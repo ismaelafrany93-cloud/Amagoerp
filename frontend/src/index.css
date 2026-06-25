@@ -1,0 +1,61 @@
+/* ============================================
+   ESTILOS GENERALES
+   ============================================ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f5f7fb;
+}
+
+a {
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* ============================================
+   ESTILOS PARA IMPRESIÓN DE FACTURAS (A4)
+   ============================================ */
+@media print {
+  /* Ocultar TODO */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Mostrar SOLO la factura */
+  #factura-para-imprimir,
+  #factura-para-imprimir * {
+    visibility: visible !important;
+  }
+
+  #factura-para-imprimir {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    background: white !important;
+    padding: 20px !important;
+    z-index: 9999 !important;
+    visibility: visible !important;
+    box-shadow: none !important;
+  }
+
+  /* Ocultar elementos que no deben imprimirse */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Configuración de página A4 */
+  @page {
+    margin: 0;
+    size: A4;
+  }
+}

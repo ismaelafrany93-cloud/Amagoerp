@@ -8,11 +8,16 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ============================================
-// CORS (ESTABLE PARA RENDER + FRONTEND)
+// CORS CONFIG (CORRECTO PARA FETCH + LOGIN)
 // ============================================
-app.use(cors({
-    origin: "*"
-}));
+const corsOptions = {
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // ============================================
 // MIDDLEWARES
@@ -49,6 +54,14 @@ app.use('/recetas', require('./routes/recetas'));
 // ============================================
 app.get('/', (req, res) => {
     res.send('🚀 AMAGO ERP Backend funcionando');
+});
+
+// ============================================
+// MANEJO BÁSICO DE ERRORES
+// ============================================
+app.use((err, req, res, next) => {
+    console.error("❌ Error:", err.message);
+    res.status(500).json({ error: "Error interno del servidor" });
 });
 
 // ============================================

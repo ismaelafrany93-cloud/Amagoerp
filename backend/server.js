@@ -5,14 +5,24 @@ const fs = require('fs');
 const pool = require('./db');
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
-// Middlewares
-app.use(cors());
+// ============================================
+// CORS (ESTABLE PARA RENDER + FRONTEND)
+// ============================================
+app.use(cors({
+    origin: "*"
+}));
+
+// ============================================
+// MIDDLEWARES
+// ============================================
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Crear carpeta uploads si no existe
+// ============================================
+// CREAR CARPETA UPLOADS SI NO EXISTE
+// ============================================
 if (!fs.existsSync('./uploads')) {
     fs.mkdirSync('./uploads');
 }
@@ -34,11 +44,16 @@ app.use('/creditos', require('./routes/creditos'));
 app.use('/operarios', require('./routes/operarios'));
 app.use('/recetas', require('./routes/recetas'));
 
-// Ruta de prueba
+// ============================================
+// RUTA DE PRUEBA
+// ============================================
 app.get('/', (req, res) => {
     res.send('🚀 AMAGO ERP Backend funcionando');
 });
 
+// ============================================
+// INICIAR SERVIDOR
+// ============================================
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
 });

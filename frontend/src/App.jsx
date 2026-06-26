@@ -15,7 +15,7 @@ import Creditos from './pages/Creditos'
 import ProductosNoEntregados from './pages/ProductosNoEntregados'
 import ProtectedRoute from './components/ProtectedRoute'
 import Recetas from './pages/Recetas'
-import historial from './pages/Historial'
+import Historial from './pages/Historial'
 
 function App() {
   return (

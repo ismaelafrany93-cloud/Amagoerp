@@ -8,16 +8,19 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ============================================
-// CORS CONFIG (CORRECTO PARA FETCH + LOGIN)
+// CORS ULTRA COMPATIBLE (RENDER + PRE-FLIGHT FIX)
 // ============================================
-const corsOptions = {
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
-};
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(200);
+    }
+
+    next();
+});
 
 // ============================================
 // MIDDLEWARES
@@ -26,7 +29,7 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================================
-// CREAR CARPETA UPLOADS SI NO EXISTE
+// CREAR UPLOADS SI NO EXISTE
 // ============================================
 if (!fs.existsSync('./uploads')) {
     fs.mkdirSync('./uploads');
@@ -50,23 +53,23 @@ app.use('/operarios', require('./routes/operarios'));
 app.use('/recetas', require('./routes/recetas'));
 
 // ============================================
-// RUTA DE PRUEBA
+// TEST ROUTE
 // ============================================
 app.get('/', (req, res) => {
     res.send('🚀 AMAGO ERP Backend funcionando');
 });
 
 // ============================================
-// MANEJO BÁSICO DE ERRORES
+// ERROR HANDLER
 // ============================================
 app.use((err, req, res, next) => {
-    console.error("❌ Error:", err.message);
-    res.status(500).json({ error: "Error interno del servidor" });
+    console.error("❌ ERROR:", err);
+    res.status(500).json({ error: "Server error" });
 });
 
 // ============================================
-// INICIAR SERVIDOR
+// START SERVER
 // ============================================
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });

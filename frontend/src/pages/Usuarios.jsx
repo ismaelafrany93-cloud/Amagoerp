@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import AdminLayout from '../layouts/AdminLayout'
+import API_URL from '../config'  // 👈 Importar la URL centralizada
 
 function Usuarios() {
   const [usuarios, setUsuarios] = useState([])
@@ -20,7 +21,7 @@ function Usuarios() {
 
   const cargarUsuarios = async () => {
     try {
-      const response = await fetch('http://localhost:5000/usuarios')
+      const response = await fetch(`${API_URL}/usuarios`)  // 👈 Cambiado
       const data = await response.json()
       setUsuarios(data)
     } catch (error) {
@@ -35,7 +36,7 @@ function Usuarios() {
     setCargando(true)
 
     try {
-      const url = editando ? `http://localhost:5000/usuarios/${editando}` : 'http://localhost:5000/usuarios'
+      const url = editando ? `${API_URL}/usuarios/${editando}` : `${API_URL}/usuarios`  // 👈 Cambiado
       const method = editando ? 'PUT' : 'POST'
 
       const response = await fetch(url, {
@@ -67,7 +68,7 @@ function Usuarios() {
     if (!window.confirm('¿Estás seguro de eliminar este usuario?')) return
 
     try {
-      const response = await fetch(`http://localhost:5000/usuarios/${id}`, { method: 'DELETE' })
+      const response = await fetch(`${API_URL}/usuarios/${id}`, { method: 'DELETE' })  // 👈 Cambiado
       const data = await response.json()
 
       if (data.success) {
@@ -86,7 +87,7 @@ function Usuarios() {
     if (!window.confirm('¿Resetear contraseña a 123456?')) return
 
     try {
-      const response = await fetch(`http://localhost:5000/usuarios/${id}/resetear`, { method: 'PUT' })
+      const response = await fetch(`${API_URL}/usuarios/${id}/resetear`, { method: 'PUT' })  // 👈 Cambiado
       const data = await response.json()
 
       if (data.success) {

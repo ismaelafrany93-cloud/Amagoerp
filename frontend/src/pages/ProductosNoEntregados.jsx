@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import AdminLayout from '../layouts/AdminLayout'
+import API_URL from '../config'  // 👈 Importar la URL centralizada
 
 function ProductosNoEntregados() {
   const [productos, setProductos] = useState([])
@@ -11,7 +12,7 @@ function ProductosNoEntregados() {
 
   const cargarNoEntregados = async () => {
     try {
-      const response = await fetch('http://localhost:5000/entregas/no-entregados')
+      const response = await fetch(`${API_URL}/entregas/no-entregados`)  // 👈 Cambiado
       const data = await response.json()
       setProductos(data)
     } catch (error) {
@@ -23,7 +24,7 @@ function ProductosNoEntregados() {
 
   const marcarRevisado = async (id) => {
     try {
-      const response = await fetch(`http://localhost:5000/entregas/no-entregados/${id}`, {
+      const response = await fetch(`${API_URL}/entregas/no-entregados/${id}`, {  // 👈 Cambiado
         method: 'PUT'
       })
       if (response.ok) {

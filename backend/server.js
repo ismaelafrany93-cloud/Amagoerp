@@ -37,6 +37,7 @@ app.use('/usuarios', require('./routes/usuarios'));
 app.use('/creditos', require('./routes/creditos'));
 app.use('/operarios', require('./routes/operarios'));
 app.use('/recetas', require('./routes/recetas'));
+app.use('/historial', require('./routes/historial'));
 
 // ============================================
 // TEST ROUTE

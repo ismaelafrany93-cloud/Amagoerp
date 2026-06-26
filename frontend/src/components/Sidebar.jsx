@@ -148,6 +148,10 @@ function Sidebar() {
           </Link>
         )}
 
+        <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block' }}>
+  📜 Historial
+</Link>
+
         {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
           <Link to="/usuarios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             👥 {!colapsado && <span>Usuarios</span>}

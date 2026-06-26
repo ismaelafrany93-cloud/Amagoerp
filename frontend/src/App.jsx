@@ -15,6 +15,7 @@ import Creditos from './pages/Creditos'
 import ProductosNoEntregados from './pages/ProductosNoEntregados'
 import ProtectedRoute from './components/ProtectedRoute'
 import Recetas from './pages/Recetas'
+import historial from './pages/Historial'
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
         <Route path="/configuracion" element={<ProtectedRoute><Configuracion /></ProtectedRoute>} />
         <Route path="/recetas" element={<ProtectedRoute><Recetas /></ProtectedRoute>} />
         <Route path="/creditos" element={<ProtectedRoute><Creditos /></ProtectedRoute>} />
+        <Route path="/historial" element={<ProtectedRoute><Historial /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   )

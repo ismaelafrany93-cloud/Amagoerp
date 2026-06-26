@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import AdminLayout from '../layouts/AdminLayout'
+import API_URL from '../config'  // 👈 Importar la URL centralizada
 
 function Clientes() {
   const [clientes, setClientes] = useState([])
@@ -13,7 +14,7 @@ function Clientes() {
 
   const cargarClientes = async () => {
     try {
-      const response = await fetch('http://localhost:5000/clientes')
+      const response = await fetch(`${API_URL}/clientes`)  // 👈 Cambiado
       const data = await response.json()
       setClientes(data)
     } catch (error) {
@@ -28,7 +29,7 @@ function Clientes() {
     setCargando(true)
 
     try {
-      const response = await fetch('http://localhost:5000/clientes', {
+      const response = await fetch(`${API_URL}/clientes`, {  // 👈 Cambiado
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)

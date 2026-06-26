@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import AdminLayout from '../layouts/AdminLayout'
+import API_URL from '../config'  // 👈 Importar la URL centralizada
 
 function Reportes() {
   const [topProductos, setTopProductos] = useState([])
@@ -11,7 +12,7 @@ function Reportes() {
 
   const cargarReportes = async () => {
     try {
-      const response = await fetch('http://localhost:5000/reportes/top-productos')
+      const response = await fetch(`${API_URL}/reportes/top-productos`)  // 👈 Cambiado
       const data = await response.json()
       setTopProductos(data)
     } catch (error) {

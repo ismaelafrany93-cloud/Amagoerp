@@ -1,96 +1,97 @@
-import { useState, useEffect } from 'react';
-import AdminLayout from '../layouts/AdminLayout';
+import { useState, useEffect } from 'react'
+import AdminLayout from '../layouts/AdminLayout'
+import API_URL from '../config'  // 👈 Importar la URL centralizada
 
 function Recetas() {
-    const [recetas, setRecetas] = useState([]);
-    const [productos, setProductos] = useState([]);
-    const [materiales, setMateriales] = useState([]);
-    const [cargando, setCargando] = useState(true);
-    const [mostrarForm, setMostrarForm] = useState(false);
-    const [mensaje, setMensaje] = useState('');
+    const [recetas, setRecetas] = useState([])
+    const [productos, setProductos] = useState([])
+    const [materiales, setMateriales] = useState([])
+    const [cargando, setCargando] = useState(true)
+    const [mostrarForm, setMostrarForm] = useState(false)
+    const [mensaje, setMensaje] = useState('')
     const [form, setForm] = useState({
         producto_id: '',
         material_id: '',
         cantidad_necesaria: '',
         descripcion: ''
-    });
+    })
 
     useEffect(() => {
-        cargarDatos();
-    }, []);
+        cargarDatos()
+    }, [])
 
     const cargarDatos = async () => {
         try {
             const [recetasRes, productosRes, materialesRes] = await Promise.all([
-                fetch('http://localhost:5000/recetas'),
-                fetch('http://localhost:5000/productos'),
-                fetch('http://localhost:5000/recetas/materiales')
-            ]);
+                fetch(`${API_URL}/recetas`),  // 👈 Cambiado
+                fetch(`${API_URL}/productos`),  // 👈 Cambiado
+                fetch(`${API_URL}/recetas/materiales`)  // 👈 Cambiado
+            ])
 
-            const recetasData = await recetasRes.json();
-            const productosData = await productosRes.json();
-            const materialesData = await materialesRes.json();
+            const recetasData = await recetasRes.json()
+            const productosData = await productosRes.json()
+            const materialesData = await materialesRes.json()
 
-            setRecetas(recetasData);
-            setProductos(productosData);
-            setMateriales(materialesData);
+            setRecetas(recetasData)
+            setProductos(productosData)
+            setMateriales(materialesData)
         } catch (error) {
-            console.error('Error cargando datos:', error);
-            setMensaje('❌ Error cargando datos');
+            console.error('Error cargando datos:', error)
+            setMensaje('❌ Error cargando datos')
         } finally {
-            setCargando(false);
+            setCargando(false)
         }
-    };
+    }
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
-        setCargando(true);
+        e.preventDefault()
+        setCargando(true)
 
         try {
-            const response = await fetch('http://localhost:5000/recetas', {
+            const response = await fetch(`${API_URL}/recetas`, {  // 👈 Cambiado
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form)
-            });
+            })
 
-            const data = await response.json();
+            const data = await response.json()
 
             if (data.success) {
-                setMensaje('✅ Material agregado correctamente');
-                setForm({ producto_id: '', material_id: '', cantidad_necesaria: '', descripcion: '' });
-                setMostrarForm(false);
-                cargarDatos();
-                setTimeout(() => setMensaje(''), 3000);
+                setMensaje('✅ Material agregado correctamente')
+                setForm({ producto_id: '', material_id: '', cantidad_necesaria: '', descripcion: '' })
+                setMostrarForm(false)
+                cargarDatos()
+                setTimeout(() => setMensaje(''), 3000)
             } else {
-                setMensaje('❌ ' + (data.message || data.error));
+                setMensaje('❌ ' + (data.message || data.error))
             }
         } catch (error) {
-            console.error(error);
-            setMensaje('❌ Error al guardar');
+            console.error(error)
+            setMensaje('❌ Error al guardar')
         } finally {
-            setCargando(false);
+            setCargando(false)
         }
-    };
+    }
 
     const handleDelete = async (id) => {
-        if (!window.confirm('¿Eliminar este material de la receta?')) return;
+        if (!window.confirm('¿Eliminar este material de la receta?')) return
 
         try {
-            const response = await fetch(`http://localhost:5000/recetas/${id}`, {
+            const response = await fetch(`${API_URL}/recetas/${id}`, {  // 👈 Cambiado
                 method: 'DELETE'
-            });
-            const data = await response.json();
+            })
+            const data = await response.json()
 
             if (data.success) {
-                setMensaje('✅ Material eliminado');
-                cargarDatos();
-                setTimeout(() => setMensaje(''), 3000);
+                setMensaje('✅ Material eliminado')
+                cargarDatos()
+                setTimeout(() => setMensaje(''), 3000)
             }
         } catch (error) {
-            console.error(error);
-            setMensaje('❌ Error al eliminar');
+            console.error(error)
+            setMensaje('❌ Error al eliminar')
         }
-    };
+    }
 
     if (cargando && recetas.length === 0) {
         return (
@@ -99,7 +100,7 @@ function Recetas() {
                     <h2>Cargando recetas...</h2>
                 </div>
             </AdminLayout>
-        );
+        )
     }
 
     return (
@@ -277,7 +278,7 @@ function Recetas() {
                 </tbody>
             </table>
         </AdminLayout>
-    );
+    )
 }
 
-export default Recetas;
+export default Recetas

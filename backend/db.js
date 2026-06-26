@@ -1,11 +1,11 @@
 const { Pool } = require('pg');
 
+// 👇 USAR LA VARIABLE DE ENTORNO DE RENDER
 const pool = new Pool({
-    user: 'postgres',
-    password: 'AmagoERP2026!',
-    host: 'localhost',
-    port: 5432,
-    database: 'amago_erp'
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 module.exports = pool;

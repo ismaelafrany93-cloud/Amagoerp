@@ -124,6 +124,13 @@ function Sidebar() {
           </Link>
         )}
 
+        {/* ✅ RECETAS - AGREGADO */}
+        {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
+          <Link to="/recetas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
+            📋 {!colapsado && <span>Recetas</span>}
+          </Link>
+        )}
+
         {tieneAcceso(['chofer', 'subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/entregas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             🚚 {!colapsado && <span>Entregas</span>}
@@ -149,8 +156,8 @@ function Sidebar() {
         )}
 
         <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block' }}>
-  📜 Historial
-</Link>
+          📜 {!colapsado && <span>Historial</span>}
+        </Link>
 
         {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
           <Link to="/usuarios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
@@ -162,7 +169,7 @@ function Sidebar() {
           ⚙️ {!colapsado && <span>Configuración</span>}
         </Link>
 
-        {/* Botón Cerrar Sesión dentro del menú */}
+        {/* Botón Cerrar Sesión */}
         <button
           onClick={cerrarSesion}
           style={{

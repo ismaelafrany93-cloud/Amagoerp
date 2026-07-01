@@ -186,123 +186,126 @@ function POS() {
       setCargando(false)
     }
   }
+
   const nuevaVenta = () => {
-  setVentaCompletada(false)
-  setCodigoEntrega('')
-  setCarrito([])
-  setCliente({ nombre: '', telefono: '', direccion: '', referencia: '', detalles: '' })
-  setTipoPago('contado')
-  setTipoEntrega('retiro')
-  setVentaId(null)
-  setCostoEnvio('')
-  setDescuento('')
-  setCodigoAutorizacion('')
-  setMostrarAutorizacion(false)
-}
+    setVentaCompletada(false)
+    setCodigoEntrega('')
+    setCarrito([])
+    setCliente({ nombre: '', telefono: '', direccion: '', referencia: '', detalles: '' })
+    setTipoPago('contado')
+    setTipoEntrega('retiro')
+    setVentaId(null)
+    setCostoEnvio('')
+    setDescuento('')
+    setCodigoAutorizacion('')
+    setMostrarAutorizacion(false)
+  }
 
-const getTipoFactura = () => {
-  if (tipoPago === 'credito' && tipoEntrega === 'domicilio') return '📦 Crédito con Entrega a Domicilio'
-  if (tipoPago === 'credito' && tipoEntrega === 'retiro') return '📦 Crédito - Retiro en Tienda'
-  if (tipoPago === 'contado' && tipoEntrega === 'domicilio') return '🚚 Contado con Entrega a Domicilio'
-  return '💰 Contado - Retiro en Tienda'
-}
+  const getTipoFactura = () => {
+    if (tipoPago === 'credito' && tipoEntrega === 'domicilio') return '📦 Crédito con Entrega a Domicilio'
+    if (tipoPago === 'credito' && tipoEntrega === 'retiro') return '📦 Crédito - Retiro en Tienda'
+    if (tipoPago === 'contado' && tipoEntrega === 'domicilio') return '🚚 Contado con Entrega a Domicilio'
+    return '💰 Contado - Retiro en Tienda'
+  }
 
-if (ventaCompletada) {
-  return (
-    <AdminLayout>
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <h1 style={{ color: '#003b6f' }}>✅ Factura Generada</h1>
-        <div style={{
-          border: '2px solid #003b6f',
-          borderRadius: '12px',
-          padding: '40px',
-          maxWidth: '550px',
-          margin: '30px auto',
-          backgroundColor: '#f5f7fb'
-        }}>
-          <h2>{getTipoFactura()}</h2>
-          {codigoEntrega && (
-            <div style={{
-              fontSize: '2.5rem',
-              fontWeight: 'bold',
-              color: '#003b6f',
-              letterSpacing: '4px',
-              backgroundColor: 'white',
-              padding: '20px',
-              borderRadius: '8px',
-              border: '2px dashed #003b6f'
-            }}>
-              {codigoEntrega}
+  if (ventaCompletada) {
+    return (
+      <AdminLayout>
+        <div style={{ padding: '40px', textAlign: 'center' }}>
+          <h1 style={{ color: '#003b6f' }}>✅ Factura Generada</h1>
+          <div style={{
+            border: '2px solid #003b6f',
+            borderRadius: '12px',
+            padding: '40px',
+            maxWidth: '550px',
+            margin: '30px auto',
+            backgroundColor: '#f5f7fb'
+          }}>
+            <h2>{getTipoFactura()}</h2>
+            {codigoEntrega && (
+              <div style={{
+                fontSize: '2.5rem',
+                fontWeight: 'bold',
+                color: '#003b6f',
+                letterSpacing: '4px',
+                backgroundColor: 'white',
+                padding: '20px',
+                borderRadius: '8px',
+                border: '2px dashed #003b6f'
+              }}>
+                {codigoEntrega}
+              </div>
+            )}
+            <p style={{ marginTop: '20px', color: '#666' }}>
+              {tipoPago === 'credito' 
+                ? 'Cliente debe pagar el monto pendiente' 
+                : 'Venta pagada al contado'}
+              {tipoEntrega === 'domicilio' && ' - El chofer realizará la entrega'}
+              {tipoEntrega === 'retiro' && ' - Cliente retira en tienda'}
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
+              <button 
+                onClick={() => window.print()} 
+                style={{
+                  padding: '12px 30px',
+                  backgroundColor: '#003b6f',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '1rem'
+                }}
+              >
+                🖨️ Imprimir Factura
+              </button>
+              <button 
+                onClick={nuevaVenta} 
+                style={{
+                  padding: '12px 30px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '1rem'
+                }}
+              >
+                Nueva Venta
+              </button>
             </div>
-          )}
-          <p style={{ marginTop: '20px', color: '#666' }}>
-            {tipoPago === 'credito' 
-              ? 'Cliente debe pagar el monto pendiente' 
-              : 'Venta pagada al contado'}
-            {tipoEntrega === 'domicilio' && ' - El chofer realizará la entrega'}
-            {tipoEntrega === 'retiro' && ' - Cliente retira en tienda'}
-          </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
-            <button 
-              onClick={() => window.print()} 
-              style={{
-                padding: '12px 30px',
-                backgroundColor: '#003b6f',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '1rem'
-              }}
-            >
-              🖨️ Imprimir Factura
-            </button>
-            <button 
-              onClick={nuevaVenta} 
-              style={{
-                padding: '12px 30px',
-                backgroundColor: '#4CAF50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '1rem'
-              }}
-            >
-              Nueva Venta
-            </button>
+          </div>
+
+          <div id="factura-para-imprimir" style={{ 
+            position: 'fixed', 
+            left: '0', 
+            top: '0',
+            width: '100mm',
+            backgroundColor: 'white',
+            padding: '15px',
+            zIndex: 9999,
+            visibility: 'hidden'
+          }}>
+            <Factura
+              ref={facturaRef}
+              venta={{ id: ventaId }}
+              cliente={cliente}
+              carrito={carrito}
+              total={total}
+              tipoVenta={tipoPago === 'credito' ? 'credito' : 'contado'}
+              tipoEntrega={tipoEntrega}
+              codigoEntrega={codigoEntrega}
+            />
           </div>
         </div>
+      </AdminLayout>
+    )
+  }
 
-        <div id="factura-para-imprimir" style={{ 
-          position: 'fixed', 
-          left: '0', 
-          top: '0',
-          width: '100mm',
-          backgroundColor: 'white',
-          padding: '15px',
-          zIndex: 9999,
-          visibility: 'hidden'
-        }}>
-          <Factura
-            ref={facturaRef}
-            venta={{ id: ventaId }}
-            cliente={cliente}
-            carrito={carrito}
-            total={total}
-            tipoVenta={tipoPago === 'credito' ? 'credito' : 'contado'}
-            tipoEntrega={tipoEntrega}
-            codigoEntrega={codigoEntrega}
-          />
-        </div>
-      </div>
-    </AdminLayout>
-  )
-}
-return (
+  return (
     <AdminLayout>
       <h1>🛒 Punto de Venta</h1>
 
+      {/* Tipo de Pago */}
       <div style={{
         display: 'flex',
         gap: '20px',
@@ -332,6 +335,7 @@ return (
         </label>
       </div>
 
+      {/* Tipo de Entrega */}
       <div style={{
         display: 'flex',
         gap: '20px',
@@ -361,19 +365,20 @@ return (
         </label>
       </div>
 
-      {/* Sección de Costo de Envío y Descuento */}
+      {/* COSTO DE ENVÍO Y DESCUENTO */}
       <div style={{
-        border: '1px solid #ddd',
+        border: '2px solid #003b6f',
         borderRadius: '8px',
         padding: '15px',
         marginBottom: '20px',
-        backgroundColor: '#f9f9f9'
+        backgroundColor: '#e8f0fe',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
         <h4 style={{ margin: '0 0 15px 0', color: '#003b6f' }}>💰 Costos y Descuentos</h4>
         
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
           <div>
-            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Costo de Envío (RD$)</label>
+            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>Costo de Envío (RD$)</label>
             <input
               type="number"
               step="0.01"
@@ -381,11 +386,11 @@ return (
               value={costoEnvio}
               onChange={(e) => setCostoEnvio(e.target.value)}
               placeholder="0.00"
-              style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              style={{ width: '100%', padding: '10px', border: '1px solid #003b6f', borderRadius: '8px', backgroundColor: 'white' }}
             />
           </div>
           <div>
-            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Descuento (%)</label>
+            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>Descuento (%)</label>
             <input
               type="number"
               step="0.01"
@@ -403,7 +408,7 @@ return (
                 }
               }}
               placeholder="0"
-              style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              style={{ width: '100%', padding: '10px', border: '1px solid #003b6f', borderRadius: '8px', backgroundColor: 'white' }}
             />
           </div>
         </div>
@@ -411,43 +416,21 @@ return (
         {mostrarAutorizacion && (
           <div style={{ marginTop: '15px', padding: '15px', backgroundColor: '#fff8e1', borderRadius: '8px', border: '1px solid #ff9800' }}>
             <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>
-              🔑 Código de Autorización
+              🔑 Código de Autorización (requerido para descuento)
             </label>
             <input
               type="text"
               value={codigoAutorizacion}
               onChange={(e) => setCodigoAutorizacion(e.target.value)}
               placeholder="Ej: AUT-2026"
-              style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              style={{ width: '100%', padding: '10px', border: '1px solid #ff9800', borderRadius: '8px', backgroundColor: 'white' }}
             />
             <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '5px' }}>
-              Solo el dueño o subgerente puede autorizar descuentos
-            </p>
-          </div>
-        )}
-
-        {carrito.length > 0 && (
-          <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
-            <p style={{ margin: '5px 0' }}>
-              <strong>Subtotal:</strong> RD$ {subtotal.toFixed(2)}
-            </p>
-            {parseFloat(costoEnvio) > 0 && (
-              <p style={{ margin: '5px 0' }}>
-                <strong>Envío:</strong> RD$ {parseFloat(costoEnvio).toFixed(2)}
-              </p>
-            )}
-            {parseFloat(descuento) > 0 && (
-              <p style={{ margin: '5px 0', color: '#d32f2f' }}>
-                <strong>Descuento ({descuento}%):</strong> -RD$ {((subtotal + parseFloat(costoEnvio || 0)) * (parseFloat(descuento) / 100)).toFixed(2)}
-              </p>
-            )}
-            <p style={{ margin: '5px 0', fontSize: '1.1rem', fontWeight: 'bold', color: '#003b6f' }}>
-              <strong>Total a pagar:</strong> RD$ {total.toFixed(2)}
+              ⚠️ Solo el dueño o subgerente puede autorizar descuentos
             </p>
           </div>
         )}
       </div>
-
       {/* Datos del Cliente */}
       <div style={{
         border: '2px solid #003b6f',
@@ -501,6 +484,30 @@ return (
         </div>
       </div>
 
+      {/* Resumen de totales */}
+      {carrito.length > 0 && (
+        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '1px solid #003b6f' }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#003b6f' }}>📊 Resumen de la Venta</h4>
+          <p style={{ margin: '5px 0' }}>
+            <strong>Subtotal:</strong> RD$ {subtotal.toFixed(2)}
+          </p>
+          {parseFloat(costoEnvio) > 0 && (
+            <p style={{ margin: '5px 0' }}>
+              <strong>Envío:</strong> RD$ {parseFloat(costoEnvio).toFixed(2)}
+            </p>
+          )}
+          {parseFloat(descuento) > 0 && (
+            <p style={{ margin: '5px 0', color: '#d32f2f' }}>
+              <strong>Descuento ({descuento}%):</strong> -RD$ {((subtotal + parseFloat(costoEnvio || 0)) * (parseFloat(descuento) / 100)).toFixed(2)}
+            </p>
+          )}
+          <p style={{ margin: '5px 0', fontSize: '1.3rem', fontWeight: 'bold', color: '#003b6f' }}>
+            <strong>Total a pagar:</strong> RD$ {total.toFixed(2)}
+          </p>
+        </div>
+      )}
+
+      {/* Buscador */}
       <input
         type="text"
         placeholder="🔍 Buscar producto..."

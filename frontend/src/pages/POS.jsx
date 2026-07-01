@@ -17,6 +17,7 @@ function POS() {
   const [ventaCompletada, setVentaCompletada] = useState(false)
   const [ventaId, setVentaId] = useState(null)
 
+  // 👇 CAMPOS DE ENVÍO Y DESCUENTO (SIEMPRE VISIBLES)
   const [costoEnvio, setCostoEnvio] = useState('')
   const [descuento, setDescuento] = useState('')
   const [codigoAutorizacion, setCodigoAutorizacion] = useState('')
@@ -365,7 +366,7 @@ function POS() {
         </label>
       </div>
 
-      {/* COSTO DE ENVÍO Y DESCUENTO */}
+      {/* 👇 COSTO DE ENVÍO Y DESCUENTO - SIEMPRE VISIBLE */}
       <div style={{
         border: '2px solid #003b6f',
         borderRadius: '8px',
@@ -431,6 +432,7 @@ function POS() {
           </div>
         )}
       </div>
+
       {/* Datos del Cliente */}
       <div style={{
         border: '2px solid #003b6f',

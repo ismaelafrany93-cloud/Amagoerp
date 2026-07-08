@@ -24,12 +24,15 @@ function Login() {
       const data = await response.json()
 
       if (data.success) {
-        localStorage.setItem('usuario', JSON.stringify(data.user))
-        if (data.user.rol === 'vendedor' || data.user.rol === 'vendedora') {
+        // 🔑 GUARDAR USUARIO CORRECTAMENTE
+        localStorage.setItem('usuario', JSON.stringify(data.usuario))  // ← CAMBIADO: data.user → data.usuario
+        
+        // Redirigir según el rol
+        if (data.usuario.rol === 'vendedor' || data.usuario.rol === 'vendedora') {
           navigate('/ventas')
-        } else if (data.user.rol === 'chofer') {
+        } else if (data.usuario.rol === 'chofer') {
           navigate('/entregas')
-        } else if (data.user.rol === 'supervisor') {
+        } else if (data.usuario.rol === 'supervisor') {
           navigate('/produccion')
         } else {
           navigate('/dashboard')
@@ -38,6 +41,7 @@ function Login() {
         setError(data.message || 'Credenciales incorrectas')
       }
     } catch (error) {
+      console.error('Error en login:', error)
       setError('Error de conexión con el servidor')
     } finally {
       setCargando(false)

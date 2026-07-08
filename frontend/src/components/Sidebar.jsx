@@ -13,15 +13,11 @@ function Sidebar() {
   const sucursalId = usuario?.sucursal_id || null
   const sucursalNombre = usuario?.sucursal || usuario?.sucursal_nombre || ''
   
-  // 🔍 DEBUG - Elimina esto después
-  console.log('🔍 Sidebar Debug:', { rol, sucursalId, sucursalNombre })
-
   // 👇 SUCURSALES SEGÚN TU BASE DE DATOS
+  // Principal = ID 3
   const esSucursalPrincipal = sucursalId === 3 || 
                               sucursalNombre === 'Sucursal Principal' || 
-                              sucursalNombre === 'Principal' ||
-                              // Si es vendedor y no tiene sucursal, la principal por defecto
-                              (rol === 'vendedor' || rol === 'vendedora') && sucursalId === null
+                              sucursalNombre === 'Principal'
   
   const esSucursalBani = sucursalId === 1 || 
                          sucursalNombre === 'Sucursal Baní' || 
@@ -38,7 +34,8 @@ function Sidebar() {
   const esChofer = rol === 'chofer'
   const esSupervisor = rol === 'supervisor'
 
-  console.log('🔍 Sidebar Sucursales:', { esSucursalPrincipal, esSucursalBani, esSucursalSabana })
+  // Si es vendedor y no tiene sucursal, asumir que es de la principal
+  const esVendedorPrincipal = esVendedor && (esSucursalPrincipal || sucursalId === null)
 
   const cerrarSesion = () => {
     if (window.confirm('¿Estás seguro de que quieres cerrar sesión?')) {
@@ -99,7 +96,7 @@ function Sidebar() {
           {sucursalNombre && (
             <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6 }}>🏢 {sucursalNombre}</p>
           )}
-          {!sucursalNombre && (
+          {!sucursalNombre && esVendedor && (
             <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6, color: '#ff8a80' }}>⚠️ Sin sucursal asignada</p>
           )}
         </div>
@@ -143,20 +140,24 @@ function Sidebar() {
         )}
 
         {/* ========================================== */}
-        {/* MENÚ PARA VENDEDOR (PRINCIPAL, BANÍ O SABANA) */}
+        {/* MENÚ PARA VENDEDOR */}
         {/* ========================================== */}
         {esVendedor && (
           <>
             {/* 🛒 Ventas - Todos los vendedores */}
             <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🛒 {!colapsado && <span>Ventas</span>}</Link>
 
-            {/* 📊 Inventario según sucursal */}
-            {esSucursalPrincipal && (
+            {/* 📊 Inventario - Principal */}
+            {esVendedorPrincipal && (
               <Link to="/inventario" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario</span>}</Link>
             )}
+
+            {/* 📊 Inventario - Baní */}
             {esSucursalBani && (
               <Link to="/inventario-bani" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario Baní</span>}</Link>
             )}
+
+            {/* 📊 Inventario - Sabana */}
             {esSucursalSabana && (
               <Link to="/inventario-sabana" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario Sabana</span>}</Link>
             )}
@@ -168,7 +169,7 @@ function Sidebar() {
             <Link to="/creditos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Créditos</span>}</Link>
 
             {/* 📦 Transferencias - Solo vendedores de la principal */}
-            {esSucursalPrincipal && (
+            {esVendedorPrincipal && (
               <Link to="/transferencias" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Transferencias</span>}</Link>
             )}
 

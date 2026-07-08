@@ -43,24 +43,32 @@ function POS() {
     cargarProductos()
   }, [])
 
-  const cargarProductos = async () => {
+  // En POS.jsx, reemplaza la función cargarProductos con esta:
+
+const cargarProductos = async () => {
     try {
-      let url = `${API_URL}/productos`
-      if (esSucursal && !esSucursalPrincipal) {
-        url = `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`
-      }
-      const response = await fetch(url)
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
-      }
-      const data = await response.json()
-      setProductos(Array.isArray(data) ? data : [])
+        const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+        let url = `${API_URL}/productos`;
+        
+        // Si el usuario tiene sucursal, filtrar productos por sucursal
+        if (usuario.sucursal_id && usuario.sucursal_id > 0) {
+            url = `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`;
+        }
+        
+        console.log('📦 Cargando productos desde:', url);
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json();
+        setProductos(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error cargando productos:', error)
-      alert('❌ Error cargando productos. Verifica tu conexión.')
-      setProductos([])
+        console.error('Error cargando productos:', error);
+        alert('❌ Error cargando productos. Verifica tu conexión.');
+        setProductos([]);
     }
-  }
+};
 
   const agregar = (producto) => {
     if (producto.stock <= 0) {

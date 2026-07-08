@@ -54,7 +54,6 @@ function POS() {
         throw new Error(`Error ${response.status}: ${response.statusText}`)
       }
       const data = await response.json()
-      // 🛡️ SIEMPRE asegurar que sea un array
       setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando productos:', error)
@@ -333,7 +332,7 @@ function POS() {
         }}>
           <p style={{ margin: 0, color: '#e65100' }}>
             🏢 <strong>{usuario.sucursal_nombre || 'Mi Sucursal'}</strong> - 
-            Mostrando inventario de tu sucursal
+            Mostrando productos de tu sucursal
           </p>
         </div>
       )}

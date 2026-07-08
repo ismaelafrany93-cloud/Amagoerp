@@ -4,21 +4,22 @@ import API_URL from '../config'
 
 function Usuarios() {
   const [usuarios, setUsuarios] = useState([])
-  const [sucursales, setSucursales] = useState([])  // ← AGREGADO
+  const [sucursales, setSucursales] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editando, setEditando] = useState(null)
+  const [mensaje, setMensaje] = useState('')
   const [form, setForm] = useState({
     nombre: '',
     correo: '',
     password: '',
     rol: 'vendedor',
-    sucursal_id: ''  // ← CAMBIADO de 'sucursal' a 'sucursal_id'
+    sucursal_id: ''
   })
 
   useEffect(() => {
     cargarUsuarios()
-    cargarSucursales()  // ← AGREGADO
+    cargarSucursales()
   }, [])
 
   const cargarUsuarios = async () => {
@@ -33,7 +34,6 @@ function Usuarios() {
     }
   }
 
-  // ← FUNCIÓN AGREGADA
   const cargarSucursales = async () => {
     try {
       const response = await fetch(`${API_URL}/sucursales`)
@@ -47,20 +47,19 @@ function Usuarios() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setCargando(true)
+    setMensaje('')
 
     try {
       const url = editando ? `${API_URL}/usuarios/${editando}` : `${API_URL}/usuarios`
       const method = editando ? 'PUT' : 'POST'
 
-      // Preparar datos para enviar
       const datosEnviar = {
         nombre: form.nombre,
         correo: form.correo,
         rol: form.rol,
-        sucursal_id: form.sucursal_id || null  // Si está vacío, enviar null
+        sucursal_id: form.sucursal_id || null
       }
 
-      // Solo incluir password si se proporcionó
       if (form.password) {
         datosEnviar.password = form.password
       }
@@ -74,17 +73,18 @@ function Usuarios() {
       const data = await response.json()
 
       if (data.success) {
-        alert(editando ? '✅ Usuario actualizado' : '✅ Usuario creado')
+        setMensaje(editando ? '✅ Usuario actualizado correctamente' : '✅ Usuario creado correctamente')
         setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal_id: '' })
         setMostrarForm(false)
         setEditando(null)
         cargarUsuarios()
+        setTimeout(() => setMensaje(''), 3000)
       } else {
-        alert('❌ Error: ' + (data.message || data.error))
+        setMensaje('❌ Error: ' + (data.message || data.error))
       }
     } catch (error) {
-      console.error(error)
-      alert('❌ Error guardando usuario')
+      console.error('Error:', error)
+      setMensaje('❌ Error al guardar')
     } finally {
       setCargando(false)
     }
@@ -98,14 +98,15 @@ function Usuarios() {
       const data = await response.json()
 
       if (data.success) {
-        alert('✅ Usuario eliminado')
+        setMensaje('✅ Usuario eliminado')
         cargarUsuarios()
+        setTimeout(() => setMensaje(''), 3000)
       } else {
-        alert('❌ Error eliminando usuario')
+        setMensaje('❌ Error eliminando usuario')
       }
     } catch (error) {
-      console.error(error)
-      alert('❌ Error eliminando usuario')
+      console.error('Error:', error)
+      setMensaje('❌ Error eliminando usuario')
     }
   }
 
@@ -117,13 +118,14 @@ function Usuarios() {
       const data = await response.json()
 
       if (data.success) {
-        alert('✅ Contraseña reseteada a 123456')
+        setMensaje('✅ Contraseña reseteada a 123456')
+        setTimeout(() => setMensaje(''), 3000)
       } else {
-        alert('❌ Error reseteando contraseña')
+        setMensaje('❌ Error reseteando contraseña')
       }
     } catch (error) {
-      console.error(error)
-      alert('❌ Error reseteando contraseña')
+      console.error('Error:', error)
+      setMensaje('❌ Error reseteando contraseña')
     }
   }
 
@@ -133,39 +135,117 @@ function Usuarios() {
       correo: usuario.correo,
       password: '',
       rol: usuario.rol,
-      sucursal_id: usuario.sucursal_id || ''  // ← CAMBIADO
+      sucursal_id: usuario.sucursal_id || ''
     })
     setEditando(usuario.id)
     setMostrarForm(true)
+  }
+
+  if (cargando) {
+    return (
+      <AdminLayout>
+        <div style={{ textAlign: 'center', padding: '60px' }}>
+          <h2>Cargando usuarios...</h2>
+        </div>
+      </AdminLayout>
+    )
   }
 
   return (
     <AdminLayout>
       <h1>👥 Usuarios</h1>
 
-      <button onClick={() => { setMostrarForm(!mostrarForm); setEditando(null); setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal_id: '' }) }} style={{ marginBottom: '20px', padding: '10px 20px', backgroundColor: '#003b6f', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' }}>
+      {mensaje && (
+        <div style={{
+          backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
+          color: mensaje.includes('✅') ? '#1b5e20' : '#dc2626',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
+          {mensaje}
+        </div>
+      )}
+
+      <button
+        onClick={() => {
+          setMostrarForm(!mostrarForm)
+          setEditando(null)
+          setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal_id: '' })
+        }}
+        style={{
+          marginBottom: '20px',
+          padding: '10px 20px',
+          backgroundColor: '#003b6f',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          fontSize: '1rem'
+        }}
+      >
         {mostrarForm ? '✕ Cancelar' : '➕ Nuevo Usuario'}
       </button>
 
       {mostrarForm && (
-        <form onSubmit={handleSubmit} style={{ backgroundColor: '#f5f7fb', padding: '25px', borderRadius: '12px', marginBottom: '25px', border: '2px solid #003b6f' }}>
-          <h3 style={{ marginTop: 0, color: '#003b6f' }}>{editando ? '✏️ Editar Usuario' : '➕ Agregar Usuario'}</h3>
+        <form onSubmit={handleSubmit} style={{
+          backgroundColor: '#f5f7fb',
+          padding: '25px',
+          borderRadius: '12px',
+          marginBottom: '25px',
+          border: '2px solid #003b6f'
+        }}>
+          <h3 style={{ marginTop: 0, color: '#003b6f' }}>
+            {editando ? '✏️ Editar Usuario' : '➕ Agregar Usuario'}
+          </h3>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             <div>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Nombre *</label>
-              <input type="text" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} required placeholder="Nombre completo" style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }} />
+              <input
+                type="text"
+                value={form.nombre}
+                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                required
+                placeholder="Nombre completo"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
             </div>
+
             <div>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Correo *</label>
-              <input type="email" value={form.correo} onChange={(e) => setForm({ ...form, correo: e.target.value })} required placeholder="usuario@amago.com" style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }} />
+              <input
+                type="email"
+                value={form.correo}
+                onChange={(e) => setForm({ ...form, correo: e.target.value })}
+                required
+                placeholder="usuario@amago.com"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
             </div>
+
             <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>{editando ? 'Nueva Contraseña (opcional)' : 'Contraseña *'}</label>
-              <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editando} placeholder={editando ? 'Dejar vacío para mantener' : 'Mínimo 4 caracteres'} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }} />
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>
+                {editando ? 'Nueva Contraseña (opcional)' : 'Contraseña *'}
+              </label>
+              <input
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required={!editando}
+                placeholder={editando ? 'Dejar vacío para mantener' : 'Mínimo 4 caracteres'}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
             </div>
+
             <div>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Rol *</label>
-              <select value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}>
+              <select
+                value={form.rol}
+                onChange={(e) => setForm({ ...form, rol: e.target.value })}
+                required
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              >
                 <option value="vendedor">👤 Vendedor</option>
                 <option value="supervisor">🏭 Supervisor</option>
                 <option value="chofer">🚚 Chofer</option>
@@ -173,7 +253,8 @@ function Usuarios() {
                 <option value="dueno">👑 Dueño</option>
               </select>
             </div>
-            <div>
+
+            <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Sucursal</label>
               <select
                 value={form.sucursal_id}
@@ -185,43 +266,133 @@ function Usuarios() {
                   <option key={s.id} value={s.id}>{s.nombre}</option>
                 ))}
               </select>
+              <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '5px' }}>
+                ⚠️ Si el usuario no tiene sucursal, no verá el menú completo
+              </p>
             </div>
           </div>
-          <button type="submit" disabled={cargando} style={{ marginTop: '15px', padding: '12px 30px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' }}>{cargando ? 'Guardando...' : editando ? '✅ Actualizar Usuario' : '✅ Guardar Usuario'}</button>
+
+          <button
+            type="submit"
+            disabled={cargando}
+            style={{
+              marginTop: '15px',
+              padding: '12px 30px',
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '1rem'
+            }}
+          >
+            {cargando ? 'Guardando...' : editando ? '✅ Actualizar Usuario' : '✅ Guardar Usuario'}
+          </button>
         </form>
       )}
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
-            <th style={{ padding: '12px', textAlign: 'left' }}>ID</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Nombre</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Correo</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Rol</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Sucursal</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {usuarios.map((u) => (
-            <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td style={{ padding: '12px' }}>{u.id}</td>
-              <td style={{ padding: '12px' }}>{u.nombre}</td>
-              <td style={{ padding: '12px' }}>{u.correo}</td>
-              <td style={{ padding: '12px', textAlign: 'center' }}>
-                <span style={{ backgroundColor: u.rol === 'dueno' ? '#d32f2f' : u.rol === 'subgerente' ? '#003b6f' : u.rol === 'supervisor' ? '#ff9800' : u.rol === 'chofer' ? '#4CAF50' : '#757575', color: 'white', padding: '2px 12px', borderRadius: '12px', fontSize: '0.8rem' }}>{u.rol}</span>
-              </td>
-              <td style={{ padding: '12px', textAlign: 'center' }}>{u.sucursal_nombre || u.sucursal || '-'}</td>
-              <td style={{ padding: '12px', textAlign: 'center' }}>
-                <button onClick={() => handleEdit(u)} style={{ backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', marginRight: '5px' }}>✏️</button>
-                <button onClick={() => handleReset(u.id)} style={{ backgroundColor: '#ff9800', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', marginRight: '5px' }}>🔑</button>
-                <button onClick={() => handleDelete(u.id)} style={{ backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer' }}>🗑️</button>
-              </td>
+      <div style={{
+        overflowX: 'auto',
+        backgroundColor: 'white',
+        borderRadius: '8px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <table style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          overflow: 'hidden'
+        }}>
+          <thead>
+            <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
+              <th style={{ padding: '12px', textAlign: 'left' }}>ID</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Nombre</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Correo</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Rol</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Sucursal</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
-          ))}
-          {usuarios.length === 0 && <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>No hay usuarios registrados</td></tr>}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {usuarios.length === 0 ? (
+              <tr>
+                <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                  No hay usuarios registrados
+                </td>
+              </tr>
+            ) : (
+              usuarios.map((u) => (
+                <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '12px' }}>{u.id}</td>
+                  <td style={{ padding: '12px' }}>{u.nombre}</td>
+                  <td style={{ padding: '12px' }}>{u.correo}</td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    <span style={{
+                      backgroundColor: u.rol === 'dueno' ? '#d32f2f' :
+                                     u.rol === 'subgerente' ? '#003b6f' :
+                                     u.rol === 'supervisor' ? '#ff9800' :
+                                     u.rol === 'chofer' ? '#4CAF50' : '#757575',
+                      color: 'white',
+                      padding: '2px 12px',
+                      borderRadius: '12px',
+                      fontSize: '0.8rem'
+                    }}>
+                      {u.rol}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    {u.sucursal_nombre || u.sucursal || (
+                      <span style={{ color: '#f44336', fontWeight: 'bold' }}>⚠️ Sin sucursal</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => handleEdit(u)}
+                      style={{
+                        backgroundColor: '#2196F3',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '4px 10px',
+                        cursor: 'pointer',
+                        marginRight: '5px'
+                      }}
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => handleReset(u.id)}
+                      style={{
+                        backgroundColor: '#ff9800',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '4px 10px',
+                        cursor: 'pointer',
+                        marginRight: '5px'
+                      }}
+                    >
+                      🔑
+                    </button>
+                    <button
+                      onClick={() => handleDelete(u.id)}
+                      style={{
+                        backgroundColor: '#f44336',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '4px 10px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </AdminLayout>
   )
 }

@@ -5,11 +5,13 @@ function Sidebar() {
   const [colapsado, setColapsado] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
+  
+  // 👇 OBTENER USUARIO
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
   const sucursalId = usuario?.sucursal_id || null
   const esSucursalPrincipal = sucursalId === 1
-  const esSucursalBani = sucursalId === 2 // Cambia 2 por el ID de Baní
+  const esSucursalBani = sucursalId === 2 // Cambia por el ID de Baní
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
 
   const cerrarSesion = () => {
@@ -23,18 +25,16 @@ function Sidebar() {
     return rolesPermitidos.includes(rol)
   }
 
-  // 👇 SOLO SUCURSAL PRINCIPAL PUEDE VER TRANSFERENCIAS
   const puedeVerTransferencias = () => {
     return esSucursalPrincipal && tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin'])
   }
 
-  // 👇 VERIFICAR SI PUEDE VER INVENTARIO GENERAL
   const puedeVerInventarioGeneral = () => {
     return esSucursalPrincipal && tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin'])
   }
 
-  // 👇 VERIFICAR SI PUEDE VER INVENTARIO DE BANÍ
   const puedeVerInventarioBani = () => {
+    // 🔑 CLAVE: Mostrar si es usuario de Baní O si es dueño/subgerente
     return esSucursalBani || esSubgerente
   }
 
@@ -113,67 +113,55 @@ function Sidebar() {
         {/* ========================================== */}
         {esSucursalBani && (
           <>
-            {/* 🛒 Ventas */}
-            {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/ventas" style={{ 
-                color: 'white', 
-                textDecoration: 'none', 
-                padding: '8px 12px', 
-                borderRadius: '6px', 
-                display: 'block', 
-                textAlign: colapsado ? 'center' : 'left',
-                backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent'
-              }}>
-                🛒 {!colapsado && <span>Ventas</span>}
-              </Link>
-            )}
+            <Link to="/ventas" style={{ 
+              color: 'white', 
+              textDecoration: 'none', 
+              padding: '8px 12px', 
+              borderRadius: '6px', 
+              display: 'block', 
+              textAlign: colapsado ? 'center' : 'left',
+              backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent'
+            }}>
+              🛒 {!colapsado && <span>Ventas</span>}
+            </Link>
 
-            {/* 📊 Inventario Baní - Específico para Baní */}
-            {puedeVerInventarioBani() && (
-              <Link to="/inventario-bani" style={{ 
-                color: 'white', 
-                textDecoration: 'none', 
-                padding: '8px 12px', 
-                borderRadius: '6px', 
-                display: 'block', 
-                textAlign: colapsado ? 'center' : 'left',
-                backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent'
-              }}>
-                📊 {!colapsado && <span>Inventario Baní</span>}
-              </Link>
-            )}
+            {/* 👇 INVENTARIO BANÍ - Aparece para vendedores de Baní */}
+            <Link to="/inventario-bani" style={{ 
+              color: 'white', 
+              textDecoration: 'none', 
+              padding: '8px 12px', 
+              borderRadius: '6px', 
+              display: 'block', 
+              textAlign: colapsado ? 'center' : 'left',
+              backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent'
+            }}>
+              📊 {!colapsado && <span>Inventario Baní</span>}
+            </Link>
 
-            {/* 👤 Clientes */}
-            {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/clientes" style={{ 
-                color: 'white', 
-                textDecoration: 'none', 
-                padding: '8px 12px', 
-                borderRadius: '6px', 
-                display: 'block', 
-                textAlign: colapsado ? 'center' : 'left',
-                backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent'
-              }}>
-                👤 {!colapsado && <span>Clientes</span>}
-              </Link>
-            )}
+            <Link to="/clientes" style={{ 
+              color: 'white', 
+              textDecoration: 'none', 
+              padding: '8px 12px', 
+              borderRadius: '6px', 
+              display: 'block', 
+              textAlign: colapsado ? 'center' : 'left',
+              backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent'
+            }}>
+              👤 {!colapsado && <span>Clientes</span>}
+            </Link>
 
-            {/* 💰 Créditos */}
-            {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/creditos" style={{ 
-                color: 'white', 
-                textDecoration: 'none', 
-                padding: '8px 12px', 
-                borderRadius: '6px', 
-                display: 'block', 
-                textAlign: colapsado ? 'center' : 'left',
-                backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent'
-              }}>
-                💰 {!colapsado && <span>Créditos</span>}
-              </Link>
-            )}
+            <Link to="/creditos" style={{ 
+              color: 'white', 
+              textDecoration: 'none', 
+              padding: '8px 12px', 
+              borderRadius: '6px', 
+              display: 'block', 
+              textAlign: colapsado ? 'center' : 'left',
+              backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent'
+            }}>
+              💰 {!colapsado && <span>Créditos</span>}
+            </Link>
 
-            {/* ⚙️ Configuración */}
             <Link to="/configuracion" style={{ 
               color: 'white', 
               textDecoration: 'none', 
@@ -193,7 +181,6 @@ function Sidebar() {
         {/* ========================================== */}
         {esSucursalPrincipal && (
           <>
-            {/* 📊 Dashboard */}
             {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
               <Link to="/dashboard" style={{ 
                 color: 'white', 
@@ -208,7 +195,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 🛒 Ventas */}
             {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/ventas" style={{ 
                 color: 'white', 
@@ -223,7 +209,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 📦 Productos */}
             {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/productos" style={{ 
                 color: 'white', 
@@ -238,7 +223,7 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 📊 Inventario General - Solo dueño/subgerente */}
+            {/* 👇 INVENTARIO GENERAL - Solo dueño/subgerente */}
             {puedeVerInventarioGeneral() && (
               <Link to="/inventario" style={{ 
                 color: 'white', 
@@ -253,7 +238,7 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 🏢 Inventario Baní - Dueño/subgerente también pueden verlo */}
+            {/* 👇 INVENTARIO BANÍ - Aparece para DUEÑO/SUBGERENTE */}
             {esSubgerente && (
               <Link to="/inventario-bani" style={{ 
                 color: 'white', 
@@ -268,7 +253,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 👤 Clientes */}
             {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/clientes" style={{ 
                 color: 'white', 
@@ -283,7 +267,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 🏭 Producción */}
             {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/produccion" style={{ 
                 color: 'white', 
@@ -298,7 +281,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 🔧 Materiales */}
             {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/materiales" style={{ 
                 color: 'white', 
@@ -313,7 +295,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 📋 Recetas */}
             {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/recetas" style={{ 
                 color: 'white', 
@@ -328,7 +309,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 🚚 Entregas */}
             {tieneAcceso(['chofer', 'subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/entregas" style={{ 
                 color: 'white', 
@@ -343,7 +323,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 📋 No Entregados */}
             {tieneAcceso(['subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/no-entregados" style={{ 
                 color: 'white', 
@@ -358,7 +337,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 💰 Créditos */}
             {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/creditos" style={{ 
                 color: 'white', 
@@ -373,7 +351,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 📈 Reportes */}
             {tieneAcceso(['subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/reportes" style={{ 
                 color: 'white', 
@@ -388,7 +365,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 📜 Historial */}
             {tieneAcceso(['subgerente', 'dueno', 'dueño', 'admin']) && (
               <Link to="/historial" style={{ 
                 color: 'white', 
@@ -403,7 +379,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 👥 Usuarios */}
             {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
               <Link to="/usuarios" style={{ 
                 color: 'white', 
@@ -418,7 +393,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 🏢 Sucursales */}
             {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
               <Link to="/sucursales" style={{ 
                 color: 'white', 
@@ -433,7 +407,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* 📦 Transferencias - SOLO PRINCIPAL */}
             {puedeVerTransferencias() && (
               <Link to="/transferencias" style={{ 
                 color: 'white', 
@@ -448,7 +421,6 @@ function Sidebar() {
               </Link>
             )}
 
-            {/* ⚙️ Configuración */}
             <Link to="/configuracion" style={{ 
               color: 'white', 
               textDecoration: 'none', 
@@ -462,29 +434,29 @@ function Sidebar() {
             </Link>
           </>
         )}
-
-        {/* Botón Cerrar Sesión */}
-        <button
-          onClick={cerrarSesion}
-          style={{
-            marginTop: '15px',
-            padding: '10px',
-            border: 'none',
-            cursor: 'pointer',
-            borderRadius: '6px',
-            backgroundColor: 'rgba(244, 67, 54, 0.15)',
-            color: '#ff8a80',
-            width: '100%',
-            fontSize: colapsado ? '1.2rem' : '0.85rem',
-            display: 'flex',
-            justifyContent: colapsado ? 'center' : 'flex-start',
-            gap: colapsado ? 0 : '8px',
-            alignItems: 'center'
-          }}
-        >
-          🚪 {!colapsado && <span>Cerrar sesión</span>}
-        </button>
       </nav>
+
+      {/* Botón Cerrar Sesión */}
+      <button
+        onClick={cerrarSesion}
+        style={{
+          marginTop: '15px',
+          padding: '10px',
+          border: 'none',
+          cursor: 'pointer',
+          borderRadius: '6px',
+          backgroundColor: 'rgba(244, 67, 54, 0.15)',
+          color: '#ff8a80',
+          width: '100%',
+          fontSize: colapsado ? '1.2rem' : '0.85rem',
+          display: 'flex',
+          justifyContent: colapsado ? 'center' : 'flex-start',
+          gap: colapsado ? 0 : '8px',
+          alignItems: 'center'
+        }}
+      >
+        🚪 {!colapsado && <span>Cerrar sesión</span>}
+      </button>
     </div>
   )
 }

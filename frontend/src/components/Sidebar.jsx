@@ -18,23 +18,6 @@ function Sidebar() {
     return rolesPermitidos.includes(rol)
   }
 
-  // Verificar si el usuario es de sucursal
-const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
-
-// En el menú, mostrar según el rol y sucursal
-{!esSucursal && tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
-  <Link to="/sucursales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block' }}>
-    🏢 {!colapsado && <span>Sucursales</span>}
-  </Link>
-)}
-
-{/* Siempre mostrar ventas a los vendedores (incluyendo sucursal) */}
-{tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-  <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block' }}>
-    🛒 {!colapsado && <span>Ventas</span>}
-  </Link>
-)}
-
   const sidebarWidth = colapsado ? '60px' : '220px'
 
   return (
@@ -99,89 +82,126 @@ const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
         overflowX: 'hidden',
         paddingRight: '5px'
       }}>
+        {/* 📊 Dashboard - Dueño, Subgerente */}
         {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
           <Link to="/dashboard" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             📊 {!colapsado && <span>Dashboard</span>}
           </Link>
         )}
 
+        {/* 🛒 Ventas - Vendedor, Subgerente, Dueño */}
         {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             🛒 {!colapsado && <span>Ventas</span>}
           </Link>
         )}
 
+        {/* 📦 Productos - Supervisor, Subgerente, Dueño */}
         {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/productos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             📦 {!colapsado && <span>Productos</span>}
           </Link>
         )}
 
+        {/* 📊 Inventario - Vendedor, Supervisor, Subgerente, Dueño */}
         {tieneAcceso(['vendedor', 'vendedora', 'supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/inventario" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             📊 {!colapsado && <span>Inventario</span>}
           </Link>
         )}
 
+        {/* 👤 Clientes - Vendedor, Subgerente, Dueño */}
         {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/clientes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             👤 {!colapsado && <span>Clientes</span>}
           </Link>
         )}
 
+        {/* 🏭 Producción - Supervisor, Subgerente, Dueño */}
         {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/produccion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             🏭 {!colapsado && <span>Producción</span>}
           </Link>
         )}
 
+        {/* 🔧 Materiales - Supervisor, Subgerente, Dueño */}
         {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/materiales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             🔧 {!colapsado && <span>Materiales</span>}
           </Link>
         )}
 
-        {/* ✅ RECETAS - AGREGADO */}
+        {/* 📋 Recetas - Supervisor, Subgerente, Dueño */}
         {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/recetas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             📋 {!colapsado && <span>Recetas</span>}
           </Link>
         )}
 
+        {/* 🚚 Entregas - Chofer, Subgerente, Dueño */}
         {tieneAcceso(['chofer', 'subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/entregas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             🚚 {!colapsado && <span>Entregas</span>}
           </Link>
         )}
 
+        {/* 📋 No Entregados - Subgerente, Dueño */}
         {tieneAcceso(['subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/no-entregados" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             📋 {!colapsado && <span>No Entregados</span>}
           </Link>
         )}
 
+        {/* 💰 Créditos - Vendedor, Subgerente, Dueño */}
         {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/creditos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             💰 {!colapsado && <span>Créditos</span>}
           </Link>
         )}
 
+        {/* 📈 Reportes - Subgerente, Dueño */}
         {tieneAcceso(['subgerente', 'dueno', 'dueño', 'admin']) && (
           <Link to="/reportes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             📈 {!colapsado && <span>Reportes</span>}
           </Link>
         )}
 
-        <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block' }}>
-          📜 {!colapsado && <span>Historial</span>}
-        </Link>
+        {/* 📜 Historial - Subgerente, Dueño */}
+        {tieneAcceso(['subgerente', 'dueno', 'dueño', 'admin']) && (
+          <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
+            📜 {!colapsado && <span>Historial</span>}
+          </Link>
+        )}
 
+        {/* 👥 Usuarios - Dueño, Subgerente */}
         {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
           <Link to="/usuarios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
             👥 {!colapsado && <span>Usuarios</span>}
           </Link>
         )}
 
+        {/* 🔑 Códigos - Dueño, Subgerente */}
+        {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
+          <Link to="/codigos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
+            🔑 {!colapsado && <span>Códigos</span>}
+          </Link>
+        )}
+
+        {/* 🏢 Sucursales - Dueño, Subgerente */}
+        {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
+          <Link to="/sucursales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
+            🏢 {!colapsado && <span>Sucursales</span>}
+          </Link>
+        )}
+
+        {/* 📦 Transferencias - Vendedor, Subgerente, Dueño */}
+        {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
+          <Link to="/transferencias" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
+            📦 {!colapsado && <span>Transferencias</span>}
+          </Link>
+        )}
+
+        {/* ⚙️ Configuración - TODOS lo ven */}
         <Link to="/configuracion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
           ⚙️ {!colapsado && <span>Configuración</span>}
         </Link>

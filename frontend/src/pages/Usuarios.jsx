@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import AdminLayout from '../layouts/AdminLayout'
-import API_URL from '../config'  // 👈 Importar la URL centralizada
+import API_URL from '../config'
 
 function Usuarios() {
   const [usuarios, setUsuarios] = useState([])
+  const [sucursales, setSucursales] = useState([])  // ← AGREGADO
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editando, setEditando] = useState(null)
@@ -12,16 +13,17 @@ function Usuarios() {
     correo: '',
     password: '',
     rol: 'vendedor',
-    sucursal: ''
+    sucursal_id: ''  // ← CAMBIADO de 'sucursal' a 'sucursal_id'
   })
 
   useEffect(() => {
     cargarUsuarios()
+    cargarSucursales()  // ← AGREGADO
   }, [])
 
   const cargarUsuarios = async () => {
     try {
-      const response = await fetch(`${API_URL}/usuarios`)  // 👈 Cambiado
+      const response = await fetch(`${API_URL}/usuarios`)
       const data = await response.json()
       setUsuarios(data)
     } catch (error) {
@@ -31,25 +33,49 @@ function Usuarios() {
     }
   }
 
+  // ← FUNCIÓN AGREGADA
+  const cargarSucursales = async () => {
+    try {
+      const response = await fetch(`${API_URL}/sucursales`)
+      const data = await response.json()
+      setSucursales(data)
+    } catch (error) {
+      console.error('Error cargando sucursales:', error)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setCargando(true)
 
     try {
-      const url = editando ? `${API_URL}/usuarios/${editando}` : `${API_URL}/usuarios`  // 👈 Cambiado
+      const url = editando ? `${API_URL}/usuarios/${editando}` : `${API_URL}/usuarios`
       const method = editando ? 'PUT' : 'POST'
+
+      // Preparar datos para enviar
+      const datosEnviar = {
+        nombre: form.nombre,
+        correo: form.correo,
+        rol: form.rol,
+        sucursal_id: form.sucursal_id || null  // Si está vacío, enviar null
+      }
+
+      // Solo incluir password si se proporcionó
+      if (form.password) {
+        datosEnviar.password = form.password
+      }
 
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify(datosEnviar)
       })
 
       const data = await response.json()
 
       if (data.success) {
         alert(editando ? '✅ Usuario actualizado' : '✅ Usuario creado')
-        setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal: '' })
+        setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal_id: '' })
         setMostrarForm(false)
         setEditando(null)
         cargarUsuarios()
@@ -68,7 +94,7 @@ function Usuarios() {
     if (!window.confirm('¿Estás seguro de eliminar este usuario?')) return
 
     try {
-      const response = await fetch(`${API_URL}/usuarios/${id}`, { method: 'DELETE' })  // 👈 Cambiado
+      const response = await fetch(`${API_URL}/usuarios/${id}`, { method: 'DELETE' })
       const data = await response.json()
 
       if (data.success) {
@@ -87,7 +113,7 @@ function Usuarios() {
     if (!window.confirm('¿Resetear contraseña a 123456?')) return
 
     try {
-      const response = await fetch(`${API_URL}/usuarios/${id}/resetear`, { method: 'PUT' })  // 👈 Cambiado
+      const response = await fetch(`${API_URL}/usuarios/${id}/resetear`, { method: 'PUT' })
       const data = await response.json()
 
       if (data.success) {
@@ -107,7 +133,7 @@ function Usuarios() {
       correo: usuario.correo,
       password: '',
       rol: usuario.rol,
-      sucursal: usuario.sucursal || ''
+      sucursal_id: usuario.sucursal_id || ''  // ← CAMBIADO
     })
     setEditando(usuario.id)
     setMostrarForm(true)
@@ -117,7 +143,7 @@ function Usuarios() {
     <AdminLayout>
       <h1>👥 Usuarios</h1>
 
-      <button onClick={() => { setMostrarForm(!mostrarForm); setEditando(null); setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal: '' }) }} style={{ marginBottom: '20px', padding: '10px 20px', backgroundColor: '#003b6f', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' }}>
+      <button onClick={() => { setMostrarForm(!mostrarForm); setEditando(null); setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal_id: '' }) }} style={{ marginBottom: '20px', padding: '10px 20px', backgroundColor: '#003b6f', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' }}>
         {mostrarForm ? '✕ Cancelar' : '➕ Nuevo Usuario'}
       </button>
 
@@ -148,21 +174,17 @@ function Usuarios() {
               </select>
             </div>
             <div>
-    <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Sucursal</label>
-    <select
-        value={form.sucursal_id}
-        onChange={(e) => setForm({ ...form, sucursal_id: e.target.value })}
-        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-    >
-        <option value="">Seleccionar sucursal</option>
-        {sucursales.map(s => (
-            <option key={s.id} value={s.id}>{s.nombre}</option>
-        ))}
-    </select>
-</div>
-            <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Sucursal</label>
-              <input type="text" value={form.sucursal} onChange={(e) => setForm({ ...form, sucursal: e.target.value })} placeholder="Ej: Sucursal Norte" style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }} />
+              <select
+                value={form.sucursal_id}
+                onChange={(e) => setForm({ ...form, sucursal_id: e.target.value })}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              >
+                <option value="">Sin sucursal</option>
+                {sucursales.map(s => (
+                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                ))}
+              </select>
             </div>
           </div>
           <button type="submit" disabled={cargando} style={{ marginTop: '15px', padding: '12px 30px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' }}>{cargando ? 'Guardando...' : editando ? '✅ Actualizar Usuario' : '✅ Guardar Usuario'}</button>
@@ -189,7 +211,7 @@ function Usuarios() {
               <td style={{ padding: '12px', textAlign: 'center' }}>
                 <span style={{ backgroundColor: u.rol === 'dueno' ? '#d32f2f' : u.rol === 'subgerente' ? '#003b6f' : u.rol === 'supervisor' ? '#ff9800' : u.rol === 'chofer' ? '#4CAF50' : '#757575', color: 'white', padding: '2px 12px', borderRadius: '12px', fontSize: '0.8rem' }}>{u.rol}</span>
               </td>
-              <td style={{ padding: '12px', textAlign: 'center' }}>{u.sucursal || '-'}</td>
+              <td style={{ padding: '12px', textAlign: 'center' }}>{u.sucursal_nombre || u.sucursal || '-'}</td>
               <td style={{ padding: '12px', textAlign: 'center' }}>
                 <button onClick={() => handleEdit(u)} style={{ backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', marginRight: '5px' }}>✏️</button>
                 <button onClick={() => handleReset(u.id)} style={{ backgroundColor: '#ff9800', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', marginRight: '5px' }}>🔑</button>

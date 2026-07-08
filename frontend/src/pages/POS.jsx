@@ -121,6 +121,21 @@ function POS() {
       return
     }
 
+    const cargarProductos = async () => {
+    try {
+        const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+        const url = usuario.sucursal_id 
+            ? `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`
+            : `${API_URL}/productos`
+        
+        const response = await fetch(url)
+        const data = await response.json()
+        setProductos(data)
+    } catch (error) {
+        console.error('Error cargando productos:', error)
+    }
+}
+
     const desc = parseFloat(descuento) || 0
     if (desc > 0 && !codigoAutorizacion.trim()) {
       alert('⚠️ Para aplicar un descuento debes ingresar el código de autorización')

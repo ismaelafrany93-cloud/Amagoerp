@@ -14,6 +14,27 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.post('/', async (req, res) => {
+    try {
+        const { nombre, correo, password, rol, sucursal_id } = req.body;
+
+        const result = await pool.query(
+            `INSERT INTO usuarios (nombre, correo, password, rol, sucursal_id)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, nombre, correo, rol, sucursal_id`,
+            [nombre, correo, password || '123456', rol || 'vendedor', sucursal_id || null]
+        );
+
+        res.json({
+            success: true,
+            usuario: result.rows[0]
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Crear usuario
 router.post('/', async (req, res) => {
     try {

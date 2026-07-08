@@ -147,6 +147,19 @@ function Usuarios() {
                 <option value="dueno">👑 Dueño</option>
               </select>
             </div>
+            <div>
+    <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Sucursal</label>
+    <select
+        value={form.sucursal_id}
+        onChange={(e) => setForm({ ...form, sucursal_id: e.target.value })}
+        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+    >
+        <option value="">Seleccionar sucursal</option>
+        {sucursales.map(s => (
+            <option key={s.id} value={s.id}>{s.nombre}</option>
+        ))}
+    </select>
+</div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Sucursal</label>
               <input type="text" value={form.sucursal} onChange={(e) => setForm({ ...form, sucursal: e.target.value })} placeholder="Ej: Sucursal Norte" style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }} />

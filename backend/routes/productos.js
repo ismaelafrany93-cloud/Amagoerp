@@ -15,6 +15,27 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Obtener productos (con filtro de sucursal)
+router.get('/', async (req, res) => {
+    try {
+        const { sucursal_id } = req.query;
+        let query = 'SELECT * FROM productos';
+        let params = [];
+
+        if (sucursal_id) {
+            query += ' WHERE sucursal_id = $1 OR sucursal_id IS NULL';
+            params.push(sucursal_id);
+        }
+
+        query += ' ORDER BY nombre';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Obtener un producto por ID
 router.get('/:id', async (req, res) => {
     try {

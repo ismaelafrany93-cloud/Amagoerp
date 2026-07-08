@@ -18,6 +18,23 @@ function Sidebar() {
     return rolesPermitidos.includes(rol)
   }
 
+  // Verificar si el usuario es de sucursal
+const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
+
+// En el menú, mostrar según el rol y sucursal
+{!esSucursal && tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
+  <Link to="/sucursales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block' }}>
+    🏢 {!colapsado && <span>Sucursales</span>}
+  </Link>
+)}
+
+{/* Siempre mostrar ventas a los vendedores (incluyendo sucursal) */}
+{tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
+  <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block' }}>
+    🛒 {!colapsado && <span>Ventas</span>}
+  </Link>
+)}
+
   const sidebarWidth = colapsado ? '60px' : '220px'
 
   return (

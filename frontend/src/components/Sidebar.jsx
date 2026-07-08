@@ -13,38 +13,38 @@ function Sidebar() {
   const sucursalId = usuario?.sucursal_id || null
   const sucursalNombre = usuario?.sucursal || usuario?.sucursal_nombre || ''
   
-  // 👇 DETECTAR SUCURSALES SEGÚN ID
-  const esSucursalPrincipal = sucursalId === 3 || sucursalNombre === 'Sucursal Principal' || sucursalNombre === 'Principal'
-  const esSucursalBani = sucursalId === 1 || sucursalNombre === 'Sucursal Baní' || sucursalNombre === 'Bani' || sucursalNombre === 'Baní'
-  const esSucursalSabana = sucursalId === 2 || sucursalNombre === 'Sucursal Sabana' || sucursalNombre === 'Sabana'
+  // 🔍 DEBUG - Elimina esto después
+  console.log('🔍 Sidebar Debug:', { rol, sucursalId, sucursalNombre })
+
+  // 👇 SUCURSALES SEGÚN TU BASE DE DATOS
+  const esSucursalPrincipal = sucursalId === 3 || 
+                              sucursalNombre === 'Sucursal Principal' || 
+                              sucursalNombre === 'Principal' ||
+                              // Si es vendedor y no tiene sucursal, la principal por defecto
+                              (rol === 'vendedor' || rol === 'vendedora') && sucursalId === null
   
-  // 👇 SI ES SUBGERENTE O ADMIN, VE TODO
+  const esSucursalBani = sucursalId === 1 || 
+                         sucursalNombre === 'Sucursal Baní' || 
+                         sucursalNombre === 'Bani' || 
+                         sucursalNombre === 'Baní'
+  
+  const esSucursalSabana = sucursalId === 2 || 
+                           sucursalNombre === 'Sucursal Sabana' || 
+                           sucursalNombre === 'Sabana'
+  
+  // 👇 ROLES
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  const esVendedor = ['vendedor', 'vendedora'].includes(rol)
+  const esChofer = rol === 'chofer'
+  const esSupervisor = rol === 'supervisor'
+
+  console.log('🔍 Sidebar Sucursales:', { esSucursalPrincipal, esSucursalBani, esSucursalSabana })
 
   const cerrarSesion = () => {
     if (window.confirm('¿Estás seguro de que quieres cerrar sesión?')) {
       localStorage.removeItem('usuario')
       navigate('/')
     }
-  }
-
-  const tieneAcceso = (rolesPermitidos) => {
-    return rolesPermitidos.includes(rol)
-  }
-
-  // 👇 SUBGERENTE/DUEÑO PUEDEN VER TRANSFERENCIAS
-  const puedeVerTransferencias = () => {
-    return esSubgerente || (esSucursalPrincipal && tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']))
-  }
-
-  // 👇 SUBGERENTE/DUEÑO PUEDEN VER INVENTARIO BANÍ
-  const puedeVerInventarioBani = () => {
-    return esSubgerente || esSucursalBani
-  }
-
-  // 👇 SUBGERENTE/DUEÑO PUEDEN VER INVENTARIO SABANA
-  const puedeVerInventarioSabana = () => {
-    return esSubgerente || esSucursalSabana
   }
 
   const sidebarWidth = colapsado ? '60px' : '220px'
@@ -89,9 +89,7 @@ function Sidebar() {
         >
           ☰
         </button>
-        {!colapsado && <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>
-          {esSucursalBani ? '🏢 BANÍ' : esSucursalSabana ? '🏢 SABANA' : 'AMAGO'}
-        </span>}
+        {!colapsado && <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>AMAGO</span>}
       </div>
 
       {!colapsado && (
@@ -100,6 +98,9 @@ function Sidebar() {
           <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6 }}>Rol: {rol}</p>
           {sucursalNombre && (
             <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6 }}>🏢 {sucursalNombre}</p>
+          )}
+          {!sucursalNombre && (
+            <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6, color: '#ff8a80' }}>⚠️ Sin sucursal asignada</p>
           )}
         </div>
       )}
@@ -115,127 +116,85 @@ function Sidebar() {
       }}>
 
         {/* ========================================== */}
-        {/* MENÚ PARA BANÍ (SOLO VENDEDORES DE BANÍ) */}
+        {/* MENÚ PARA SUBGERENTE/DUEÑO (VE TODO) */}
         {/* ========================================== */}
-        {esSucursalBani && !esSubgerente && (
+        {esSubgerente && (
           <>
+            <Link to="/dashboard" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/dashboard' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Dashboard</span>}</Link>
             <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🛒 {!colapsado && <span>Ventas</span>}</Link>
-            <Link to="/inventario-bani" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario Baní</span>}</Link>
+            <Link to="/productos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/productos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Productos</span>}</Link>
+            <Link to="/inventario" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario General</span>}</Link>
+            <Link to="/inventario-bani" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏢 {!colapsado && <span>Inventario Baní</span>}</Link>
+            <Link to="/inventario-sabana" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏢 {!colapsado && <span>Inventario Sabana</span>}</Link>
             <Link to="/clientes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👤 {!colapsado && <span>Clientes</span>}</Link>
+            <Link to="/produccion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/produccion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏭 {!colapsado && <span>Producción</span>}</Link>
+            <Link to="/materiales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/materiales' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔧 {!colapsado && <span>Materiales</span>}</Link>
+            <Link to="/recetas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/recetas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📋 {!colapsado && <span>Recetas</span>}</Link>
+            <Link to="/entregas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🚚 {!colapsado && <span>Entregas</span>}</Link>
+            <Link to="/no-entregados" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/no-entregados' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📋 {!colapsado && <span>No Entregados</span>}</Link>
             <Link to="/creditos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Créditos</span>}</Link>
+            <Link to="/reportes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/reportes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📈 {!colapsado && <span>Reportes</span>}</Link>
+            <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📜 {!colapsado && <span>Historial</span>}</Link>
+            <Link to="/usuarios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/usuarios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👥 {!colapsado && <span>Usuarios</span>}</Link>
+            <Link to="/sucursales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/sucursales' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏢 {!colapsado && <span>Sucursales</span>}</Link>
+            <Link to="/transferencias" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Transferencias</span>}</Link>
             <Link to="/configuracion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>⚙️ {!colapsado && <span>Configuración</span>}</Link>
           </>
         )}
 
         {/* ========================================== */}
-        {/* MENÚ PARA SABANA (SOLO VENDEDORES DE SABANA) */}
+        {/* MENÚ PARA VENDEDOR (PRINCIPAL, BANÍ O SABANA) */}
         {/* ========================================== */}
-        {esSucursalSabana && !esSubgerente && (
+        {esVendedor && (
           <>
+            {/* 🛒 Ventas - Todos los vendedores */}
             <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🛒 {!colapsado && <span>Ventas</span>}</Link>
-            <Link to="/inventario-sabana" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario Sabana</span>}</Link>
-            <Link to="/clientes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👤 {!colapsado && <span>Clientes</span>}</Link>
-            <Link to="/creditos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Créditos</span>}</Link>
-            <Link to="/configuracion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>⚙️ {!colapsado && <span>Configuración</span>}</Link>
-          </>
-        )}
 
-        {/* ========================================== */}
-        {/* MENÚ PARA SUCURSAL PRINCIPAL Y SUBGERENTES */}
-        {/* ========================================== */}
-        {(esSucursalPrincipal || esSubgerente) && (
-          <>
-            {/* 📊 Dashboard */}
-            {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
-              <Link to="/dashboard" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/dashboard' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Dashboard</span>}</Link>
+            {/* 📊 Inventario según sucursal */}
+            {esSucursalPrincipal && (
+              <Link to="/inventario" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario</span>}</Link>
             )}
-
-            {/* 🛒 Ventas */}
-            {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🛒 {!colapsado && <span>Ventas</span>}</Link>
+            {esSucursalBani && (
+              <Link to="/inventario-bani" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario Baní</span>}</Link>
             )}
-
-            {/* 📦 Productos */}
-            {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/productos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/productos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Productos</span>}</Link>
-            )}
-
-            {/* 📊 Inventario General */}
-            {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
-              <Link to="/inventario" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario General</span>}</Link>
-            )}
-
-            {/* 🏢 Inventario Baní */}
-            {puedeVerInventarioBani() && (
-              <Link to="/inventario-bani" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏢 {!colapsado && <span>Inventario Baní</span>}</Link>
-            )}
-
-            {/* 🏢 Inventario Sabana */}
-            {puedeVerInventarioSabana() && (
-              <Link to="/inventario-sabana" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏢 {!colapsado && <span>Inventario Sabana</span>}</Link>
+            {esSucursalSabana && (
+              <Link to="/inventario-sabana" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario Sabana</span>}</Link>
             )}
 
             {/* 👤 Clientes */}
-            {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/clientes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👤 {!colapsado && <span>Clientes</span>}</Link>
-            )}
-
-            {/* 🏭 Producción */}
-            {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/produccion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/produccion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏭 {!colapsado && <span>Producción</span>}</Link>
-            )}
-
-            {/* 🔧 Materiales */}
-            {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/materiales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/materiales' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔧 {!colapsado && <span>Materiales</span>}</Link>
-            )}
-
-            {/* 📋 Recetas */}
-            {tieneAcceso(['supervisor', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/recetas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/recetas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📋 {!colapsado && <span>Recetas</span>}</Link>
-            )}
-
-            {/* 🚚 Entregas */}
-            {tieneAcceso(['chofer', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/entregas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🚚 {!colapsado && <span>Entregas</span>}</Link>
-            )}
-
-            {/* 📋 No Entregados */}
-            {tieneAcceso(['subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/no-entregados" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/no-entregados' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📋 {!colapsado && <span>No Entregados</span>}</Link>
-            )}
+            <Link to="/clientes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👤 {!colapsado && <span>Clientes</span>}</Link>
 
             {/* 💰 Créditos */}
-            {tieneAcceso(['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/creditos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Créditos</span>}</Link>
-            )}
+            <Link to="/creditos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Créditos</span>}</Link>
 
-            {/* 📈 Reportes */}
-            {tieneAcceso(['subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/reportes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/reportes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📈 {!colapsado && <span>Reportes</span>}</Link>
-            )}
-
-            {/* 📜 Historial */}
-            {tieneAcceso(['subgerente', 'dueno', 'dueño', 'admin']) && (
-              <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📜 {!colapsado && <span>Historial</span>}</Link>
-            )}
-
-            {/* 👥 Usuarios */}
-            {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
-              <Link to="/usuarios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/usuarios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👥 {!colapsado && <span>Usuarios</span>}</Link>
-            )}
-
-            {/* 🏢 Sucursales */}
-            {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
-              <Link to="/sucursales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/sucursales' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏢 {!colapsado && <span>Sucursales</span>}</Link>
-            )}
-
-            {/* 📦 Transferencias */}
-            {puedeVerTransferencias() && (
+            {/* 📦 Transferencias - Solo vendedores de la principal */}
+            {esSucursalPrincipal && (
               <Link to="/transferencias" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Transferencias</span>}</Link>
             )}
 
             {/* ⚙️ Configuración */}
+            <Link to="/configuracion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>⚙️ {!colapsado && <span>Configuración</span>}</Link>
+          </>
+        )}
+
+        {/* ========================================== */}
+        {/* MENÚ PARA CHOFER */}
+        {/* ========================================== */}
+        {esChofer && (
+          <>
+            <Link to="/entregas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🚚 {!colapsado && <span>Entregas</span>}</Link>
+            <Link to="/configuracion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>⚙️ {!colapsado && <span>Configuración</span>}</Link>
+          </>
+        )}
+
+        {/* ========================================== */}
+        {/* MENÚ PARA SUPERVISOR */}
+        {/* ========================================== */}
+        {esSupervisor && (
+          <>
+            <Link to="/produccion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/produccion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏭 {!colapsado && <span>Producción</span>}</Link>
+            <Link to="/materiales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/materiales' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔧 {!colapsado && <span>Materiales</span>}</Link>
+            <Link to="/recetas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/recetas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📋 {!colapsado && <span>Recetas</span>}</Link>
             <Link to="/configuracion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>⚙️ {!colapsado && <span>Configuración</span>}</Link>
           </>
         )}

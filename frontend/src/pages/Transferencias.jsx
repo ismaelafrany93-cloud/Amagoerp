@@ -19,25 +19,29 @@ function Transferencias() {
     const [cantidadSeleccionada, setCantidadSeleccionada] = useState(1)
 
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-    const esSucursalPrincipal = usuario.sucursal_id === 1
+    
+    // ✅ SOLO ESTOS ROLES PUEDEN HACER TRANSFERENCIAS
+    const rolesPermitidos = ['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']
+    const puedeHacerTransferencias = rolesPermitidos.includes(usuario.rol) && usuario.sucursal_id === 3
 
     useEffect(() => {
-        // Verificar acceso - Solo sucursal principal
-        if (!esSucursalPrincipal) {
-            alert('⚠️ Solo usuarios de la sucursal principal pueden acceder a Transferencias')
+        if (!puedeHacerTransferencias) {
+            alert('⚠️ Solo vendedores, subgerente y dueño de la sucursal principal pueden acceder a Transferencias')
             window.location.href = '/dashboard'
         } else {
             cargarDatos()
         }
     }, [])
 
-    // Si no es principal, mostrar mensaje
-    if (!esSucursalPrincipal) {
+    // Si no tiene permisos, mostrar mensaje
+    if (!puedeHacerTransferencias) {
         return (
             <AdminLayout>
                 <div style={{ textAlign: 'center', padding: '60px' }}>
                     <h2>⛔ Acceso Denegado</h2>
-                    <p style={{ color: '#666' }}>Solo usuarios de la sucursal principal pueden acceder a Transferencias</p>
+                    <p style={{ color: '#666' }}>
+                        Solo vendedores, subgerente y dueño de la sucursal principal pueden acceder a Transferencias
+                    </p>
                 </div>
             </AdminLayout>
         )
@@ -55,7 +59,6 @@ function Transferencias() {
             const productosData = await prodRes.json()
             const sucursalesData = await sucRes.json()
 
-            // 🛡️ SIEMPRE asegurar que sean arrays
             setTransferencias(Array.isArray(transferenciasData) ? transferenciasData : [])
             setProductos(Array.isArray(productosData) ? productosData : [])
             setSucursales(Array.isArray(sucursalesData) ? sucursalesData : [])
@@ -392,6 +395,7 @@ function Transferencias() {
                 </form>
             )}
 
+            {/* Lista de transferencias */}
             <table style={{
                 width: '100%',
                 borderCollapse: 'collapse',

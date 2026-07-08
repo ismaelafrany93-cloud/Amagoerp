@@ -19,11 +19,28 @@ function Transferencias() {
     const [cantidadSeleccionada, setCantidadSeleccionada] = useState(1)
 
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-    const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
+    const esSucursalPrincipal = usuario.sucursal_id === 1
 
     useEffect(() => {
-        cargarDatos()
+        // Verificar acceso - Solo sucursal principal
+        if (!esSucursalPrincipal) {
+            alert('⚠️ Solo usuarios de la sucursal principal pueden acceder a Transferencias')
+            window.location.href = '/dashboard'
+        } else {
+            cargarDatos()
+        }
     }, [])
+
+    if (!esSucursalPrincipal) {
+        return (
+            <AdminLayout>
+                <div style={{ textAlign: 'center', padding: '60px' }}>
+                    <h2>⛔ Acceso Denegado</h2>
+                    <p style={{ color: '#666' }}>Solo usuarios de la sucursal principal pueden acceder a Transferencias</p>
+                </div>
+            </AdminLayout>
+        )
+    }
 
     const cargarDatos = async () => {
         try {
@@ -133,6 +150,7 @@ function Transferencias() {
                 setMensaje('❌ Error: ' + (data.message || data.error))
             }
         } catch (error) {
+            console.error('Error al guardar:', error)
             setMensaje('❌ Error al guardar')
         } finally {
             setCargando(false)
@@ -156,6 +174,7 @@ function Transferencias() {
                 setMensaje('❌ ' + (data.message || data.error))
             }
         } catch (error) {
+            console.error('Error al confirmar recepción:', error)
             setMensaje('❌ Error al confirmar recepción')
         }
     }
@@ -177,6 +196,7 @@ function Transferencias() {
                 setMensaje('❌ ' + (data.message || data.error))
             }
         } catch (error) {
+            console.error('Error al cancelar:', error)
             setMensaje('❌ Error al cancelar')
         }
     }
@@ -367,7 +387,6 @@ function Transferencias() {
                 </form>
             )}
 
-            {/* Lista de transferencias */}
             <table style={{
                 width: '100%',
                 borderCollapse: 'collapse',

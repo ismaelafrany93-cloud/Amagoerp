@@ -6,6 +6,10 @@ function Inventario() {
   const [productos, setProductos] = useState([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
+  
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+  const esSucursalPrincipal = usuario.sucursal_id === 1
+  const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
 
   useEffect(() => {
     cargarInventario()
@@ -13,19 +17,16 @@ function Inventario() {
 
   const cargarInventario = async () => {
     try {
-      const response = await fetch(`${API_URL}/inventario`)
-      
+      let url = `${API_URL}/inventario`
+      if (esSucursal && !esSucursalPrincipal) {
+        url = `${API_URL}/inventario?sucursal_id=${usuario.sucursal_id}`
+      }
+      const response = await fetch(url)
       if (!response.ok) {
         throw new Error('Error al cargar el inventario')
       }
-      
       const data = await response.json()
-      
-      if (Array.isArray(data)) {
-        setProductos(data)
-      } else {
-        setProductos([])
-      }
+      setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando inventario:', error)
       setError('Error al cargar el inventario: ' + error.message)
@@ -33,6 +34,12 @@ function Inventario() {
     } finally {
       setCargando(false)
     }
+  }
+
+  const infoSucursal = () => {
+    if (esSucursalPrincipal) return '📊 Inventario General - Todas las sucursales'
+    if (esSucursal) return `🏢 Inventario - ${usuario.sucursal_nombre || 'Mi Sucursal'}`
+    return '📊 Inventario'
   }
 
   if (cargando) {
@@ -72,7 +79,21 @@ function Inventario() {
 
   return (
     <AdminLayout>
-      <h1>📦 Inventario</h1>
+      <h1>📦 {infoSucursal()}</h1>
+      
+      {!esSucursalPrincipal && esSucursal && (
+        <div style={{
+          backgroundColor: '#e3f2fd',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #003b6f'
+        }}>
+          <p style={{ margin: 0, color: '#003b6f' }}>
+            ℹ️ Mostrando inventario de tu sucursal
+          </p>
+        </div>
+      )}
 
       <table style={{ 
         width: '100%', 

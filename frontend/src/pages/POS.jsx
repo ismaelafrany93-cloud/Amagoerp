@@ -9,20 +9,15 @@ function POS() {
   const [carrito, setCarrito] = useState([])
   const [busqueda, setBusqueda] = useState('')
   const [cargando, setCargando] = useState(false)
-  
   const [tipoPago, setTipoPago] = useState('contado')
   const [tipoEntrega, setTipoEntrega] = useState('retiro')
-  
   const [codigoEntrega, setCodigoEntrega] = useState('')
   const [ventaCompletada, setVentaCompletada] = useState(false)
   const [ventaId, setVentaId] = useState(null)
-
-  // 👇 CAMPOS DE ENVÍO Y DESCUENTO (SIEMPRE VISIBLES)
   const [costoEnvio, setCostoEnvio] = useState('')
   const [descuento, setDescuento] = useState('')
   const [codigoAutorizacion, setCodigoAutorizacion] = useState('')
   const [mostrarAutorizacion, setMostrarAutorizacion] = useState(false)
-
   const [cliente, setCliente] = useState({
     nombre: '',
     telefono: '',
@@ -32,6 +27,9 @@ function POS() {
   })
 
   const facturaRef = useRef()
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+  const esSucursalPrincipal = usuario.sucursal_id === 1
+  const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
 
   const handlePrint = useReactToPrint({
     content: () => facturaRef.current,
@@ -47,18 +45,31 @@ function POS() {
 
   const cargarProductos = async () => {
     try {
-      const response = await fetch(`${API_URL}/productos`)
+      let url = `${API_URL}/productos`
+      if (esSucursal && !esSucursalPrincipal) {
+        url = `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`
+      }
+      const response = await fetch(url)
       const data = await response.json()
       setProductos(data)
     } catch (error) {
       console.error('Error cargando productos:', error)
+      alert('❌ Error cargando productos. Verifica tu conexión.')
     }
   }
 
   const agregar = (producto) => {
+    if (producto.stock <= 0) {
+      alert('⚠️ No hay stock disponible de este producto')
+      return
+    }
     setCarrito(prev => {
       const existe = prev.find(item => item.id === producto.id)
       if (existe) {
+        if (existe.cantidad >= producto.stock) {
+          alert(`⚠️ Solo hay ${producto.stock} unidades disponibles`)
+          return prev
+        }
         return prev.map(item =>
           item.id === producto.id
             ? { ...item, cantidad: item.cantidad + 1 }
@@ -73,6 +84,11 @@ function POS() {
     if (nuevaCantidad <= 0) {
       setCarrito(prev => prev.filter(item => item.id !== id))
     } else {
+      const producto = productos.find(p => p.id === id)
+      if (producto && nuevaCantidad > producto.stock) {
+        alert(`⚠️ Solo hay ${producto.stock} unidades disponibles`)
+        return
+      }
       setCarrito(prev =>
         prev.map(item =>
           item.id === id
@@ -115,27 +131,10 @@ function POS() {
       alert('⚠️ Por favor ingresa el nombre del cliente')
       return
     }
-
     if (carrito.length === 0) {
       alert('⚠️ El carrito está vacío')
       return
     }
-
-    const cargarProductos = async () => {
-    try {
-        const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-        const url = usuario.sucursal_id 
-            ? `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`
-            : `${API_URL}/productos`
-        
-        const response = await fetch(url)
-        const data = await response.json()
-        setProductos(data)
-    } catch (error) {
-        console.error('Error cargando productos:', error)
-    }
-}
-
     const desc = parseFloat(descuento) || 0
     if (desc > 0 && !codigoAutorizacion.trim()) {
       alert('⚠️ Para aplicar un descuento debes ingresar el código de autorización')
@@ -143,49 +142,46 @@ function POS() {
     }
 
     setCargando(true)
-
     try {
-      const usuario = JSON.parse(localStorage.getItem('usuario'))
-
       const esCredito = tipoPago === 'credito'
       const esDomicilio = tipoEntrega === 'domicilio'
+
+      const datosVenta = {
+        usuario_id: usuario.id,
+        sucursal_id: usuario.sucursal_id || null,
+        carrito: carrito.map(item => ({
+          id: item.id,
+          precio: item.precio,
+          cantidad: item.cantidad
+        })),
+        total: subtotal,
+        tipo_pago: esCredito ? 'Crédito' : 'Efectivo',
+        tipo_venta: esCredito ? 'credito' : 'contado',
+        tipo_entrega: esDomicilio ? 'domicilio' : 'retiro',
+        cliente_nombre: cliente.nombre,
+        cliente_telefono: cliente.telefono,
+        cliente_direccion: cliente.direccion,
+        cliente_referencia: cliente.referencia,
+        detalles: cliente.detalles,
+        costo_envio: parseFloat(costoEnvio) || 0,
+        descuento: parseFloat(descuento) || 0,
+        codigo_autorizacion: codigoAutorizacion || null
+      }
 
       const response = await fetch(`${API_URL}/ventas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          usuario_id: usuario.id,
-          carrito: carrito.map(item => ({
-            id: item.id,
-            precio: item.precio,
-            cantidad: item.cantidad
-          })),
-          total: subtotal,
-          tipo_pago: esCredito ? 'Crédito' : 'Efectivo',
-          tipo_venta: esCredito ? 'credito' : 'contado',
-          tipo_entrega: esDomicilio ? 'domicilio' : 'retiro',
-          cliente_nombre: cliente.nombre,
-          cliente_telefono: cliente.telefono,
-          cliente_direccion: cliente.direccion,
-          cliente_referencia: cliente.referencia,
-          detalles: cliente.detalles,
-          costo_envio: parseFloat(costoEnvio) || 0,
-          descuento: parseFloat(descuento) || 0,
-          codigo_autorizacion: codigoAutorizacion || null
-        })
+        body: JSON.stringify(datosVenta)
       })
 
       const data = await response.json()
 
       if (data.success) {
         setVentaId(data.ventaId)
-        
         if (esCredito || esDomicilio) {
           setCodigoEntrega(data.codigo)
         }
-        
         setVentaCompletada(true)
-        
         let mensaje = `✅ Venta completada #${data.ventaId} - Total: RD$ ${data.total.toFixed(2)}`
         if (data.descuento_aplicado > 0) {
           mensaje += `\n💰 Descuento aplicado: ${data.descuento_aplicado}%`
@@ -223,6 +219,8 @@ function POS() {
     if (tipoPago === 'contado' && tipoEntrega === 'domicilio') return '🚚 Contado con Entrega a Domicilio'
     return '💰 Contado - Retiro en Tienda'
   }
+
+  const esSucursalNoPrincipal = esSucursal && !esSucursalPrincipal
 
   if (ventaCompletada) {
     return (
@@ -290,7 +288,6 @@ function POS() {
               </button>
             </div>
           </div>
-
           <div id="factura-para-imprimir" style={{ 
             position: 'fixed', 
             left: '0', 
@@ -321,7 +318,21 @@ function POS() {
     <AdminLayout>
       <h1>🛒 Punto de Venta</h1>
 
-      {/* Tipo de Pago */}
+      {esSucursalNoPrincipal && (
+        <div style={{
+          backgroundColor: '#fff3e0',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          marginBottom: '15px',
+          borderLeft: '4px solid #ff9800'
+        }}>
+          <p style={{ margin: 0, color: '#e65100' }}>
+            🏢 <strong>{usuario.sucursal_nombre || 'Mi Sucursal'}</strong> - 
+            Mostrando inventario de tu sucursal
+          </p>
+        </div>
+      )}
+
       <div style={{
         display: 'flex',
         gap: '20px',
@@ -334,24 +345,15 @@ function POS() {
       }}>
         <label style={{ fontWeight: 'bold', color: '#003b6f' }}>💳 Tipo de Pago:</label>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-          <input
-            type="radio"
-            checked={tipoPago === 'contado'}
-            onChange={() => setTipoPago('contado')}
-          />
+          <input type="radio" checked={tipoPago === 'contado'} onChange={() => setTipoPago('contado')} />
           💰 Contado
         </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-          <input
-            type="radio"
-            checked={tipoPago === 'credito'}
-            onChange={() => setTipoPago('credito')}
-          />
+          <input type="radio" checked={tipoPago === 'credito'} onChange={() => setTipoPago('credito')} />
           📦 Crédito
         </label>
       </div>
 
-      {/* Tipo de Entrega */}
       <div style={{
         display: 'flex',
         gap: '20px',
@@ -364,24 +366,15 @@ function POS() {
       }}>
         <label style={{ fontWeight: 'bold', color: '#1b5e20' }}>🚚 Tipo de Entrega:</label>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-          <input
-            type="radio"
-            checked={tipoEntrega === 'retiro'}
-            onChange={() => setTipoEntrega('retiro')}
-          />
+          <input type="radio" checked={tipoEntrega === 'retiro'} onChange={() => setTipoEntrega('retiro')} />
           🏪 Retiro en tienda
         </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-          <input
-            type="radio"
-            checked={tipoEntrega === 'domicilio'}
-            onChange={() => setTipoEntrega('domicilio')}
-          />
+          <input type="radio" checked={tipoEntrega === 'domicilio'} onChange={() => setTipoEntrega('domicilio')} />
           🚚 Entrega a domicilio
         </label>
       </div>
 
-      {/* 👇 COSTO DE ENVÍO Y DESCUENTO - SIEMPRE VISIBLE */}
       <div style={{
         border: '2px solid #003b6f',
         borderRadius: '8px',
@@ -391,7 +384,6 @@ function POS() {
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
         <h4 style={{ margin: '0 0 15px 0', color: '#003b6f' }}>💰 Costos y Descuentos</h4>
-        
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
           <div>
             <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>Costo de Envío (RD$)</label>
@@ -428,12 +420,9 @@ function POS() {
             />
           </div>
         </div>
-
         {mostrarAutorizacion && (
           <div style={{ marginTop: '15px', padding: '15px', backgroundColor: '#fff8e1', borderRadius: '8px', border: '1px solid #ff9800' }}>
-            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>
-              🔑 Código de Autorización (requerido para descuento)
-            </label>
+            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>🔑 Código de Autorización</label>
             <input
               type="text"
               value={codigoAutorizacion}
@@ -448,7 +437,6 @@ function POS() {
         )}
       </div>
 
-      {/* Datos del Cliente */}
       <div style={{
         border: '2px solid #003b6f',
         borderRadius: '12px',
@@ -501,17 +489,12 @@ function POS() {
         </div>
       </div>
 
-      {/* Resumen de totales */}
       {carrito.length > 0 && (
         <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '1px solid #003b6f' }}>
           <h4 style={{ margin: '0 0 10px 0', color: '#003b6f' }}>📊 Resumen de la Venta</h4>
-          <p style={{ margin: '5px 0' }}>
-            <strong>Subtotal:</strong> RD$ {subtotal.toFixed(2)}
-          </p>
+          <p style={{ margin: '5px 0' }}><strong>Subtotal:</strong> RD$ {subtotal.toFixed(2)}</p>
           {parseFloat(costoEnvio) > 0 && (
-            <p style={{ margin: '5px 0' }}>
-              <strong>Envío:</strong> RD$ {parseFloat(costoEnvio).toFixed(2)}
-            </p>
+            <p style={{ margin: '5px 0' }}><strong>Envío:</strong> RD$ {parseFloat(costoEnvio).toFixed(2)}</p>
           )}
           {parseFloat(descuento) > 0 && (
             <p style={{ margin: '5px 0', color: '#d32f2f' }}>
@@ -524,7 +507,6 @@ function POS() {
         </div>
       )}
 
-      {/* Buscador */}
       <input
         type="text"
         placeholder="🔍 Buscar producto..."
@@ -543,29 +525,36 @@ function POS() {
                   border: '1px solid #ddd',
                   padding: '15px',
                   borderRadius: '10px',
-                  backgroundColor: '#f9f9f9'
+                  backgroundColor: '#f9f9f9',
+                  opacity: (producto.stock || 0) <= 0 ? 0.5 : 1
                 }}>
                   <h4 style={{ margin: '0 0 8px 0' }}>{producto.nombre}</h4>
                   <p style={{ margin: '5px 0', fontSize: '1.1rem', fontWeight: 'bold', color: '#003b6f' }}>
                     RD$ {Number(producto.precio).toFixed(2)}
                   </p>
-                  <p style={{ margin: '2px 0', fontSize: '0.8rem', color: '#666' }}>
+                  <p style={{ 
+                    margin: '2px 0', 
+                    fontSize: '0.8rem', 
+                    color: (producto.stock || 0) <= 0 ? '#f44336' : (producto.stock || 0) <= 5 ? '#ff9800' : '#666'
+                  }}>
                     Stock: {producto.stock || 0}
+                    {(producto.stock || 0) <= 0 && ' ❌ Agotado'}
                   </p>
                   <button
                     onClick={() => agregar(producto)}
+                    disabled={(producto.stock || 0) <= 0}
                     style={{
-                      backgroundColor: '#003b6f',
+                      backgroundColor: (producto.stock || 0) <= 0 ? '#999' : '#003b6f',
                       color: 'white',
                       border: 'none',
                       borderRadius: '6px',
                       padding: '8px 16px',
-                      cursor: 'pointer',
+                      cursor: (producto.stock || 0) <= 0 ? 'not-allowed' : 'pointer',
                       width: '100%',
                       marginTop: '8px'
                     }}
                   >
-                    Agregar
+                    {(producto.stock || 0) <= 0 ? 'Agotado' : 'Agregar'}
                   </button>
                 </div>
               ))}
@@ -588,9 +577,9 @@ function POS() {
                   <div style={{ fontWeight: 'bold' }}>{item.nombre}</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
-                      <button onClick={() => actualizarCantidad(item.id, item.cantidad - 1)} style={{ cursor: 'pointer' }}>−</button>
+                      <button onClick={() => actualizarCantidad(item.id, item.cantidad - 1)} style={{ cursor: 'pointer', padding: '2px 8px' }}>−</button>
                       <span style={{ margin: '0 8px' }}>{item.cantidad}</span>
-                      <button onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} style={{ cursor: 'pointer' }}>+</button>
+                      <button onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} style={{ cursor: 'pointer', padding: '2px 8px' }}>+</button>
                     </div>
                     <span>RD$ {(item.precio * item.cantidad).toFixed(2)}</span>
                     <button onClick={() => eliminar(item.id)} style={{ backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer' }}>✕</button>

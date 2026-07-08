@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /productos - Obtener productos (con filtro por sucursal)
+// GET /productos - Obtener productos
 // ============================================
 router.get('/', async (req, res) => {
     try {
@@ -15,19 +15,15 @@ router.get('/', async (req, res) => {
                 p.categoria, 
                 p.descripcion, 
                 p.precio,
-                p.costo,
-                p.stock,
+                COALESCE(p.stock, 0) as stock,
                 p.sucursal_id,
-                s.nombre as sucursal_nombre,
-                COALESCE(pi.stock, p.stock) as stock_disponible
+                s.nombre as sucursal_nombre
             FROM productos p
             LEFT JOIN sucursales s ON p.sucursal_id = s.id
-            LEFT JOIN producto_inventario pi ON p.id = pi.producto_id AND pi.sucursal_id = p.sucursal_id
             WHERE 1=1
         `;
         let params = [];
 
-        // Filtrar por sucursal si se envía el parámetro
         if (sucursal_id) {
             query += ` AND (p.sucursal_id = $1 OR p.sucursal_id IS NULL)`;
             params.push(sucursal_id);
@@ -36,18 +32,16 @@ router.get('/', async (req, res) => {
         query += ` ORDER BY p.nombre`;
 
         const result = await pool.query(query, params);
-        res.json(result.rows);
+        res.json(result.rows || []);
+        
     } catch (error) {
-        console.error('Error en GET /productos:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message 
-        });
+        console.error('❌ Error en GET /productos:', error.message);
+        res.status(200).json([]);
     }
 });
 
 // ============================================
-// GET /productos/:id - Obtener un producto por ID
+// GET /productos/:id - Obtener producto por ID
 // ============================================
 router.get('/:id', async (req, res) => {
     try {
@@ -70,8 +64,9 @@ router.get('/:id', async (req, res) => {
         }
 
         res.json(result.rows[0]);
+        
     } catch (error) {
-        console.error('Error en GET /productos/:id:', error);
+        console.error('❌ Error en GET /productos/:id:', error.message);
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -89,14 +84,10 @@ router.post('/', async (req, res) => {
             categoria, 
             descripcion, 
             precio, 
-            costo,
             stock, 
-            sucursal_id,
-            codigo_barras,
-            imagen_url
+            sucursal_id
         } = req.body;
 
-        // Validar datos requeridos
         if (!nombre || !precio) {
             return res.status(400).json({
                 success: false,
@@ -106,19 +97,16 @@ router.post('/', async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO productos 
-             (nombre, categoria, descripcion, precio, costo, stock, sucursal_id, codigo_barras, imagen_url)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             (nombre, categoria, descripcion, precio, stock, sucursal_id)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
             [
                 nombre, 
                 categoria || 'General', 
                 descripcion || '', 
                 precio, 
-                costo || 0, 
                 stock || 0, 
-                sucursal_id || null, 
-                codigo_barras || null,
-                imagen_url || null
+                sucursal_id || null
             ]
         );
 
@@ -127,8 +115,9 @@ router.post('/', async (req, res) => {
             producto: result.rows[0],
             message: 'Producto creado correctamente'
         });
+        
     } catch (error) {
-        console.error('Error en POST /productos:', error);
+        console.error('❌ Error en POST /productos:', error.message);
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -147,14 +136,10 @@ router.put('/:id', async (req, res) => {
             categoria, 
             descripcion, 
             precio, 
-            costo,
             stock, 
-            sucursal_id,
-            codigo_barras,
-            imagen_url
+            sucursal_id
         } = req.body;
 
-        // Verificar que el producto existe
         const existe = await pool.query(
             'SELECT id FROM productos WHERE id = $1',
             [id]
@@ -173,24 +158,18 @@ router.put('/:id', async (req, res) => {
                  categoria = $2, 
                  descripcion = $3, 
                  precio = $4, 
-                 costo = $5,
-                 stock = $6,
-                 sucursal_id = $7,
-                 codigo_barras = $8,
-                 imagen_url = $9,
+                 stock = $5,
+                 sucursal_id = $6,
                  updated_at = NOW()
-             WHERE id = $10
+             WHERE id = $7
              RETURNING *`,
             [
                 nombre, 
                 categoria || 'General', 
                 descripcion || '', 
                 precio, 
-                costo || 0, 
                 stock || 0, 
-                sucursal_id || null, 
-                codigo_barras || null,
-                imagen_url || null,
+                sucursal_id || null,
                 id
             ]
         );
@@ -200,8 +179,9 @@ router.put('/:id', async (req, res) => {
             producto: result.rows[0],
             message: 'Producto actualizado correctamente'
         });
+        
     } catch (error) {
-        console.error('Error en PUT /productos/:id:', error);
+        console.error('❌ Error en PUT /productos/:id:', error.message);
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -216,7 +196,6 @@ router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Verificar que el producto existe
         const existe = await pool.query(
             'SELECT id FROM productos WHERE id = $1',
             [id]
@@ -229,27 +208,15 @@ router.delete('/:id', async (req, res) => {
             });
         }
 
-        // Verificar si tiene ventas asociadas
-        const ventas = await pool.query(
-            'SELECT id FROM detalle_venta WHERE producto_id = $1 LIMIT 1',
-            [id]
-        );
-
-        if (ventas.rows.length > 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'No se puede eliminar el producto porque tiene ventas asociadas'
-            });
-        }
-
         await pool.query('DELETE FROM productos WHERE id = $1', [id]);
 
         res.json({ 
             success: true,
             message: 'Producto eliminado correctamente'
         });
+        
     } catch (error) {
-        console.error('Error en DELETE /productos/:id:', error);
+        console.error('❌ Error en DELETE /productos/:id:', error.message);
         res.status(500).json({ 
             success: false, 
             error: error.message 

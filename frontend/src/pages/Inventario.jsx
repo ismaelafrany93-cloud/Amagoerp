@@ -18,15 +18,27 @@ function Inventario() {
   const cargarInventario = async () => {
     try {
       let url = `${API_URL}/inventario`
+      
+      // Si es usuario de sucursal (no principal), filtrar por su sucursal
       if (esSucursal && !esSucursalPrincipal) {
         url = `${API_URL}/inventario?sucursal_id=${usuario.sucursal_id}`
       }
+      
       const response = await fetch(url)
+      
       if (!response.ok) {
-        throw new Error('Error al cargar el inventario')
+        throw new Error(`Error ${response.status}: ${response.statusText}`)
       }
+      
       const data = await response.json()
-      setProductos(Array.isArray(data) ? data : [])
+      
+      // 🛡️ SIEMPRE asegurar que sea un array
+      if (Array.isArray(data)) {
+        setProductos(data)
+      } else {
+        console.warn('La respuesta no es un array:', data)
+        setProductos([])
+      }
     } catch (error) {
       console.error('Error cargando inventario:', error)
       setError('Error al cargar el inventario: ' + error.message)
@@ -113,7 +125,7 @@ function Inventario() {
           </tr>
         </thead>
         <tbody>
-          {productos.length === 0 ? (
+          {!Array.isArray(productos) || productos.length === 0 ? (
             <tr>
               <td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                 No hay productos en el inventario
@@ -121,9 +133,9 @@ function Inventario() {
             </tr>
           ) : (
             productos.map((p) => (
-              <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
+              <tr key={p.id || Math.random()} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: '12px' }}>{p.id}</td>
-                <td style={{ padding: '12px' }}>{p.nombre}</td>
+                <td style={{ padding: '12px' }}>{p.nombre || 'Sin nombre'}</td>
                 <td style={{ padding: '12px' }}>{p.categoria || 'N/A'}</td>
                 <td style={{ 
                   padding: '12px', 
@@ -134,7 +146,7 @@ function Inventario() {
                   {p.stock || 0}
                 </td>
                 <td style={{ padding: '12px', textAlign: 'right' }}>
-                  RD$ {Number(p.precio).toFixed(2)}
+                  RD$ {Number(p.precio || 0).toFixed(2)}
                 </td>
               </tr>
             ))

@@ -31,6 +31,7 @@ function Transferencias() {
         }
     }, [])
 
+    // Si no es principal, mostrar mensaje
     if (!esSucursalPrincipal) {
         return (
             <AdminLayout>
@@ -54,12 +55,16 @@ function Transferencias() {
             const productosData = await prodRes.json()
             const sucursalesData = await sucRes.json()
 
-            setTransferencias(transferenciasData)
-            setProductos(productosData)
-            setSucursales(sucursalesData)
+            // 🛡️ SIEMPRE asegurar que sean arrays
+            setTransferencias(Array.isArray(transferenciasData) ? transferenciasData : [])
+            setProductos(Array.isArray(productosData) ? productosData : [])
+            setSucursales(Array.isArray(sucursalesData) ? sucursalesData : [])
         } catch (error) {
             console.error('Error cargando datos:', error)
             setMensaje('❌ Error cargando datos')
+            setTransferencias([])
+            setProductos([])
+            setSucursales([])
         } finally {
             setCargando(false)
         }
@@ -263,7 +268,7 @@ function Transferencias() {
                                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
                             >
                                 <option value="">Seleccionar</option>
-                                {sucursales.map(s => (
+                                {Array.isArray(sucursales) && sucursales.map(s => (
                                     <option key={s.id} value={s.id}>{s.nombre}</option>
                                 ))}
                             </select>
@@ -277,7 +282,7 @@ function Transferencias() {
                                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
                             >
                                 <option value="">Seleccionar</option>
-                                {sucursales.map(s => (
+                                {Array.isArray(sucursales) && sucursales.map(s => (
                                     <option key={s.id} value={s.id}>{s.nombre}</option>
                                 ))}
                             </select>
@@ -303,7 +308,7 @@ function Transferencias() {
                             style={{ flex: 2, padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
                         >
                             <option value="">Seleccionar producto</option>
-                            {productos.map(p => (
+                            {Array.isArray(productos) && productos.map(p => (
                                 <option key={p.id} value={p.id}>{p.nombre} (Stock: {p.stock || 0})</option>
                             ))}
                         </select>
@@ -406,7 +411,7 @@ function Transferencias() {
                     </tr>
                 </thead>
                 <tbody>
-                    {transferencias.length === 0 ? (
+                    {!Array.isArray(transferencias) || transferencias.length === 0 ? (
                         <tr>
                             <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                                 No hay transferencias registradas

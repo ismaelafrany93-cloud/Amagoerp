@@ -50,11 +50,16 @@ function POS() {
         url = `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`
       }
       const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`)
+      }
       const data = await response.json()
-      setProductos(data)
+      // 🛡️ SIEMPRE asegurar que sea un array
+      setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando productos:', error)
       alert('❌ Error cargando productos. Verifica tu conexión.')
+      setProductos([])
     }
   }
 
@@ -518,8 +523,8 @@ function POS() {
       <div style={{ display: 'flex', gap: '20px' }}>
         <div style={{ flex: 2 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px' }}>
-            {productos
-              .filter(p => p.nombre.toLowerCase().includes(busqueda.toLowerCase()))
+            {Array.isArray(productos) && productos
+              .filter(p => p.nombre && p.nombre.toLowerCase().includes(busqueda.toLowerCase()))
               .map((producto) => (
                 <div key={producto.id} style={{
                   border: '1px solid #ddd',
@@ -528,9 +533,9 @@ function POS() {
                   backgroundColor: '#f9f9f9',
                   opacity: (producto.stock || 0) <= 0 ? 0.5 : 1
                 }}>
-                  <h4 style={{ margin: '0 0 8px 0' }}>{producto.nombre}</h4>
+                  <h4 style={{ margin: '0 0 8px 0' }}>{producto.nombre || 'Sin nombre'}</h4>
                   <p style={{ margin: '5px 0', fontSize: '1.1rem', fontWeight: 'bold', color: '#003b6f' }}>
-                    RD$ {Number(producto.precio).toFixed(2)}
+                    RD$ {Number(producto.precio || 0).toFixed(2)}
                   </p>
                   <p style={{ 
                     margin: '2px 0', 
@@ -574,7 +579,7 @@ function POS() {
                   borderRadius: '8px',
                   marginBottom: '10px'
                 }}>
-                  <div style={{ fontWeight: 'bold' }}>{item.nombre}</div>
+                  <div style={{ fontWeight: 'bold' }}>{item.nombre || 'Sin nombre'}</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
                       <button onClick={() => actualizarCantidad(item.id, item.cantidad - 1)} style={{ cursor: 'pointer', padding: '2px 8px' }}>−</button>

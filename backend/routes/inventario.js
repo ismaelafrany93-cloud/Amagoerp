@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /inventario - Obtener inventario por sucursal
+// GET /inventario - Obtener inventario con filtro por sucursal
 // ============================================
 router.get('/', async (req, res) => {
     try {
@@ -29,9 +29,18 @@ router.get('/', async (req, res) => {
 
         // Si se especifica sucursal, filtrar SOLO esa sucursal
         if (sucursal_id) {
-            query += ` AND pi.sucursal_id = $${paramIndex}`;
-            params.push(sucursal_id);
-            paramIndex++;
+            // Si es la sucursal principal (1), mostrar todos los productos
+            // incluyendo los que tienen NULL o sucursal_id = 1
+            if (sucursal_id === '1') {
+                query += ` AND (pi.sucursal_id = $${paramIndex} OR pi.sucursal_id IS NULL)`;
+                params.push(sucursal_id);
+                paramIndex++;
+            } else {
+                // Para otras sucursales, mostrar SOLO productos de esa sucursal
+                query += ` AND pi.sucursal_id = $${paramIndex}`;
+                params.push(sucursal_id);
+                paramIndex++;
+            }
         }
 
         query += ` ORDER BY p.nombre`;
@@ -41,6 +50,37 @@ router.get('/', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Error en GET /inventario:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
+// GET /inventario/sucursal/:id - Inventario por sucursal específica
+// ============================================
+router.get('/sucursal/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const result = await pool.query(
+            `SELECT 
+                p.id, 
+                p.nombre, 
+                p.categoria, 
+                p.precio,
+                COALESCE(pi.stock, 0) as stock,
+                s.nombre as sucursal_nombre
+             FROM productos p
+             LEFT JOIN producto_inventario pi ON p.id = pi.producto_id AND pi.sucursal_id = $1
+             LEFT JOIN sucursales s ON s.id = $1
+             WHERE pi.sucursal_id = $1 OR pi.sucursal_id IS NULL
+             ORDER BY p.nombre`,
+            [id]
+        );
+
+        res.json(result.rows || []);
+        
+    } catch (error) {
+        console.error('❌ Error en GET /inventario/sucursal/:id:', error.message);
         res.status(200).json([]);
     }
 });

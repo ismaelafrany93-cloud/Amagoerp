@@ -180,13 +180,6 @@ function Sidebar() {
           </Link>
         )}
 
-        {/* 🔑 Códigos - Dueño, Subgerente */}
-        {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
-          <Link to="/codigos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>
-            🔑 {!colapsado && <span>Códigos</span>}
-          </Link>
-        )}
-
         {/* 🏢 Sucursales - Dueño, Subgerente */}
         {tieneAcceso(['dueno', 'dueño', 'subgerente', 'admin']) && (
           <Link to="/sucursales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left' }}>

@@ -16,7 +16,6 @@ import ProductosNoEntregados from './pages/ProductosNoEntregados'
 import ProtectedRoute from './components/ProtectedRoute'
 import Recetas from './pages/Recetas'
 import Historial from './pages/Historial'
-import Codigos from './pages/Codigos'
 import Sucursales from './pages/Sucursales'        // 👈 IMPORTAR SUCURSALES
 import Transferencias from './pages/Transferencias' // 👈 IMPORTAR TRANSFERENCIAS
 
@@ -41,7 +40,6 @@ function App() {
         <Route path="/recetas" element={<ProtectedRoute><Recetas /></ProtectedRoute>} />
         <Route path="/creditos" element={<ProtectedRoute><Creditos /></ProtectedRoute>} />
         <Route path="/historial" element={<ProtectedRoute><Historial /></ProtectedRoute>} />
-        <Route path="/codigos" element={<ProtectedRoute><Codigos /></ProtectedRoute>} />
         
         {/* 👇 RUTAS NUEVAS */}
         <Route path="/sucursales" element={<ProtectedRoute><Sucursales /></ProtectedRoute>} />

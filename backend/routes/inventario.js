@@ -9,7 +9,6 @@ router.get('/', async (req, res) => {
     try {
         const { sucursal_id } = req.query;
         
-        // Si no hay sucursal_id, devolver todos los productos (para el dueño)
         let query = `
             SELECT 
                 p.id, 
@@ -23,18 +22,16 @@ router.get('/', async (req, res) => {
             FROM productos p
             LEFT JOIN producto_inventario pi ON p.id = pi.producto_id
             LEFT JOIN sucursales s ON pi.sucursal_id = s.id
+            WHERE 1=1
         `;
         let params = [];
         let paramIndex = 1;
 
         // Si se especifica sucursal, filtrar SOLO esa sucursal
         if (sucursal_id) {
-            query += ` WHERE pi.sucursal_id = $${paramIndex}`;
+            query += ` AND pi.sucursal_id = $${paramIndex}`;
             params.push(sucursal_id);
             paramIndex++;
-        } else {
-            // Si no hay filtro, mostrar todos (para el dueño)
-            query += ` WHERE 1=1`;
         }
 
         query += ` ORDER BY p.nombre`;
@@ -49,7 +46,7 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// POST /inventario - Agregar producto a una sucursal (SOLO DUEÑO/SUBGERENTE)
+// POST /inventario - Agregar producto a una sucursal
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -103,6 +100,10 @@ router.post('/', async (req, res) => {
                  WHERE producto_id = $2 AND sucursal_id = $3`,
                 [stock || 0, producto_id, sucursal_id]
             );
+            res.json({
+                success: true,
+                message: `Stock actualizado en ${sucursal.rows[0].nombre}`
+            });
         } else {
             // Crear nuevo registro
             await pool.query(
@@ -110,12 +111,11 @@ router.post('/', async (req, res) => {
                  VALUES ($1, $2, $3)`,
                 [producto_id, sucursal_id, stock || 0]
             );
+            res.json({
+                success: true,
+                message: `Producto agregado a ${sucursal.rows[0].nombre} correctamente`
+            });
         }
-
-        res.json({
-            success: true,
-            message: `Producto agregado a ${sucursal.rows[0].nombre} correctamente`
-        });
 
     } catch (error) {
         console.error('❌ Error en POST /inventario:', error.message);

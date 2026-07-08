@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import POS from './pages/POS'
 import Inventario from './pages/Inventario'
+import InventarioBani from './pages/InventarioBani'  // ← NUEVO
 import Entregas from './pages/Entregas'
 import Login from './pages/Login'
 import Clientes from './pages/Clientes'
@@ -16,8 +17,8 @@ import ProductosNoEntregados from './pages/ProductosNoEntregados'
 import ProtectedRoute from './components/ProtectedRoute'
 import Recetas from './pages/Recetas'
 import Historial from './pages/Historial'
-import Sucursales from './pages/Sucursales'        // 👈 IMPORTAR SUCURSALES
-import Transferencias from './pages/Transferencias' // 👈 IMPORTAR TRANSFERENCIAS
+import Sucursales from './pages/Sucursales'
+import Transferencias from './pages/Transferencias'
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
         <Route path="/ventas" element={<ProtectedRoute><POS /></ProtectedRoute>} />
         <Route path="/productos" element={<ProtectedRoute><Productos /></ProtectedRoute>} />
         <Route path="/inventario" element={<ProtectedRoute><Inventario /></ProtectedRoute>} />
+        <Route path="/inventario-bani" element={<ProtectedRoute><InventarioBani /></ProtectedRoute>} />
         <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
         <Route path="/produccion" element={<ProtectedRoute><Produccion /></ProtectedRoute>} />
         <Route path="/materiales" element={<ProtectedRoute><Materiales /></ProtectedRoute>} />
@@ -40,8 +42,6 @@ function App() {
         <Route path="/recetas" element={<ProtectedRoute><Recetas /></ProtectedRoute>} />
         <Route path="/creditos" element={<ProtectedRoute><Creditos /></ProtectedRoute>} />
         <Route path="/historial" element={<ProtectedRoute><Historial /></ProtectedRoute>} />
-        
-        {/* 👇 RUTAS NUEVAS */}
         <Route path="/sucursales" element={<ProtectedRoute><Sucursales /></ProtectedRoute>} />
         <Route path="/transferencias" element={<ProtectedRoute><Transferencias /></ProtectedRoute>} />
         

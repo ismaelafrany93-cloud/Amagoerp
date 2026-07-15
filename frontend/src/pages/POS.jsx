@@ -23,7 +23,8 @@ function POS() {
     telefono: '',
     direccion: '',
     referencia: '',
-    detalles: ''
+    detalles: '',
+    es_mayorista: false  // 👈 NUEVO CAMPO
   })
 
   const facturaRef = useRef()
@@ -45,34 +46,40 @@ function POS() {
 
   const cargarProductos = async () => {
     try {
-        const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
-        let url = `${API_URL}/productos`;
-        
-        if (usuario.sucursal_id && usuario.sucursal_id > 0) {
-            url = `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`;
-        }
-        
-        console.log('📦 Cargando productos desde:', url);
-        
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Error ${response.status}: ${response.statusText}`);
-        }
-        const data = await response.json();
-        setProductos(Array.isArray(data) ? data : []);
+      const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+      let url = `${API_URL}/productos`;
+      
+      if (usuario.sucursal_id && usuario.sucursal_id > 0) {
+        url = `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`;
+      }
+      
+      console.log('📦 Cargando productos desde:', url);
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+      setProductos(Array.isArray(data) ? data : []);
     } catch (error) {
-        console.error('Error cargando productos:', error);
-        alert('❌ Error cargando productos. Verifica tu conexión.');
-        setProductos([]);
+      console.error('Error cargando productos:', error);
+      alert('❌ Error cargando productos. Verifica tu conexión.');
+      setProductos([]);
     }
-  };
+  }
 
-  // 🔑 FUNCIÓN PARA CALCULAR PRECIO SEGÚN CANTIDAD
+  // 🔑 FUNCIÓN PARA CALCULAR PRECIO SEGÚN CLIENTE Y CANTIDAD
   const calcularPrecio = (producto, cantidad) => {
-    // Si tiene precio_mayor y la cantidad supera el mínimo
-    if (producto.precio_mayor && producto.cantidad_mayor && cantidad >= producto.cantidad_mayor) {
-        return parseFloat(producto.precio_mayor)
+    // Si el cliente es mayorista, siempre aplicar precio mayor
+    if (cliente.es_mayorista && producto.precio_mayor) {
+      return parseFloat(producto.precio_mayor)
     }
+    
+    // Si no es mayorista, aplicar regla de cantidad
+    if (producto.precio_mayor && producto.cantidad_mayor && cantidad >= producto.cantidad_mayor) {
+      return parseFloat(producto.precio_mayor)
+    }
+    
     return parseFloat(producto.precio)
   }
 
@@ -203,7 +210,8 @@ function POS() {
         detalles: cliente.detalles,
         costo_envio: parseFloat(costoEnvio) || 0,
         descuento: parseFloat(descuento) || 0,
-        codigo_autorizacion: codigoAutorizacion || null
+        codigo_autorizacion: codigoAutorizacion || null,
+        cliente_es_mayorista: cliente.es_mayorista || false  // 👈 NUEVO
       }
 
       const response = await fetch(`${API_URL}/ventas`, {
@@ -225,6 +233,9 @@ function POS() {
           mensaje += `\n💰 Descuento aplicado: ${data.descuento_aplicado}%`
           mensaje += `\n🔑 Autorizado: ${data.autorizado ? 'SÍ' : 'NO'}`
         }
+        if (cliente.es_mayorista) {
+          mensaje += `\n👑 Cliente Mayorista - Precio especial aplicado`
+        }
         alert(mensaje)
       } else {
         alert('❌ Error: ' + (data.error || data.message || 'No se pudo guardar'))
@@ -241,7 +252,7 @@ function POS() {
     setVentaCompletada(false)
     setCodigoEntrega('')
     setCarrito([])
-    setCliente({ nombre: '', telefono: '', direccion: '', referencia: '', detalles: '' })
+    setCliente({ nombre: '', telefono: '', direccion: '', referencia: '', detalles: '', es_mayorista: false })
     setTipoPago('contado')
     setTipoEntrega('retiro')
     setVentaId(null)
@@ -524,6 +535,34 @@ function POS() {
               style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
             />
           </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              cursor: 'pointer',
+              backgroundColor: cliente.es_mayorista ? '#e8f5e9' : 'transparent',
+              padding: '10px',
+              borderRadius: '8px',
+              border: cliente.es_mayorista ? '2px solid #4CAF50' : '2px solid transparent',
+              transition: 'all 0.3s'
+            }}>
+              <input
+                type="checkbox"
+                checked={cliente.es_mayorista || false}
+                onChange={(e) => setCliente({ ...cliente, es_mayorista: e.target.checked })}
+                style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#4CAF50' }}
+              />
+              <div>
+                <span style={{ fontWeight: 'bold' }}>👑 Cliente Mayorista</span>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
+                  {cliente.es_mayorista 
+                    ? '✅ Precio al por mayor aplicado automáticamente' 
+                    : 'Marcar si este cliente es mayorista'}
+                </p>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -537,6 +576,11 @@ function POS() {
           {parseFloat(descuento) > 0 && (
             <p style={{ margin: '5px 0', color: '#d32f2f' }}>
               <strong>Descuento ({descuento}%):</strong> -RD$ {((subtotal + parseFloat(costoEnvio || 0)) * (parseFloat(descuento) / 100)).toFixed(2)}
+            </p>
+          )}
+          {cliente.es_mayorista && (
+            <p style={{ margin: '5px 0', color: '#4CAF50', fontWeight: 'bold' }}>
+              👑 Cliente Mayorista - Precio especial aplicado
             </p>
           )}
           <p style={{ margin: '5px 0', fontSize: '1.3rem', fontWeight: 'bold', color: '#003b6f' }}>
@@ -625,7 +669,7 @@ function POS() {
                       <button onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} style={{ cursor: 'pointer', padding: '2px 8px' }}>+</button>
                     </div>
                     <span>
-                      {item.cantidad >= item.cantidad_mayor ? '💰 Mayor' : '🛒 Detal'}
+                      {cliente.es_mayorista ? '👑 Mayor' : (item.cantidad >= item.cantidad_mayor ? '💰 Mayor' : '🛒 Detal')}
                       {' '}
                       RD$ {(Number(item.precio_unitario || item.precio) * item.cantidad).toFixed(2)}
                     </span>

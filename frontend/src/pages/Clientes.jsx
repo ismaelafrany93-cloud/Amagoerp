@@ -12,7 +12,8 @@ function Clientes() {
     nombre: '',
     telefono: '',
     direccion: '',
-    referencia: ''
+    referencia: '',
+    es_mayorista: false  // 👈 NUEVO CAMPO
   })
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
@@ -25,7 +26,6 @@ function Clientes() {
 
   const cargarClientes = async () => {
     try {
-      // Enviar sucursal_id y rol para filtrar
       let url = `${API_URL}/clientes`
       if (sucursalId && !esSubgerente) {
         url = `${API_URL}/clientes?sucursal_id=${sucursalId}`
@@ -60,7 +60,8 @@ function Clientes() {
         telefono: form.telefono || '',
         direccion: form.direccion || '',
         referencia: form.referencia || '',
-        sucursal_id: sucursalId // Asignar la sucursal del usuario
+        sucursal_id: sucursalId,
+        es_mayorista: form.es_mayorista || false  // 👈 NUEVO
       }
 
       const response = await fetch(url, {
@@ -73,7 +74,7 @@ function Clientes() {
 
       if (data.success) {
         setMensaje(editando ? '✅ Cliente actualizado correctamente' : '✅ Cliente creado correctamente')
-        setForm({ nombre: '', telefono: '', direccion: '', referencia: '' })
+        setForm({ nombre: '', telefono: '', direccion: '', referencia: '', es_mayorista: false })
         setMostrarForm(false)
         setEditando(null)
         cargarClientes()
@@ -114,7 +115,8 @@ function Clientes() {
       nombre: cliente.nombre,
       telefono: cliente.telefono || '',
       direccion: cliente.direccion || '',
-      referencia: cliente.referencia || ''
+      referencia: cliente.referencia || '',
+      es_mayorista: cliente.es_mayorista || false  // 👈 NUEVO
     })
     setEditando(cliente.id)
     setMostrarForm(true)
@@ -150,7 +152,7 @@ function Clientes() {
         onClick={() => {
           setMostrarForm(!mostrarForm)
           setEditando(null)
-          setForm({ nombre: '', telefono: '', direccion: '', referencia: '' })
+          setForm({ nombre: '', telefono: '', direccion: '', referencia: '', es_mayorista: false })
         }}
         style={{
           marginBottom: '20px',
@@ -220,6 +222,34 @@ function Clientes() {
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
             </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                cursor: 'pointer',
+                backgroundColor: form.es_mayorista ? '#e8f5e9' : 'transparent',
+                padding: '10px',
+                borderRadius: '8px',
+                border: form.es_mayorista ? '2px solid #4CAF50' : '2px solid transparent',
+                transition: 'all 0.3s'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={form.es_mayorista || false}
+                  onChange={(e) => setForm({ ...form, es_mayorista: e.target.checked })}
+                  style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#4CAF50' }}
+                />
+                <div>
+                  <span style={{ fontWeight: 'bold' }}>👑 Cliente Mayorista</span>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
+                    {form.es_mayorista
+                      ? '✅ Siempre aplica precio al por mayor'
+                      : 'Marcar si este cliente es mayorista'}
+                  </p>
+                </div>
+              </label>
+            </div>
           </div>
 
           <button
@@ -259,13 +289,14 @@ function Clientes() {
               <th style={{ padding: '12px', textAlign: 'left' }}>Teléfono</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Dirección</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Sucursal</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Tipo</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {clientes.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                   No hay clientes registrados
                 </td>
               </tr>
@@ -278,6 +309,29 @@ function Clientes() {
                   <td style={{ padding: '12px' }}>{c.direccion || 'N/A'}</td>
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     {c.sucursal_nombre || 'Sin sucursal'}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    {c.es_mayorista ? (
+                      <span style={{
+                        backgroundColor: '#4CAF50',
+                        color: 'white',
+                        padding: '2px 10px',
+                        borderRadius: '12px',
+                        fontSize: '0.8rem'
+                      }}>
+                        👑 Mayorista
+                      </span>
+                    ) : (
+                      <span style={{
+                        backgroundColor: '#757575',
+                        color: 'white',
+                        padding: '2px 10px',
+                        borderRadius: '12px',
+                        fontSize: '0.8rem'
+                      }}>
+                        Normal
+                      </span>
+                    )}
                   </td>
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     <button

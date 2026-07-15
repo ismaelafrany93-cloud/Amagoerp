@@ -28,9 +28,10 @@ router.post('/', async (req, res) => {
             cliente_referencia,
             cliente_id,
             detalles,
-            costo_envio,        // 👈 NUEVO
-            descuento,          // 👈 NUEVO
-            codigo_autorizacion // 👈 NUEVO
+            costo_envio,
+            descuento,
+            codigo_autorizacion,
+            cliente_es_mayorista  // 👈 NUEVO CAMPO
         } = req.body;
 
         // 1. Verificar si el cliente existe, si no crearlo
@@ -44,12 +45,17 @@ router.post('/', async (req, res) => {
 
             if (clienteExistente.rows.length > 0) {
                 clienteId = clienteExistente.rows[0].id;
+                // Actualizar si es mayorista
+                await pool.query(
+                    'UPDATE clientes SET es_mayorista = $1 WHERE id = $2',
+                    [cliente_es_mayorista || false, clienteId]
+                );
             } else {
                 const nuevoCliente = await pool.query(
-                    `INSERT INTO clientes (nombre, telefono, direccion) 
-                     VALUES ($1, $2, $3) 
+                    `INSERT INTO clientes (nombre, telefono, direccion, es_mayorista) 
+                     VALUES ($1, $2, $3, $4) 
                      RETURNING id`,
-                    [cliente_nombre, cliente_telefono, cliente_direccion]
+                    [cliente_nombre, cliente_telefono, cliente_direccion, cliente_es_mayorista || false]
                 );
                 clienteId = nuevoCliente.rows[0].id;
             }
@@ -116,14 +122,16 @@ router.post('/', async (req, res) => {
                 usuario_id, total, tipo_pago, tipo_venta, tipo_entrega,
                 cliente_nombre, cliente_telefono, cliente_direccion, cliente_referencia,
                 cliente_id, codigo_entrega, estado_entrega, detalles,
-                costo_envio, descuento, codigo_autorizacion, autorizado
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                costo_envio, descuento, codigo_autorizacion, autorizado,
+                cliente_es_mayorista
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING *`,
             [
                 usuario_id, totalFinal, tipo_pago, tipo_venta, tipo_entrega,
                 cliente_nombre, cliente_telefono, cliente_direccion, cliente_referencia,
                 clienteId, codigo, estadoEntrega, detalles,
-                costoEnvioFinal, descuentoAplicado, codigo_autorizacion || null, autorizado
+                costoEnvioFinal, descuentoAplicado, codigo_autorizacion || null, autorizado,
+                cliente_es_mayorista || false
             ]
         );
 

@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useReactToPrint } from 'react-to-print'
 import AdminLayout from '../layouts/AdminLayout'
 import API_URL from '../config'
+import ConstanciaTransferencia from '../components/ConstanciaTransferencia'
 
 function Transferencias() {
     const [transferencias, setTransferencias] = useState([])
@@ -18,30 +20,73 @@ function Transferencias() {
     const [productoSeleccionado, setProductoSeleccionado] = useState('')
     const [cantidadSeleccionada, setCantidadSeleccionada] = useState(1)
 
+    // 👇 NUEVOS ESTADOS PARA IMPRESIÓN
+    const [transferenciaSeleccionada, setTransferenciaSeleccionada] = useState(null)
+    const [detallesSeleccionados, setDetallesSeleccionados] = useState([])
+    const constanciaRef = useRef()
+
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-    
-    // ✅ SOLO ESTOS ROLES PUEDEN HACER TRANSFERENCIAS
-    const rolesPermitidos = ['vendedor', 'vendedora', 'subgerente', 'dueno', 'dueño', 'admin']
-    const puedeHacerTransferencias = rolesPermitidos.includes(usuario.rol) && usuario.sucursal_id === 3
+    const esSucursalPrincipal = usuario.sucursal_id === 3
+
+    // 👇 FUNCIONES DE IMPRESIÓN
+    const handlePrintConstancia = useReactToPrint({
+        content: () => constanciaRef.current,
+        documentTitle: `Constancia_Transferencia_${transferenciaSeleccionada?.id || Date.now()}`,
+        pageStyle: `
+            @page {
+                size: A4;
+                margin: 10mm;
+            }
+            @media print {
+                body { background: white; }
+                .no-print { display: none !important; }
+            }
+        `
+    })
+
+    const handlePrintTicket = useReactToPrint({
+        content: () => constanciaRef.current,
+        documentTitle: `Ticket_Transferencia_${transferenciaSeleccionada?.id || Date.now()}`,
+        pageStyle: `
+            @page {
+                size: 80mm 297mm;
+                margin: 5mm;
+            }
+            @media print {
+                body { background: white; font-size: 12px; }
+                .no-print { display: none !important; }
+            }
+        `
+    })
+
+    // 👇 FUNCIÓN PARA CARGAR DETALLES DE UNA TRANSFERENCIA
+    const cargarDetalles = async (id) => {
+        try {
+            const response = await fetch(`${API_URL}/transferencias/${id}`)
+            const data = await response.json()
+            if (data.success) {
+                setDetallesSeleccionados(data.detalles || [])
+            }
+        } catch (error) {
+            console.error('Error cargando detalles:', error)
+        }
+    }
 
     useEffect(() => {
-        if (!puedeHacerTransferencias) {
-            alert('⚠️ Solo vendedores, subgerente y dueño de la sucursal principal pueden acceder a Transferencias')
+        if (!esSucursalPrincipal) {
+            alert('⚠️ Solo usuarios de la sucursal principal pueden acceder a Transferencias')
             window.location.href = '/dashboard'
         } else {
             cargarDatos()
         }
     }, [])
 
-    // Si no tiene permisos, mostrar mensaje
-    if (!puedeHacerTransferencias) {
+    if (!esSucursalPrincipal) {
         return (
             <AdminLayout>
                 <div style={{ textAlign: 'center', padding: '60px' }}>
                     <h2>⛔ Acceso Denegado</h2>
-                    <p style={{ color: '#666' }}>
-                        Solo vendedores, subgerente y dueño de la sucursal principal pueden acceder a Transferencias
-                    </p>
+                    <p style={{ color: '#666' }}>Solo usuarios de la sucursal principal pueden acceder a Transferencias</p>
                 </div>
             </AdminLayout>
         )
@@ -477,12 +522,64 @@ function Transferencias() {
                                             </button>
                                         </>
                                     )}
+                                    {/* 👇 BOTONES DE IMPRESIÓN */}
+                                    <div style={{ marginTop: '5px' }}>
+                                        <button
+                                            onClick={() => {
+                                                setTransferenciaSeleccionada(t)
+                                                cargarDetalles(t.id)
+                                                setTimeout(() => handlePrintConstancia(), 500)
+                                            }}
+                                            style={{
+                                                backgroundColor: '#003b6f',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                padding: '4px 10px',
+                                                cursor: 'pointer',
+                                                fontSize: '12px',
+                                                marginRight: '5px'
+                                            }}
+                                        >
+                                            🖨️ A4
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setTransferenciaSeleccionada(t)
+                                                cargarDetalles(t.id)
+                                                setTimeout(() => handlePrintTicket(), 500)
+                                            }}
+                                            style={{
+                                                backgroundColor: '#4CAF50',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                padding: '4px 10px',
+                                                cursor: 'pointer',
+                                                fontSize: '12px'
+                                            }}
+                                        >
+                                            🧾 Ticket
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))
                     )}
                 </tbody>
             </table>
+
+            {/* 👇 COMPONENTE OCULTO PARA IMPRIMIR */}
+            <div style={{ display: 'none' }}>
+                {transferenciaSeleccionada && (
+                    <ConstanciaTransferencia
+                        ref={constanciaRef}
+                        transferencia={transferenciaSeleccionada}
+                        detalles={detallesSeleccionados}
+                        usuario={usuario}
+                    />
+                )}
+            </div>
         </AdminLayout>
     )
 }

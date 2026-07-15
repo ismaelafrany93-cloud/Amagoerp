@@ -12,7 +12,9 @@ function generarCodigo() {
     return 'AMG-' + codigo;
 }
 
-// Crear venta
+// ============================================
+// POST /ventas - Crear venta
+// ============================================
 router.post('/', async (req, res) => {
     try {
         const {
@@ -31,7 +33,7 @@ router.post('/', async (req, res) => {
             costo_envio,
             descuento,
             codigo_autorizacion,
-            cliente_es_mayorista  // 👈 NUEVO CAMPO
+            cliente_es_mayorista
         } = req.body;
 
         // 1. Verificar si el cliente existe, si no crearlo
@@ -98,7 +100,7 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // 3. Generar código numérico secuencial SOLO si es crédito o domicilio
+        // 3. Generar código de entrega (solo si es crédito o domicilio)
         let codigo = null;
         if (tipo_venta === 'credito' || tipo_entrega === 'domicilio') {
             let existe = true;
@@ -119,18 +121,44 @@ router.post('/', async (req, res) => {
         // 4. Guardar venta
         const ventaResult = await pool.query(
             `INSERT INTO ventas (
-                usuario_id, total, tipo_pago, tipo_venta, tipo_entrega,
-                cliente_nombre, cliente_telefono, cliente_direccion, cliente_referencia,
-                cliente_id, codigo_entrega, estado_entrega, detalles,
-                costo_envio, descuento, codigo_autorizacion, autorizado,
+                usuario_id, 
+                total, 
+                tipo_pago, 
+                tipo_venta, 
+                tipo_entrega,
+                cliente_nombre, 
+                cliente_telefono, 
+                cliente_direccion, 
+                cliente_referencia,
+                cliente_id, 
+                codigo_entrega, 
+                estado_entrega, 
+                detalles,
+                costo_envio, 
+                descuento, 
+                codigo_autorizacion, 
+                autorizado,
                 cliente_es_mayorista
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING *`,
             [
-                usuario_id, totalFinal, tipo_pago, tipo_venta, tipo_entrega,
-                cliente_nombre, cliente_telefono, cliente_direccion, cliente_referencia,
-                clienteId, codigo, estadoEntrega, detalles,
-                costoEnvioFinal, descuentoAplicado, codigo_autorizacion || null, autorizado,
+                usuario_id, 
+                totalFinal, 
+                tipo_pago, 
+                tipo_venta, 
+                tipo_entrega,
+                cliente_nombre, 
+                cliente_telefono, 
+                cliente_direccion, 
+                cliente_referencia,
+                clienteId, 
+                codigo, 
+                estadoEntrega, 
+                detalles,
+                costoEnvioFinal, 
+                descuentoAplicado, 
+                codigo_autorizacion || null, 
+                autorizado,
                 cliente_es_mayorista || false
             ]
         );
@@ -150,8 +178,10 @@ router.post('/', async (req, res) => {
         if (tipo_venta === 'contado' && tipo_entrega === 'retiro') {
             for (const item of carrito) {
                 await pool.query(
-                    `UPDATE productos SET stock = stock - $1 WHERE id = $2`,
-                    [item.cantidad || 1, item.id]
+                    `UPDATE producto_inventario 
+                     SET stock = stock - $1 
+                     WHERE producto_id = $2 AND sucursal_id = $3`,
+                    [item.cantidad || 1, item.id, usuario.sucursal_id || 3]
                 );
             }
         }
@@ -193,7 +223,8 @@ router.post('/', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error en ventas:', error);
+        console.error('❌ Error en POST /ventas:', error.message);
+        console.error('Detalles:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -201,7 +232,9 @@ router.post('/', async (req, res) => {
     }
 });
 
-// Obtener venta por código
+// ============================================
+// GET /ventas/codigo/:codigo - Obtener venta por código
+// ============================================
 router.get('/codigo/:codigo', async (req, res) => {
     try {
         const { codigo } = req.params;
@@ -240,12 +273,14 @@ router.get('/codigo/:codigo', async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
+        console.error('❌ Error en GET /ventas/codigo/:codigo:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Obtener ventas de un usuario
+// ============================================
+// GET /ventas/usuario/:id - Obtener ventas de un usuario
+// ============================================
 router.get('/usuario/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -261,7 +296,7 @@ router.get('/usuario/:id', async (req, res) => {
 
         res.json(result.rows);
     } catch (error) {
-        console.error(error);
+        console.error('❌ Error en GET /ventas/usuario/:id:', error.message);
         res.status(500).json({ error: error.message });
     }
 });

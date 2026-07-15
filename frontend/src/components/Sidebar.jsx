@@ -13,8 +13,7 @@ function Sidebar() {
   const sucursalId = usuario?.sucursal_id || null
   const sucursalNombre = usuario?.sucursal || usuario?.sucursal_nombre || ''
   
-  // 👇 SUCURSALES SEGÚN TU BASE DE DATOS
-  // Principal = ID 3
+  // 👇 SUCURSALES (ID 3 = Principal)
   const esSucursalPrincipal = sucursalId === 3 || 
                               sucursalNombre === 'Sucursal Principal' || 
                               sucursalNombre === 'Principal'
@@ -34,7 +33,7 @@ function Sidebar() {
   const esChofer = rol === 'chofer'
   const esSupervisor = rol === 'supervisor'
 
-  // Si es vendedor y no tiene sucursal, asumir que es de la principal
+  // 🔑 SI ES VENDEDOR Y NO TIENE SUCURSAL, ASUMIR QUE ES DE LA PRINCIPAL
   const esVendedorPrincipal = esVendedor && (esSucursalPrincipal || sucursalId === null)
 
   const cerrarSesion = () => {
@@ -113,7 +112,7 @@ function Sidebar() {
       }}>
 
         {/* ========================================== */}
-        {/* MENÚ PARA SUBGERENTE/DUEÑO (VE TODO) */}
+        {/* MENÚ PARA SUBGERENTE/DUEÑO */}
         {/* ========================================== */}
         {esSubgerente && (
           <>
@@ -140,14 +139,14 @@ function Sidebar() {
         )}
 
         {/* ========================================== */}
-        {/* MENÚ PARA VENDEDOR */}
+        {/* MENÚ PARA VENDEDOR (PRINCIPAL, BANÍ O SABANA) */}
         {/* ========================================== */}
         {esVendedor && (
           <>
             {/* 🛒 Ventas - Todos los vendedores */}
             <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🛒 {!colapsado && <span>Ventas</span>}</Link>
 
-            {/* 📊 Inventario - Principal */}
+            {/* 📊 Inventario - Vendedores de la Principal (ID 3 o sin sucursal) */}
             {esVendedorPrincipal && (
               <Link to="/inventario" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario</span>}</Link>
             )}

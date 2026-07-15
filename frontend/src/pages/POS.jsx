@@ -28,7 +28,7 @@ function POS() {
 
   const facturaRef = useRef()
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-  const esSucursalPrincipal = usuario.sucursal_id === 1
+  const esSucursalPrincipal = usuario.sucursal_id === 3
   const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
 
   const handlePrint = useReactToPrint({
@@ -43,14 +43,11 @@ function POS() {
     cargarProductos()
   }, [])
 
-  // En POS.jsx, reemplaza la función cargarProductos con esta:
-
-const cargarProductos = async () => {
+  const cargarProductos = async () => {
     try {
         const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
         let url = `${API_URL}/productos`;
         
-        // Si el usuario tiene sucursal, filtrar productos por sucursal
         if (usuario.sucursal_id && usuario.sucursal_id > 0) {
             url = `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`;
         }
@@ -68,7 +65,16 @@ const cargarProductos = async () => {
         alert('❌ Error cargando productos. Verifica tu conexión.');
         setProductos([]);
     }
-};
+  };
+
+  // 🔑 FUNCIÓN PARA CALCULAR PRECIO SEGÚN CANTIDAD
+  const calcularPrecio = (producto, cantidad) => {
+    // Si tiene precio_mayor y la cantidad supera el mínimo
+    if (producto.precio_mayor && producto.cantidad_mayor && cantidad >= producto.cantidad_mayor) {
+        return parseFloat(producto.precio_mayor)
+    }
+    return parseFloat(producto.precio)
+  }
 
   const agregar = (producto) => {
     if (producto.stock <= 0) {
@@ -82,13 +88,26 @@ const cargarProductos = async () => {
           alert(`⚠️ Solo hay ${producto.stock} unidades disponibles`)
           return prev
         }
+        const nuevaCantidad = existe.cantidad + 1
+        const precioUnitario = calcularPrecio(producto, nuevaCantidad)
         return prev.map(item =>
           item.id === producto.id
-            ? { ...item, cantidad: item.cantidad + 1 }
+            ? { 
+                ...item, 
+                cantidad: nuevaCantidad,
+                precio_unitario: precioUnitario,
+                precio_mostrar: precioUnitario
+              }
             : item
         )
       }
-      return [...prev, { ...producto, cantidad: 1 }]
+      const precioUnitario = calcularPrecio(producto, 1)
+      return [...prev, { 
+        ...producto, 
+        cantidad: 1,
+        precio_unitario: precioUnitario,
+        precio_mostrar: precioUnitario
+      }]
     })
   }
 
@@ -102,11 +121,18 @@ const cargarProductos = async () => {
         return
       }
       setCarrito(prev =>
-        prev.map(item =>
-          item.id === id
-            ? { ...item, cantidad: nuevaCantidad }
-            : item
-        )
+        prev.map(item => {
+          if (item.id === id) {
+            const precioUnitario = calcularPrecio(producto, nuevaCantidad)
+            return { 
+              ...item, 
+              cantidad: nuevaCantidad,
+              precio_unitario: precioUnitario,
+              precio_mostrar: precioUnitario
+            }
+          }
+          return item
+        })
       )
     }
   }
@@ -117,7 +143,7 @@ const cargarProductos = async () => {
 
   const subtotal = useMemo(() => {
     return carrito.reduce((acc, item) => {
-      return acc + (Number(item.precio) * item.cantidad)
+      return acc + (Number(item.precio_unitario || item.precio) * item.cantidad)
     }, 0)
   }, [carrito])
 
@@ -163,7 +189,7 @@ const cargarProductos = async () => {
         sucursal_id: usuario.sucursal_id || null,
         carrito: carrito.map(item => ({
           id: item.id,
-          precio: item.precio,
+          precio: item.precio_unitario || item.precio,
           cantidad: item.cantidad
         })),
         total: subtotal,
@@ -544,6 +570,11 @@ const cargarProductos = async () => {
                   <p style={{ margin: '5px 0', fontSize: '1.1rem', fontWeight: 'bold', color: '#003b6f' }}>
                     RD$ {Number(producto.precio || 0).toFixed(2)}
                   </p>
+                  {producto.precio_mayor && (
+                    <p style={{ margin: '2px 0', fontSize: '0.8rem', color: '#4CAF50' }}>
+                      Mayor: RD$ {Number(producto.precio_mayor).toFixed(2)} (mín. {producto.cantidad_mayor || 10}u)
+                    </p>
+                  )}
                   <p style={{ 
                     margin: '2px 0', 
                     fontSize: '0.8rem', 
@@ -593,7 +624,11 @@ const cargarProductos = async () => {
                       <span style={{ margin: '0 8px' }}>{item.cantidad}</span>
                       <button onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} style={{ cursor: 'pointer', padding: '2px 8px' }}>+</button>
                     </div>
-                    <span>RD$ {(item.precio * item.cantidad).toFixed(2)}</span>
+                    <span>
+                      {item.cantidad >= item.cantidad_mayor ? '💰 Mayor' : '🛒 Detal'}
+                      {' '}
+                      RD$ {(Number(item.precio_unitario || item.precio) * item.cantidad).toFixed(2)}
+                    </span>
                     <button onClick={() => eliminar(item.id)} style={{ backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer' }}>✕</button>
                   </div>
                 </div>

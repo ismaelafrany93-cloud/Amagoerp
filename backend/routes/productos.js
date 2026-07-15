@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /productos - Obtener productos con stock por sucursal
+// GET /productos - Obtener productos con stock y precios
 // ============================================
 router.get('/', async (req, res) => {
     try {
@@ -16,6 +16,8 @@ router.get('/', async (req, res) => {
                 p.categoria, 
                 p.descripcion, 
                 p.precio,
+                p.precio_mayor,
+                p.cantidad_mayor,
                 COALESCE(pi.stock, 0) as stock,
                 pi.sucursal_id,
                 s.nombre as sucursal_nombre
@@ -82,7 +84,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ============================================
-// POST /productos - Crear producto
+// POST /productos - Crear producto con precios
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -90,7 +92,9 @@ router.post('/', async (req, res) => {
             nombre, 
             categoria, 
             descripcion, 
-            precio, 
+            precio,
+            precio_mayor,
+            cantidad_mayor,
             stock,
             sucursal_id
         } = req.body;
@@ -102,18 +106,23 @@ router.post('/', async (req, res) => {
             });
         }
 
-        // Insertar producto
         const result = await pool.query(
             `INSERT INTO productos 
-             (nombre, categoria, descripcion, precio)
-             VALUES ($1, $2, $3, $4)
+             (nombre, categoria, descripcion, precio, precio_mayor, cantidad_mayor)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
-            [nombre, categoria || 'General', descripcion || '', precio]
+            [
+                nombre, 
+                categoria || 'General', 
+                descripcion || '', 
+                precio,
+                precio_mayor || null,
+                cantidad_mayor || 0
+            ]
         );
 
         const producto = result.rows[0];
 
-        // Si se especifica sucursal, crear registro en producto_inventario
         if (sucursal_id && stock) {
             await pool.query(
                 `INSERT INTO producto_inventario (producto_id, sucursal_id, stock)
@@ -138,7 +147,7 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
-// PUT /productos/:id - Actualizar producto
+// PUT /productos/:id - Actualizar producto con precios
 // ============================================
 router.put('/:id', async (req, res) => {
     try {
@@ -147,7 +156,9 @@ router.put('/:id', async (req, res) => {
             nombre, 
             categoria, 
             descripcion, 
-            precio, 
+            precio,
+            precio_mayor,
+            cantidad_mayor,
             stock,
             sucursal_id
         } = req.body;
@@ -164,20 +175,28 @@ router.put('/:id', async (req, res) => {
             });
         }
 
-        // Actualizar producto
         const result = await pool.query(
             `UPDATE productos
              SET nombre = $1, 
                  categoria = $2, 
                  descripcion = $3, 
                  precio = $4,
+                 precio_mayor = $5,
+                 cantidad_mayor = $6,
                  updated_at = NOW()
-             WHERE id = $5
+             WHERE id = $7
              RETURNING *`,
-            [nombre, categoria || 'General', descripcion || '', precio, id]
+            [
+                nombre, 
+                categoria || 'General', 
+                descripcion || '', 
+                precio,
+                precio_mayor || null,
+                cantidad_mayor || 0,
+                id
+            ]
         );
 
-        // Actualizar stock en producto_inventario si se especifica
         if (sucursal_id && stock !== undefined) {
             const existeInventario = await pool.query(
                 'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
@@ -234,10 +253,7 @@ router.delete('/:id', async (req, res) => {
             });
         }
 
-        // Eliminar registros de inventario primero
         await pool.query('DELETE FROM producto_inventario WHERE producto_id = $1', [id]);
-        
-        // Eliminar producto
         await pool.query('DELETE FROM productos WHERE id = $1', [id]);
 
         res.json({ 

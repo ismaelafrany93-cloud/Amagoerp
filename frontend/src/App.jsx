@@ -19,6 +19,7 @@ import Recetas from './pages/Recetas'
 import Historial from './pages/Historial'
 import Sucursales from './pages/Sucursales'
 import Transferencias from './pages/Transferencias'
+import InventarioSabana from './pages/InventarioSabana'
 
 function App() {
   return (
@@ -44,6 +45,7 @@ function App() {
         <Route path="/historial" element={<ProtectedRoute><Historial /></ProtectedRoute>} />
         <Route path="/sucursales" element={<ProtectedRoute><Sucursales /></ProtectedRoute>} />
         <Route path="/transferencias" element={<ProtectedRoute><Transferencias /></ProtectedRoute>} />
+        <Route path="/inventario-sabana" element={<ProtectedRoute><InventarioSabana /></ProtectedRoute>} />
         
       </Routes>
     </BrowserRouter>

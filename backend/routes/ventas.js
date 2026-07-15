@@ -36,7 +36,22 @@ router.post('/', async (req, res) => {
             cliente_es_mayorista
         } = req.body;
 
-        // 1. Verificar si el cliente existe, si no crearlo
+        // 1. Obtener datos del usuario (sucursal_id)
+        const usuarioData = await pool.query(
+            'SELECT sucursal_id, rol FROM usuarios WHERE id = $1',
+            [usuario_id]
+        );
+
+        if (usuarioData.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Usuario no encontrado'
+            });
+        }
+
+        const usuario = usuarioData.rows[0];
+
+        // 2. Verificar si el cliente existe, si no crearlo
         let clienteId = cliente_id;
 
         if (cliente_nombre) {
@@ -47,7 +62,6 @@ router.post('/', async (req, res) => {
 
             if (clienteExistente.rows.length > 0) {
                 clienteId = clienteExistente.rows[0].id;
-                // Actualizar si es mayorista
                 await pool.query(
                     'UPDATE clientes SET es_mayorista = $1 WHERE id = $2',
                     [cliente_es_mayorista || false, clienteId]
@@ -63,32 +77,25 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // 2. VERIFICAR AUTORIZACIÓN PARA DESCUENTO
+        // 3. VERIFICAR AUTORIZACIÓN PARA DESCUENTO
         let autorizado = false;
         let descuentoAplicado = parseFloat(descuento) || 0;
 
         if (descuentoAplicado > 0) {
-            const usuario = await pool.query(
-                'SELECT rol FROM usuarios WHERE id = $1',
-                [usuario_id]
-            );
-
-            if (usuario.rows.length > 0) {
-                const rol = usuario.rows[0].rol;
-                if (rol === 'dueno' || rol === 'dueño' || rol === 'subgerente' || rol === 'admin') {
+            const rolesPermitidos = ['dueno', 'dueño', 'subgerente', 'admin'];
+            if (rolesPermitidos.includes(usuario.rol)) {
+                autorizado = true;
+            } else if (codigo_autorizacion) {
+                const codigoValido = await pool.query(
+                    'SELECT * FROM codigos_autorizacion WHERE codigo = $1 AND activo = true AND usado = false AND fecha_expiracion > NOW()',
+                    [codigo_autorizacion]
+                );
+                if (codigoValido.rows.length > 0) {
                     autorizado = true;
-                } else if (codigo_autorizacion) {
-                    const codigoValido = await pool.query(
-                        'SELECT * FROM codigos_autorizacion WHERE codigo = $1 AND activo = true AND usado = false AND fecha_expiracion > NOW()',
+                    await pool.query(
+                        'UPDATE codigos_autorizacion SET usado = true WHERE codigo = $1',
                         [codigo_autorizacion]
                     );
-                    if (codigoValido.rows.length > 0) {
-                        autorizado = true;
-                        await pool.query(
-                            'UPDATE codigos_autorizacion SET usado = true WHERE codigo = $1',
-                            [codigo_autorizacion]
-                        );
-                    }
                 }
             }
 
@@ -100,7 +107,7 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // 3. Generar código de entrega (solo si es crédito o domicilio)
+        // 4. Generar código de entrega (solo si es crédito o domicilio)
         let codigo = null;
         if (tipo_venta === 'credito' || tipo_entrega === 'domicilio') {
             let existe = true;
@@ -118,10 +125,11 @@ router.post('/', async (req, res) => {
         const costoEnvioFinal = parseFloat(costo_envio) || 0;
         const totalFinal = parseFloat(total) + costoEnvioFinal - (parseFloat(total) * (descuentoAplicado / 100));
 
-        // 4. Guardar venta
+        // 5. Guardar venta
         const ventaResult = await pool.query(
             `INSERT INTO ventas (
                 usuario_id, 
+                sucursal_id,
                 total, 
                 tipo_pago, 
                 tipo_venta, 
@@ -138,11 +146,13 @@ router.post('/', async (req, res) => {
                 descuento, 
                 codigo_autorizacion, 
                 autorizado,
-                cliente_es_mayorista
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                cliente_es_mayorista,
+                estado
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'completada')
             RETURNING *`,
             [
                 usuario_id, 
+                usuario.sucursal_id || 3,
                 totalFinal, 
                 tipo_pago, 
                 tipo_venta, 
@@ -165,7 +175,7 @@ router.post('/', async (req, res) => {
 
         const ventaId = ventaResult.rows[0].id;
 
-        // 5. Guardar detalles de venta
+        // 6. Guardar detalles de venta
         for (const item of carrito) {
             await pool.query(
                 `INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, precio)
@@ -174,7 +184,7 @@ router.post('/', async (req, res) => {
             );
         }
 
-        // 6. Si es CONTADO y RETIRO, descontar inventario
+        // 7. Si es CONTADO y RETIRO, descontar inventario
         if (tipo_venta === 'contado' && tipo_entrega === 'retiro') {
             for (const item of carrito) {
                 await pool.query(
@@ -186,7 +196,7 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // 7. Si es CRÉDITO, crear cuenta por cobrar
+        // 8. Si es CRÉDITO, crear cuenta por cobrar
         if (tipo_venta === 'credito') {
             await pool.query(
                 `INSERT INTO cuentas_por_cobrar (
@@ -203,7 +213,7 @@ router.post('/', async (req, res) => {
             );
         }
 
-        // 8. Si es DOMICILIO, crear entrega
+        // 9. Si es DOMICILIO, crear entrega
         if (tipo_entrega === 'domicilio') {
             await pool.query(
                 `INSERT INTO entregas (venta_id, direccion, estado, codigo, fecha_salida)
@@ -298,6 +308,138 @@ router.get('/usuario/:id', async (req, res) => {
     } catch (error) {
         console.error('❌ Error en GET /ventas/usuario/:id:', error.message);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// PUT /ventas/:id/cancelar - Cancelar una venta
+// ============================================
+router.put('/:id/cancelar', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { usuario_id, motivo } = req.body;
+
+        // 1. Verificar que la venta existe
+        const ventaResult = await pool.query(
+            `SELECT v.*, u.sucursal_id as usuario_sucursal, u.rol as usuario_rol
+             FROM ventas v
+             JOIN usuarios u ON v.usuario_id = u.id
+             WHERE v.id = $1`,
+            [id]
+        );
+
+        if (ventaResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Venta no encontrada'
+            });
+        }
+
+        const venta = ventaResult.rows[0];
+
+        // 2. Verificar que la venta no esté ya cancelada
+        if (venta.estado === 'cancelada') {
+            return res.status(400).json({
+                success: false,
+                message: 'Esta venta ya está cancelada'
+            });
+        }
+
+        // 3. Verificar permisos - solo el vendedor de la misma sucursal o subgerente
+        const usuario = await pool.query(
+            'SELECT sucursal_id, rol FROM usuarios WHERE id = $1',
+            [usuario_id]
+        );
+
+        if (usuario.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Usuario no encontrado'
+            });
+        }
+
+        const usuarioData = usuario.rows[0];
+        const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuarioData.rol);
+        const mismaSucursal = usuarioData.sucursal_id === venta.sucursal_id;
+
+        if (!esSubgerente && !mismaSucursal) {
+            return res.status(403).json({
+                success: false,
+                message: 'No tienes permiso para cancelar esta venta. Solo el vendedor de la misma sucursal o el subgerente pueden hacerlo.'
+            });
+        }
+
+        await client.query('BEGIN');
+
+        // 4. Devolver stock al inventario (solo si fue contado y retiro)
+        if (venta.tipo_venta === 'contado' && venta.tipo_entrega === 'retiro') {
+            const detalles = await client.query(
+                'SELECT * FROM detalle_ventas WHERE venta_id = $1',
+                [id]
+            );
+
+            for (const item of detalles.rows) {
+                await client.query(
+                    `UPDATE producto_inventario 
+                     SET stock = stock + $1, updated_at = NOW()
+                     WHERE producto_id = $2 AND sucursal_id = $3`,
+                    [item.cantidad, item.producto_id, venta.sucursal_id || 3]
+                );
+            }
+        }
+
+        // 5. Si era crédito, cancelar la cuenta por cobrar
+        if (venta.tipo_venta === 'credito') {
+            const cuentas = await client.query(
+                'SELECT id FROM cuentas_por_cobrar WHERE venta_id = $1',
+                [id]
+            );
+
+            if (cuentas.rows.length > 0) {
+                await client.query(
+                    'UPDATE cuentas_por_cobrar SET estado = $1, updated_at = NOW() WHERE venta_id = $2',
+                    ['cancelada', id]
+                );
+            }
+        }
+
+        // 6. Si era domicilio, cancelar la entrega
+        if (venta.tipo_entrega === 'domicilio') {
+            await client.query(
+                'UPDATE entregas SET estado = $1 WHERE venta_id = $2',
+                ['cancelada', id]
+            );
+        }
+
+        // 7. Cancelar la venta
+        await client.query(
+            `UPDATE ventas 
+             SET estado = 'cancelada', 
+                 fecha_cancelacion = NOW(), 
+                 cancelado_por = $1,
+                 motivo_cancelacion = $2
+             WHERE id = $3`,
+            [usuario_id, motivo || 'Cancelado por el usuario', id]
+        );
+
+        await client.query('COMMIT');
+
+        res.json({
+            success: true,
+            message: '✅ Venta cancelada correctamente',
+            venta_id: id
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error en PUT /ventas/:id/cancelar:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    } finally {
+        client.release();
     }
 });
 

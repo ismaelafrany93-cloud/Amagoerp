@@ -10,6 +10,9 @@ function Historial() {
   const [mostrarEdicion, setMostrarEdicion] = useState(false)
   const [mensaje, setMensaje] = useState('')
 
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+
   // Estado para editar la factura
   const [carritoEdit, setCarritoEdit] = useState([])
   const [clienteEdit, setClienteEdit] = useState({
@@ -28,15 +31,54 @@ function Historial() {
 
   const cargarHistorial = async () => {
     try {
-      const response = await fetch(`${API_URL}/historial`)
+      let url = `${API_URL}/historial`
+      // Si no es subgerente, solo ver sus propias ventas
+      if (!esSubgerente) {
+        url = `${API_URL}/ventas/usuario/${usuario.id}`
+      }
+      const response = await fetch(url)
       const data = await response.json()
-      setVentas(data)
+      setVentas(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando historial:', error)
+      setMensaje('❌ Error cargando historial')
     } finally {
       setCargando(false)
     }
   }
+
+  // ============================================
+  // FUNCIÓN PARA CANCELAR VENTA
+  // ============================================
+  const cancelarVenta = async (ventaId) => {
+    if (!window.confirm('⚠️ ¿Estás seguro de cancelar esta venta?\n\nEsta acción no se puede deshacer.')) return;
+
+    const motivo = prompt('📝 Motivo de la cancelación (opcional):') || 'Cancelado por el usuario';
+
+    try {
+      const response = await fetch(`${API_URL}/ventas/${ventaId}/cancelar`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usuario_id: usuario.id,
+          motivo: motivo
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMensaje('✅ Venta cancelada correctamente');
+        cargarHistorial();
+        setTimeout(() => setMensaje(''), 3000);
+      } else {
+        alert('❌ Error: ' + (data.message || data.error));
+      }
+    } catch (error) {
+      console.error('Error cancelando venta:', error);
+      alert('❌ Error al cancelar la venta');
+    }
+  };
 
   const verDetalle = async (id) => {
     try {
@@ -97,8 +139,6 @@ function Historial() {
     setCargando(true)
 
     try {
-      const usuario = JSON.parse(localStorage.getItem('usuario'))
-
       const response = await fetch(`${API_URL}/historial/editar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -156,8 +196,8 @@ function Historial() {
 
       {mensaje && (
         <div style={{
-          backgroundColor: '#e8f5e9',
-          color: '#1b5e20',
+          backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
+          color: mensaje.includes('✅') ? '#1b5e20' : '#dc2626',
           padding: '10px 15px',
           borderRadius: '8px',
           marginBottom: '20px'
@@ -196,26 +236,49 @@ function Historial() {
             ventas.map((v) => (
               <tr key={v.id} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: '12px' }}>{v.id}</td>
-                <td style={{ padding: '12px' }}>{v.cliente_nombre || 'N/A'}</td>
+                <td style={{ padding: '12px' }}>{v.cliente_nombre || v.cliente || 'N/A'}</td>
                 <td style={{ padding: '12px', textAlign: 'right' }}>
                   RD$ {Number(v.total).toFixed(2)}
                 </td>
                 <td style={{ padding: '12px', textAlign: 'center' }}>
-                  {new Date(v.fecha).toLocaleDateString()}
+                  {new Date(v.fecha || v.created_at).toLocaleDateString()}
                 </td>
                 <td style={{ padding: '12px', textAlign: 'center' }}>
-                  <span style={{
-                    backgroundColor: v.estado === 'completada' ? '#4CAF50' : '#f44336',
-                    color: 'white',
-                    padding: '2px 12px',
-                    borderRadius: '12px',
-                    fontSize: '0.8rem'
-                  }}>
-                    {v.estado === 'completada' ? '✅ Activa' : '❌ Anulada'}
-                  </span>
+                  {v.estado === 'cancelada' ? (
+                    <span style={{
+                      backgroundColor: '#f44336',
+                      color: 'white',
+                      padding: '2px 12px',
+                      borderRadius: '12px',
+                      fontSize: '0.8rem'
+                    }}>
+                      ❌ Cancelada
+                    </span>
+                  ) : v.estado === 'completada' ? (
+                    <span style={{
+                      backgroundColor: '#4CAF50',
+                      color: 'white',
+                      padding: '2px 12px',
+                      borderRadius: '12px',
+                      fontSize: '0.8rem'
+                    }}>
+                      ✅ Activa
+                    </span>
+                  ) : (
+                    <span style={{
+                      backgroundColor: '#ff9800',
+                      color: 'white',
+                      padding: '2px 12px',
+                      borderRadius: '12px',
+                      fontSize: '0.8rem'
+                    }}>
+                      ⏳ Pendiente
+                    </span>
+                  )}
                 </td>
                 <td style={{ padding: '12px', textAlign: 'center' }}>
-                  {v.estado === 'completada' && (
+                  {/* Botón Editar */}
+                  {v.estado !== 'cancelada' && (
                     <button
                       onClick={() => verDetalle(v.id)}
                       style={{
@@ -224,11 +287,34 @@ function Historial() {
                         border: 'none',
                         borderRadius: '4px',
                         padding: '4px 12px',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        marginRight: '5px'
                       }}
                     >
                       ✏️ Editar
                     </button>
+                  )}
+                  
+                  {/* 👇 BOTÓN CANCELAR */}
+                  {v.estado !== 'cancelada' && (
+                    <button
+                      onClick={() => cancelarVenta(v.id)}
+                      style={{
+                        backgroundColor: '#f44336',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '4px 12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ❌ Cancelar
+                    </button>
+                  )}
+                  {v.estado === 'cancelada' && (
+                    <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                      {v.motivo_cancelacion || 'Cancelada'}
+                    </span>
                   )}
                 </td>
               </tr>

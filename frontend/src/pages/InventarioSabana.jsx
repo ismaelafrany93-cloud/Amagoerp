@@ -187,7 +187,7 @@ function InventarioSabana() {
         </p>
       </div>
 
-      {/* Botón para agregar productos (solo dueño/subgerente) */}
+      {/* 👇 BOTÓN PARA AGREGAR PRODUCTOS (SOLO SUBGERENTE/DUEÑO) */}
       {esSubgerente && (
         <button
           onClick={() => setMostrarForm(!mostrarForm)}
@@ -206,7 +206,7 @@ function InventarioSabana() {
         </button>
       )}
 
-      {/* Formulario para agregar producto (solo dueño/subgerente) */}
+      {/* 👇 FORMULARIO PARA AGREGAR PRODUCTO */}
       {mostrarForm && esSubgerente && (
         <form onSubmit={handleAgregarProducto} style={{
           backgroundColor: '#f5f7fb',

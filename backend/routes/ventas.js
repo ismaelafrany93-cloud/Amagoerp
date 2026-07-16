@@ -309,7 +309,7 @@ router.get('/usuario/:id', async (req, res) => {
 });
 
 // ============================================
-// PUT /ventas/:id/cancelar - Cancelar una venta
+// PUT /ventas/:id/cancelar - Cancelar una venta (CON ENTREGAS SIEMPRE)
 // ============================================
 router.put('/:id/cancelar', async (req, res) => {
     const client = await pool.connect();
@@ -400,7 +400,9 @@ router.put('/:id/cancelar', async (req, res) => {
             );
         }
 
+        // ============================================
         // 6. ✅ SIEMPRE cancelar la entrega si existe
+        // ============================================
         const entregaExiste = await client.query(
             'SELECT id FROM entregas WHERE venta_id = $1',
             [id]

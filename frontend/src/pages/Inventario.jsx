@@ -28,7 +28,7 @@ function Inventario() {
 
   useEffect(() => {
     cargarInventario()
-    if (esSubgerente && esSucursalPrincipal) {
+    if (esSubgerente) {
       cargarTodosProductos()
     }
   }, [])
@@ -42,6 +42,8 @@ function Inventario() {
       } else if (esSucursalPrincipal) {
         url = `${API_URL}/inventario?sucursal_id=3`
       }
+      
+      console.log('📊 Cargando inventario desde:', url)
       
       const response = await fetch(url)
       if (!response.ok) {
@@ -77,46 +79,22 @@ function Inventario() {
 
     setCargando(true)
     try {
-      // 1. Actualizar el producto con los precios
-      const productoExistente = todosProductos.find(p => p.id === parseInt(form.producto_id))
-      
-      if (productoExistente) {
-        const datosProducto = {
-          nombre: productoExistente.nombre,
-          categoria: productoExistente.categoria,
-          descripcion: productoExistente.descripcion || '',
-          precio: parseFloat(form.precio) || productoExistente.precio,
-          stock: parseInt(form.stock) || 0,
-          sucursal_id: sucursalId || 3
-        }
-
-        // ✅ SOLO la sucursal principal puede modificar precios mayoristas
-        if (esSucursalPrincipal) {
-          datosProducto.precio_mayor = parseFloat(form.precio_mayor) || null
-          datosProducto.cantidad_mayor = parseInt(form.cantidad_mayor) || 0
-        }
-
-        await fetch(`${API_URL}/productos/${form.producto_id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(datosProducto)
-        });
-      }
-
-      // 2. Agregar stock a la sucursal
       const response = await fetch(`${API_URL}/inventario`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           producto_id: parseInt(form.producto_id),
           sucursal_id: sucursalId || 3,
-          stock: parseInt(form.stock) || 0
+          stock: parseInt(form.stock) || 0,
+          precio: parseFloat(form.precio) || 0,
+          precio_mayor: parseFloat(form.precio_mayor) || null,
+          cantidad_mayor: parseInt(form.cantidad_mayor) || 0
         })
       })
 
       const data = await response.json()
       if (data.success) {
-        setMensaje('✅ Producto agregado al inventario')
+        setMensaje('✅ Producto agregado al inventario de la sucursal')
         setForm({ producto_id: '', stock: 0, precio: '', precio_mayor: '', cantidad_mayor: '' })
         setMostrarForm(false)
         cargarInventario()
@@ -224,7 +202,7 @@ function Inventario() {
             🔑 <strong>Gestión de Inventario de {usuario.sucursal_nombre || 'la Sucursal'}</strong>
           </p>
           <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
-            Solo puedes agregar o eliminar productos, los precios se gestionan desde la Principal
+            Los precios que configures aquí son exclusivos para esta sucursal
           </p>
         </div>
       )}
@@ -295,19 +273,43 @@ function Inventario() {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Normal (RD$)</label>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Normal (RD$) *</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={form.precio}
                 onChange={(e) => setForm({ ...form, precio: e.target.value })}
+                required
                 placeholder="0.00"
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
-              <p style={{ fontSize: '0.7rem', color: '#999', marginTop: '3px' }}>
-                ⚠️ Para cambiar el precio, contacta a la sucursal principal
+              <p style={{ fontSize: '0.7rem', color: '#4CAF50', marginTop: '3px' }}>
+                💰 Precio específico para esta sucursal
               </p>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Mayor (RD$)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.precio_mayor}
+                onChange={(e) => setForm({ ...form, precio_mayor: e.target.value })}
+                placeholder="0.00"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cantidad Mínima para Mayor</label>
+              <input
+                type="number"
+                min="0"
+                value={form.cantidad_mayor}
+                onChange={(e) => setForm({ ...form, cantidad_mayor: e.target.value })}
+                placeholder="10"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
             </div>
           </div>
           <button
@@ -329,139 +331,6 @@ function Inventario() {
         </form>
       )}
 
-      {/* ========================================== */}
-      {/* FORMULARIO PRINCIPAL CON PRECIOS MAYORISTAS */}
-      {/* ========================================== */}
-      {esSubgerente && esSucursalPrincipal && (
-        <div style={{ marginBottom: '20px' }}>
-          <button
-            onClick={() => setMostrarForm(!mostrarForm)}
-            style={{
-              marginBottom: '20px',
-              padding: '10px 20px',
-              backgroundColor: '#003b6f',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '1rem'
-            }}
-          >
-            {mostrarForm ? '✕ Cancelar' : '➕ Gestionar Productos y Precios'}
-          </button>
-
-          {mostrarForm && (
-            <form onSubmit={handleAgregarProducto} style={{
-              backgroundColor: '#f5f7fb',
-              padding: '25px',
-              borderRadius: '12px',
-              marginBottom: '25px',
-              border: '2px solid #003b6f'
-            }}>
-              <h3 style={{ marginTop: 0, color: '#003b6f' }}>
-                📦 Gestionar Producto
-              </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div>
-                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Producto *</label>
-                  <select
-                    value={form.producto_id}
-                    onChange={(e) => {
-                      const id = e.target.value
-                      const producto = todosProductos.find(p => p.id === parseInt(id))
-                      setForm({ 
-                        ...form, 
-                        producto_id: id,
-                        precio: producto?.precio || '',
-                        precio_mayor: producto?.precio_mayor || '',
-                        cantidad_mayor: producto?.cantidad_mayor || ''
-                      })
-                    }}
-                    required
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-                  >
-                    <option value="">Seleccionar producto</option>
-                    {todosProductos.map(p => (
-                      <option key={p.id} value={p.id}>{p.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Stock</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.stock}
-                    onChange={(e) => setForm({ ...form, stock: parseInt(e.target.value) || 0 })}
-                    placeholder="0"
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Normal (RD$) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.precio}
-                    onChange={(e) => setForm({ ...form, precio: e.target.value })}
-                    required
-                    placeholder="0.00"
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio por Mayor (RD$)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.precio_mayor}
-                    onChange={(e) => setForm({ ...form, precio_mayor: e.target.value })}
-                    placeholder="0.00"
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-                  />
-                  <p style={{ fontSize: '0.7rem', color: '#4CAF50', marginTop: '3px' }}>
-                    💰 Precio especial para clientes mayoristas
-                  </p>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cantidad Mínima para Mayor</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.cantidad_mayor}
-                    onChange={(e) => setForm({ ...form, cantidad_mayor: e.target.value })}
-                    placeholder="10"
-                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-                  />
-                  <p style={{ fontSize: '0.7rem', color: '#666', marginTop: '3px' }}>
-                    A partir de cuántas unidades aplica el precio mayor
-                  </p>
-                </div>
-              </div>
-              <button
-                type="submit"
-                disabled={cargando}
-                style={{
-                  marginTop: '15px',
-                  padding: '12px 30px',
-                  backgroundColor: '#4CAF50',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '1rem'
-                }}
-              >
-                {cargando ? 'Guardando...' : '✅ Guardar Producto'}
-              </button>
-            </form>
-          )}
-        </div>
-      )}
-
-      {/* Tabla de inventario */}
       <table style={{
         width: '100%',
         borderCollapse: 'collapse',
@@ -476,13 +345,9 @@ function Inventario() {
             <th style={{ padding: '12px', textAlign: 'left' }}>Producto</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Categoría</th>
             <th style={{ padding: '12px', textAlign: 'center' }}>Stock</th>
-            <th style={{ padding: '12px', textAlign: 'right' }}>Precio Normal</th>
-            {esSucursalPrincipal && (
-              <>
-                <th style={{ padding: '12px', textAlign: 'right' }}>Precio Mayor</th>
-                <th style={{ padding: '12px', textAlign: 'center' }}>Cant. Mín.</th>
-              </>
-            )}
+            <th style={{ padding: '12px', textAlign: 'right' }}>Precio</th>
+            <th style={{ padding: '12px', textAlign: 'right' }}>Precio Mayor</th>
+            <th style={{ padding: '12px', textAlign: 'center' }}>Cant. Mín.</th>
             {esSubgerente && !esSucursalPrincipal && (
               <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             )}
@@ -491,7 +356,7 @@ function Inventario() {
         <tbody>
           {!Array.isArray(productos) || productos.length === 0 ? (
             <tr>
-              <td colSpan={esSucursalPrincipal ? 7 : (esSubgerente && !esSucursalPrincipal ? 6 : 5)} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+              <td colSpan={esSubgerente && !esSucursalPrincipal ? 8 : 7} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                 {esSucursal && !esSucursalPrincipal 
                   ? 'No hay productos en esta sucursal. Agrega productos desde el botón "Agregar Producto a Sucursal"'
                   : 'No hay productos en el inventario'}
@@ -514,16 +379,12 @@ function Inventario() {
                 <td style={{ padding: '12px', textAlign: 'right' }}>
                   RD$ {Number(p.precio || 0).toFixed(2)}
                 </td>
-                {esSucursalPrincipal && (
-                  <>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>
-                      {p.precio_mayor ? `RD$ ${Number(p.precio_mayor).toFixed(2)}` : 'N/A'}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'center' }}>
-                      {p.cantidad_mayor || 0}
-                    </td>
-                  </>
-                )}
+                <td style={{ padding: '12px', textAlign: 'right' }}>
+                  {p.precio_mayor ? `RD$ ${Number(p.precio_mayor).toFixed(2)}` : 'N/A'}
+                </td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>
+                  {p.cantidad_mayor || 0}
+                </td>
                 {esSubgerente && !esSucursalPrincipal && (
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     <button

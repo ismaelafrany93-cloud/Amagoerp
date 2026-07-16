@@ -48,7 +48,7 @@ function Historial() {
   }
 
   // ============================================
-  // FUNCIÓN PARA CANCELAR VENTA (DEVUELVE STOCK)
+  // FUNCIÓN PARA CANCELAR VENTA (CON ACTUALIZACIÓN)
   // ============================================
   const cancelarVenta = async (ventaId) => {
     // Verificar si la venta es de la misma sucursal
@@ -76,7 +76,14 @@ function Historial() {
 
       if (data.success) {
         setMensaje('✅ Venta cancelada correctamente. Stock devuelto al inventario.');
+        
+        // 🔄 RECARGAR EL HISTORIAL
         cargarHistorial();
+        
+        // 🔄 ACTUALIZAR EL DASHBOARD (si está abierto en otra pestaña)
+        // Guardar un timestamp en localStorage para notificar al Dashboard
+        localStorage.setItem('dashboard_updated', Date.now().toString());
+        
         setTimeout(() => setMensaje(''), 3000);
       } else {
         alert('❌ Error: ' + (data.message || data.error));
@@ -174,6 +181,8 @@ function Historial() {
         setMostrarEdicion(false)
         setVentaSeleccionada(null)
         cargarHistorial()
+        // Notificar al Dashboard
+        localStorage.setItem('dashboard_updated', Date.now().toString())
         setTimeout(() => setMensaje(''), 3000)
       } else {
         alert('❌ Error: ' + (data.error || 'No se pudo guardar'))
@@ -244,7 +253,6 @@ function Historial() {
               ventas.map((v) => {
                 const esMismaSucursal = v.sucursal_id === sucursalId;
                 const puedeCancelar = esSubgerente || esMismaSucursal;
-                // 👇 TODAS LAS VENTAS QUE NO ESTÉN CANCELADAS PUEDEN EDITARSE/CANCELARSE
                 const puedeEditar = v.estado !== 'cancelada';
 
                 return (
@@ -301,7 +309,6 @@ function Historial() {
                       )}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
-                      {/* Botón Editar - solo si NO está cancelada */}
                       {puedeEditar && (
                         <button
                           onClick={() => verDetalle(v.id)}
@@ -319,7 +326,6 @@ function Historial() {
                         </button>
                       )}
                       
-                      {/* Botón Cancelar - solo si NO está cancelada y tiene permiso */}
                       {puedeEditar && puedeCancelar && (
                         <button
                           onClick={() => cancelarVenta(v.id)}
@@ -354,7 +360,7 @@ function Historial() {
         </table>
       </div>
 
-      {/* Modal de edición - solo si NO está cancelada */}
+      {/* Modal de edición */}
       {mostrarEdicion && ventaSeleccionada && ventaSeleccionada.estado !== 'cancelada' && (
         <div style={{
           position: 'fixed',

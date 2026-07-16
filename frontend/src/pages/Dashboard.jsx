@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'  // ← AGREGAR ESTE IMPORT
+import { useNavigate } from 'react-router-dom'
 import AdminLayout from '../layouts/AdminLayout'
 import API_URL from '../config'
 
 function Dashboard() {
-  const navigate = useNavigate()  // ← AGREGAR ESTA LÍNEA
+  const navigate = useNavigate()
   const [datos, setDatos] = useState({
     ventas_hoy: 0,
     produccion_hoy: 0,
@@ -16,12 +16,11 @@ function Dashboard() {
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+  const esSucursalPrincipal = usuario.sucursal_id === 3
 
-  useEffect(() => {
-    cargarDashboard()
-    cargarTopProductos()
-  }, [])
-
+  // ============================================
+  // FUNCIONES PARA CARGAR DATOS
+  // ============================================
   const cargarDashboard = async () => {
     try {
       const response = await fetch(`${API_URL}/reportes/dashboard`)
@@ -29,8 +28,6 @@ function Dashboard() {
       setDatos(data)
     } catch (error) {
       console.error('Error cargando dashboard:', error)
-    } finally {
-      setCargando(false)
     }
   }
 
@@ -39,11 +36,48 @@ function Dashboard() {
       const response = await fetch(`${API_URL}/reportes/top-productos`)
       const data = await response.json()
       setTopProductos(data)
-    } catch (error) {
-      console.error('Error cargando top productos:', error)
+    } finally {
+      setCargando(false)
     }
   }
 
+  // ============================================
+  // EFECTO PRINCIPAL
+  // ============================================
+  useEffect(() => {
+    cargarDashboard()
+    cargarTopProductos()
+
+    // 👇 ACTUALIZAR CUANDO LA PESTAÑA SE ACTIVA
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('🔄 Dashboard visible - Recargando datos...')
+        cargarDashboard()
+        cargarTopProductos()
+      }
+    }
+
+    // 👇 ACTUALIZAR CUANDO SE CANCELA UNA VENTA (desde otra pestaña)
+    const handleStorageChange = (e) => {
+      if (e.key === 'dashboard_updated') {
+        console.log('🔄 Dashboard actualizado desde otra pestaña')
+        cargarDashboard()
+        cargarTopProductos()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('storage', handleStorageChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('storage', handleStorageChange)
+    }
+  }, [])
+
+  // ============================================
+  // RENDER
+  // ============================================
   if (cargando) {
     return (
       <AdminLayout>
@@ -69,12 +103,18 @@ function Dashboard() {
           <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
             RD$ {datos.ventas_hoy?.toFixed(2) || '0.00'}
           </p>
+          <p style={{ fontSize: '0.8rem', color: '#666', margin: '5px 0 0 0' }}>
+            Total de ventas del día
+          </p>
         </div>
 
         <div style={{ backgroundColor: '#e8f5e9', padding: '20px', borderRadius: '12px' }}>
           <h3 style={{ margin: 0, color: '#1b5e20' }}>🏭 Producción Hoy</h3>
           <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
             {datos.produccion_hoy || 0} unidades
+          </p>
+          <p style={{ fontSize: '0.8rem', color: '#666', margin: '5px 0 0 0' }}>
+            Unidades producidas hoy
           </p>
         </div>
 
@@ -83,6 +123,9 @@ function Dashboard() {
           <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
             {datos.entregas_pendientes || 0}
           </p>
+          <p style={{ fontSize: '0.8rem', color: '#666', margin: '5px 0 0 0' }}>
+            Entregas pendientes
+          </p>
         </div>
 
         <div style={{ backgroundColor: '#f3e5f5', padding: '20px', borderRadius: '12px' }}>
@@ -90,10 +133,13 @@ function Dashboard() {
           <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
             RD$ {datos.ventas_mes?.toFixed(2) || '0.00'}
           </p>
+          <p style={{ fontSize: '0.8rem', color: '#666', margin: '5px 0 0 0' }}>
+            Total del mes actual
+          </p>
         </div>
       </div>
 
-      {/* 👇 TARJETA DE ACCESO A INVENTARIO BANÍ (SOLO PARA SUBGERENTE) */}
+      {/* Tarjeta de acceso a Inventario Baní (solo subgerente) */}
       {esSubgerente && (
         <div style={{
           backgroundColor: 'white',

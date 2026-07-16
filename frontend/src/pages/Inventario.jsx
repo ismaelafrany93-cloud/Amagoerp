@@ -77,16 +77,35 @@ function Inventario() {
 
     setCargando(true)
     try {
+      // 1. Primero actualizar el producto con los precios
+      const productoExistente = todosProductos.find(p => p.id === parseInt(form.producto_id))
+      
+      if (productoExistente) {
+        // Actualizar precios del producto
+        await fetch(`${API_URL}/productos/${form.producto_id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre: productoExistente.nombre,
+            categoria: productoExistente.categoria,
+            descripcion: productoExistente.descripcion || '',
+            precio: parseFloat(form.precio) || productoExistente.precio,
+            precio_mayor: parseFloat(form.precio_mayor) || null,
+            cantidad_mayor: parseInt(form.cantidad_mayor) || 0,
+            stock: parseInt(form.stock) || 0,
+            sucursal_id: sucursalId || 3
+          })
+        });
+      }
+
+      // 2. Agregar stock a la sucursal
       const response = await fetch(`${API_URL}/inventario`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           producto_id: parseInt(form.producto_id),
           sucursal_id: sucursalId || 3,
-          stock: parseInt(form.stock) || 0,
-          precio: parseFloat(form.precio) || 0,
-          precio_mayor: parseFloat(form.precio_mayor) || null,
-          cantidad_mayor: parseInt(form.cantidad_mayor) || 0
+          stock: parseInt(form.stock) || 0
         })
       })
 
@@ -237,7 +256,17 @@ function Inventario() {
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Producto *</label>
               <select
                 value={form.producto_id}
-                onChange={(e) => setForm({ ...form, producto_id: e.target.value })}
+                onChange={(e) => {
+                  const id = e.target.value
+                  const producto = todosProductos.find(p => p.id === parseInt(id))
+                  setForm({ 
+                    ...form, 
+                    producto_id: id,
+                    precio: producto?.precio || '',
+                    precio_mayor: producto?.precio_mayor || '',
+                    cantidad_mayor: producto?.cantidad_mayor || ''
+                  })
+                }}
                 required
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               >
@@ -259,19 +288,20 @@ function Inventario() {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Normal (RD$)</label>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Normal (RD$) *</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={form.precio}
                 onChange={(e) => setForm({ ...form, precio: e.target.value })}
+                required
                 placeholder="0.00"
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Mayor (RD$)</label>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio por Mayor (RD$)</label>
               <input
                 type="number"
                 step="0.01"
@@ -281,6 +311,9 @@ function Inventario() {
                 placeholder="0.00"
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
+              <p style={{ fontSize: '0.7rem', color: '#666', marginTop: '3px' }}>
+                Precio especial para clientes mayoristas
+              </p>
             </div>
             <div>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cantidad Mínima para Mayor</label>
@@ -292,6 +325,9 @@ function Inventario() {
                 placeholder="10"
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
+              <p style={{ fontSize: '0.7rem', color: '#666', marginTop: '3px' }}>
+                A partir de cuántas unidades aplica el precio mayor
+              </p>
             </div>
           </div>
           <button

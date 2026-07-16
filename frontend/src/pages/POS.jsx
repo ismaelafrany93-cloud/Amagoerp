@@ -24,7 +24,7 @@ function POS() {
     direccion: '',
     referencia: '',
     detalles: '',
-    es_mayorista: false  // 👈 NUEVO CAMPO
+    es_mayorista: false
   })
 
   const facturaRef = useRef()
@@ -68,18 +68,22 @@ function POS() {
     }
   }
 
-  // 🔑 FUNCIÓN PARA CALCULAR PRECIO SEGÚN CLIENTE Y CANTIDAD
+  // 🔑 FUNCIÓN PARA CALCULAR PRECIO (SOLO PRINCIPAL USA MAYORISTA)
   const calcularPrecio = (producto, cantidad) => {
-    // Si el cliente es mayorista, siempre aplicar precio mayor
-    if (cliente.es_mayorista && producto.precio_mayor) {
-      return parseFloat(producto.precio_mayor)
+    // ✅ SOLO la sucursal principal puede usar precios mayoristas
+    if (esSucursalPrincipal) {
+      // Si el cliente es mayorista, siempre aplicar precio mayor
+      if (cliente.es_mayorista && producto.precio_mayor) {
+        return parseFloat(producto.precio_mayor)
+      }
+      
+      // Si no es mayorista, aplicar regla de cantidad
+      if (producto.precio_mayor && producto.cantidad_mayor && cantidad >= producto.cantidad_mayor) {
+        return parseFloat(producto.precio_mayor)
+      }
     }
     
-    // Si no es mayorista, aplicar regla de cantidad
-    if (producto.precio_mayor && producto.cantidad_mayor && cantidad >= producto.cantidad_mayor) {
-      return parseFloat(producto.precio_mayor)
-    }
-    
+    // Para sucursales o si no aplica mayorista, usar precio normal
     return parseFloat(producto.precio)
   }
 
@@ -211,7 +215,7 @@ function POS() {
         costo_envio: parseFloat(costoEnvio) || 0,
         descuento: parseFloat(descuento) || 0,
         codigo_autorizacion: codigoAutorizacion || null,
-        cliente_es_mayorista: cliente.es_mayorista || false  // 👈 NUEVO
+        cliente_es_mayorista: cliente.es_mayorista || false
       }
 
       const response = await fetch(`${API_URL}/ventas`, {
@@ -382,6 +386,21 @@ function POS() {
         </div>
       )}
 
+      {/* 👇 SOLO LA PRINCIPAL PUEDE MARCAR CLIENTES MAYORISTAS */}
+      {esSucursalPrincipal && (
+        <div style={{
+          backgroundColor: '#e3f2fd',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '15px',
+          borderLeft: '4px solid #003b6f'
+        }}>
+          <p style={{ margin: 0, color: '#003b6f' }}>
+            👑 <strong>Sucursal Principal</strong> - Precios al por mayor disponibles
+          </p>
+        </div>
+      )}
+
       <div style={{
         display: 'flex',
         gap: '20px',
@@ -535,34 +554,37 @@ function POS() {
               style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
             />
           </div>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              cursor: 'pointer',
-              backgroundColor: cliente.es_mayorista ? '#e8f5e9' : 'transparent',
-              padding: '10px',
-              borderRadius: '8px',
-              border: cliente.es_mayorista ? '2px solid #4CAF50' : '2px solid transparent',
-              transition: 'all 0.3s'
-            }}>
-              <input
-                type="checkbox"
-                checked={cliente.es_mayorista || false}
-                onChange={(e) => setCliente({ ...cliente, es_mayorista: e.target.checked })}
-                style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#4CAF50' }}
-              />
-              <div>
-                <span style={{ fontWeight: 'bold' }}>👑 Cliente Mayorista</span>
-                <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
-                  {cliente.es_mayorista 
-                    ? '✅ Precio al por mayor aplicado automáticamente' 
-                    : 'Marcar si este cliente es mayorista'}
-                </p>
-              </div>
-            </label>
-          </div>
+          {/* 👇 SOLO SUCURSAL PRINCIPAL PUEDE MARCAR CLIENTES MAYORISTAS */}
+          {esSucursalPrincipal && (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                cursor: 'pointer',
+                backgroundColor: cliente.es_mayorista ? '#e8f5e9' : 'transparent',
+                padding: '10px',
+                borderRadius: '8px',
+                border: cliente.es_mayorista ? '2px solid #4CAF50' : '2px solid transparent',
+                transition: 'all 0.3s'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={cliente.es_mayorista || false}
+                  onChange={(e) => setCliente({ ...cliente, es_mayorista: e.target.checked })}
+                  style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#4CAF50' }}
+                />
+                <div>
+                  <span style={{ fontWeight: 'bold' }}>👑 Cliente Mayorista</span>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
+                    {cliente.es_mayorista 
+                      ? '✅ Precio al por mayor aplicado automáticamente' 
+                      : 'Marcar si este cliente es mayorista (solo disponible en Principal)'}
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
         </div>
       </div>
 
@@ -614,7 +636,8 @@ function POS() {
                   <p style={{ margin: '5px 0', fontSize: '1.1rem', fontWeight: 'bold', color: '#003b6f' }}>
                     RD$ {Number(producto.precio || 0).toFixed(2)}
                   </p>
-                  {producto.precio_mayor && (
+                  {/* 👇 SOLO SUCURSAL PRINCIPAL MUESTRA PRECIO MAYOR */}
+                  {esSucursalPrincipal && producto.precio_mayor && (
                     <p style={{ margin: '2px 0', fontSize: '0.8rem', color: '#4CAF50' }}>
                       Mayor: RD$ {Number(producto.precio_mayor).toFixed(2)} (mín. {producto.cantidad_mayor || 10}u)
                     </p>
@@ -669,7 +692,8 @@ function POS() {
                       <button onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} style={{ cursor: 'pointer', padding: '2px 8px' }}>+</button>
                     </div>
                     <span>
-                      {cliente.es_mayorista ? '👑 Mayor' : (item.cantidad >= item.cantidad_mayor ? '💰 Mayor' : '🛒 Detal')}
+                      {/* 👇 SOLO PRINCIPAL MUESTRA ETIQUETA MAYOR */}
+                      {esSucursalPrincipal && (cliente.es_mayorista || (item.cantidad >= item.cantidad_mayor)) ? '💰 Mayor' : '🛒 Detal'}
                       {' '}
                       RD$ {(Number(item.precio_unitario || item.precio) * item.cantidad).toFixed(2)}
                     </span>

@@ -12,9 +12,7 @@ function InventarioSabana() {
   const [form, setForm] = useState({
     producto_id: '',
     stock: 0,
-    precio: '',
-    precio_mayor: '',
-    cantidad_mayor: ''
+    precio: ''
   })
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
@@ -71,16 +69,14 @@ function InventarioSabana() {
           producto_id: parseInt(form.producto_id),
           sucursal_id: SUCURSAL_SABANA_ID,
           stock: parseInt(form.stock) || 0,
-          precio: parseFloat(form.precio) || 0,
-          precio_mayor: parseFloat(form.precio_mayor) || null,
-          cantidad_mayor: parseInt(form.cantidad_mayor) || 0
+          precio: parseFloat(form.precio) || 0
         })
       })
 
       const data = await response.json()
       if (data.success) {
         setMensaje('✅ Producto agregado al inventario de Sabana')
-        setForm({ producto_id: '', stock: 0, precio: '', precio_mayor: '', cantidad_mayor: '' })
+        setForm({ producto_id: '', stock: 0, precio: '' })
         setMostrarForm(false)
         cargarInventarioSabana()
         setTimeout(() => setMensaje(''), 3000)
@@ -179,7 +175,7 @@ function InventarioSabana() {
         </p>
         {esSubgerente && (
           <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
-            🔑 Puedes agregar o eliminar productos desde aquí
+            🔑 Puedes agregar o eliminar productos desde aquí (precios exclusivos para Sabana)
           </p>
         )}
         <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
@@ -187,7 +183,6 @@ function InventarioSabana() {
         </p>
       </div>
 
-      {/* 👇 BOTÓN PARA AGREGAR PRODUCTOS (SOLO SUBGERENTE/DUEÑO) */}
       {esSubgerente && (
         <button
           onClick={() => setMostrarForm(!mostrarForm)}
@@ -206,7 +201,6 @@ function InventarioSabana() {
         </button>
       )}
 
-      {/* 👇 FORMULARIO PARA AGREGAR PRODUCTO */}
       {mostrarForm && esSubgerente && (
         <form onSubmit={handleAgregarProducto} style={{
           backgroundColor: '#f5f7fb',
@@ -223,7 +217,15 @@ function InventarioSabana() {
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Producto *</label>
               <select
                 value={form.producto_id}
-                onChange={(e) => setForm({ ...form, producto_id: e.target.value })}
+                onChange={(e) => {
+                  const id = e.target.value
+                  const producto = todosProductos.find(p => p.id === parseInt(id))
+                  setForm({ 
+                    ...form, 
+                    producto_id: id,
+                    precio: producto?.precio || ''
+                  })
+                }}
                 required
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               >
@@ -245,39 +247,20 @@ function InventarioSabana() {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Normal (RD$)</label>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Normal (RD$) *</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={form.precio}
                 onChange={(e) => setForm({ ...form, precio: e.target.value })}
+                required
                 placeholder="0.00"
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Mayor (RD$)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.precio_mayor}
-                onChange={(e) => setForm({ ...form, precio_mayor: e.target.value })}
-                placeholder="0.00"
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cantidad Mínima para Mayor</label>
-              <input
-                type="number"
-                min="0"
-                value={form.cantidad_mayor}
-                onChange={(e) => setForm({ ...form, cantidad_mayor: e.target.value })}
-                placeholder="10"
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-              />
+              <p style={{ fontSize: '0.7rem', color: '#4CAF50', marginTop: '3px' }}>
+                💰 Precio exclusivo para Sabana
+              </p>
             </div>
           </div>
           <button
@@ -313,9 +296,7 @@ function InventarioSabana() {
             <th style={{ padding: '12px', textAlign: 'left' }}>Producto</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Categoría</th>
             <th style={{ padding: '12px', textAlign: 'center' }}>Stock</th>
-            <th style={{ padding: '12px', textAlign: 'right' }}>Precio Normal</th>
-            <th style={{ padding: '12px', textAlign: 'right' }}>Precio Mayor</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Cant. Mín.</th>
+            <th style={{ padding: '12px', textAlign: 'right' }}>Precio</th>
             {esSubgerente && (
               <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             )}
@@ -324,7 +305,7 @@ function InventarioSabana() {
         <tbody>
           {!Array.isArray(productos) || productos.length === 0 ? (
             <tr>
-              <td colSpan={esSubgerente ? 8 : 7} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+              <td colSpan={esSubgerente ? 6 : 5} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                 No hay productos en el inventario de Sabana
               </td>
             </tr>
@@ -344,12 +325,6 @@ function InventarioSabana() {
                 </td>
                 <td style={{ padding: '12px', textAlign: 'right' }}>
                   RD$ {Number(p.precio || 0).toFixed(2)}
-                </td>
-                <td style={{ padding: '12px', textAlign: 'right' }}>
-                  {p.precio_mayor ? `RD$ ${Number(p.precio_mayor).toFixed(2)}` : 'N/A'}
-                </td>
-                <td style={{ padding: '12px', textAlign: 'center' }}>
-                  {p.cantidad_mayor || 0}
                 </td>
                 {esSubgerente && (
                   <td style={{ padding: '12px', textAlign: 'center' }}>

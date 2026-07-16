@@ -11,12 +11,13 @@ function InventarioBani() {
   const [mensaje, setMensaje] = useState('')
   const [form, setForm] = useState({
     producto_id: '',
-    stock: 0
+    stock: 0,
+    precio: ''
   })
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
-  const SUCURSAL_BANI_ID = 2 // Cambia por el ID de Baní
+  const SUCURSAL_BANI_ID = 1
 
   useEffect(() => {
     cargarInventarioBani()
@@ -67,14 +68,15 @@ function InventarioBani() {
         body: JSON.stringify({
           producto_id: parseInt(form.producto_id),
           sucursal_id: SUCURSAL_BANI_ID,
-          stock: parseInt(form.stock) || 0
+          stock: parseInt(form.stock) || 0,
+          precio: parseFloat(form.precio) || 0
         })
       })
 
       const data = await response.json()
       if (data.success) {
         setMensaje('✅ Producto agregado al inventario de Baní')
-        setForm({ producto_id: '', stock: 0 })
+        setForm({ producto_id: '', stock: 0, precio: '' })
         setMostrarForm(false)
         cargarInventarioBani()
         setTimeout(() => setMensaje(''), 3000)
@@ -173,7 +175,7 @@ function InventarioBani() {
         </p>
         {esSubgerente && (
           <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
-            🔑 Puedes agregar o eliminar productos desde aquí
+            🔑 Puedes agregar o eliminar productos desde aquí (precios exclusivos para Baní)
           </p>
         )}
         <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
@@ -181,7 +183,6 @@ function InventarioBani() {
         </p>
       </div>
 
-      {/* Botón para agregar productos (solo dueño/subgerente) */}
       {esSubgerente && (
         <button
           onClick={() => setMostrarForm(!mostrarForm)}
@@ -200,7 +201,6 @@ function InventarioBani() {
         </button>
       )}
 
-      {/* Formulario para agregar producto (solo dueño/subgerente) */}
       {mostrarForm && esSubgerente && (
         <form onSubmit={handleAgregarProducto} style={{
           backgroundColor: '#f5f7fb',
@@ -217,7 +217,15 @@ function InventarioBani() {
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Producto *</label>
               <select
                 value={form.producto_id}
-                onChange={(e) => setForm({ ...form, producto_id: e.target.value })}
+                onChange={(e) => {
+                  const id = e.target.value
+                  const producto = todosProductos.find(p => p.id === parseInt(id))
+                  setForm({ 
+                    ...form, 
+                    producto_id: id,
+                    precio: producto?.precio || ''
+                  })
+                }}
                 required
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               >
@@ -237,6 +245,22 @@ function InventarioBani() {
                 placeholder="0"
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Normal (RD$) *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.precio}
+                onChange={(e) => setForm({ ...form, precio: e.target.value })}
+                required
+                placeholder="0.00"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
+              <p style={{ fontSize: '0.7rem', color: '#4CAF50', marginTop: '3px' }}>
+                💰 Precio exclusivo para Baní
+              </p>
             </div>
           </div>
           <button
@@ -258,7 +282,6 @@ function InventarioBani() {
         </form>
       )}
 
-      {/* Tabla de inventario */}
       <table style={{
         width: '100%',
         borderCollapse: 'collapse',

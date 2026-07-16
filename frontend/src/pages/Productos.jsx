@@ -4,73 +4,116 @@ import API_URL from '../config'
 
 function Productos() {
   const [productos, setProductos] = useState([])
+  const [sucursales, setSucursales] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
+  const [editando, setEditando] = useState(null)
+  const [mensaje, setMensaje] = useState('')
   const [form, setForm] = useState({
     nombre: '',
     categoria: '',
     descripcion: '',
     precio: '',
-    stock: ''
+    precio_mayor: '',
+    cantidad_mayor: '',
+    stock: '',
+    sucursal_id: ''
   })
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-  const rol = usuario?.rol || ''
-  const puedeEditar = ['dueno', 'dueño', 'subgerente', 'supervisor'].includes(rol)
+  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
 
   useEffect(() => {
     cargarProductos()
+    cargarSucursales()
   }, [])
 
   const cargarProductos = async () => {
     try {
       const response = await fetch(`${API_URL}/productos`)
       const data = await response.json()
-      setProductos(data)
+      setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando productos:', error)
+      setMensaje('❌ Error cargando productos')
     } finally {
       setCargando(false)
+    }
+  }
+
+  const cargarSucursales = async () => {
+    try {
+      const response = await fetch(`${API_URL}/sucursales`)
+      const data = await response.json()
+      setSucursales(data)
+    } catch (error) {
+      console.error('Error cargando sucursales:', error)
     }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setCargando(true)
+    setMensaje('')
 
     try {
-      const response = await fetch(`${API_URL}/productos`, {
-        method: 'POST',
+      const url = editando ? `${API_URL}/productos/${editando}` : `${API_URL}/productos`
+      const method = editando ? 'PUT' : 'POST'
+
+      const datosEnviar = {
+        nombre: form.nombre,
+        categoria: form.categoria || 'General',
+        descripcion: form.descripcion || '',
+        precio: parseFloat(form.precio) || 0,
+        precio_mayor: form.precio_mayor ? parseFloat(form.precio_mayor) : null,
+        cantidad_mayor: parseInt(form.cantidad_mayor) || 0,
+        stock: parseInt(form.stock) || 0,
+        sucursal_id: form.sucursal_id || null
+      }
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre: form.nombre,
-          categoria: form.categoria,
-          descripcion: form.descripcion,
-          precio: parseFloat(form.precio) || 0,
-          stock: parseInt(form.stock) || 0
-        })
+        body: JSON.stringify(datosEnviar)
       })
 
       const data = await response.json()
 
       if (data.success) {
-        alert('✅ Producto agregado correctamente')
-        setForm({ nombre: '', categoria: '', descripcion: '', precio: '', stock: '' })
+        setMensaje(editando ? '✅ Producto actualizado correctamente' : '✅ Producto creado correctamente')
+        setForm({ nombre: '', categoria: '', descripcion: '', precio: '', precio_mayor: '', cantidad_mayor: '', stock: '', sucursal_id: '' })
         setMostrarForm(false)
+        setEditando(null)
         cargarProductos()
+        setTimeout(() => setMensaje(''), 3000)
       } else {
-        alert('❌ Error: ' + (data.error || 'No se pudo agregar'))
+        setMensaje('❌ Error: ' + (data.message || data.error))
       }
     } catch (error) {
-      console.error(error)
-      alert('❌ Error agregando producto')
+      console.error('Error:', error)
+      setMensaje('❌ Error al guardar')
     } finally {
       setCargando(false)
     }
   }
 
+  const handleEdit = (producto) => {
+    setForm({
+      nombre: producto.nombre || '',
+      categoria: producto.categoria || '',
+      descripcion: producto.descripcion || '',
+      precio: producto.precio || '',
+      precio_mayor: producto.precio_mayor || '',
+      cantidad_mayor: producto.cantidad_mayor || '',
+      stock: producto.stock || '',
+      sucursal_id: producto.sucursal_id || ''
+    })
+    setEditando(producto.id)
+    setMostrarForm(true)
+  }
+
   const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar este producto?')) return
+    if (!window.confirm('⚠️ ¿Estás seguro de eliminar este producto?')) return
 
     try {
       const response = await fetch(`${API_URL}/productos/${id}`, {
@@ -79,187 +122,323 @@ function Productos() {
       const data = await response.json()
 
       if (data.success) {
-        alert('✅ Producto eliminado')
+        setMensaje('✅ Producto eliminado')
         cargarProductos()
+        setTimeout(() => setMensaje(''), 3000)
       } else {
-        alert('❌ Error eliminando producto')
+        setMensaje('❌ Error eliminando producto')
       }
     } catch (error) {
-      console.error(error)
-      alert('❌ Error eliminando producto')
+      console.error('Error:', error)
+      setMensaje('❌ Error eliminando producto')
     }
+  }
+
+  // Función para actualizar solo el stock
+  const handleUpdateStock = async (productoId, nuevoStock) => {
+    if (nuevoStock === undefined || nuevoStock === null) return
+
+    try {
+      const response = await fetch(`${API_URL}/productos/${productoId}/stock`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stock: parseInt(nuevoStock) || 0,
+          sucursal_id: 3 // Cambia según la sucursal que quieras editar
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setMensaje('✅ Stock actualizado correctamente')
+        cargarProductos()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        setMensaje('❌ Error: ' + data.message)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setMensaje('❌ Error actualizando stock')
+    }
+  }
+
+  if (cargando) {
+    return (
+      <AdminLayout>
+        <div style={{ textAlign: 'center', padding: '60px' }}>
+          <h2>Cargando productos...</h2>
+        </div>
+      </AdminLayout>
+    )
   }
 
   return (
     <AdminLayout>
       <h1>📦 Productos</h1>
 
-      {puedeEditar && (
-        <button 
-          onClick={() => setMostrarForm(!mostrarForm)} 
-          style={{ 
-            marginBottom: '20px', 
-            padding: '10px 20px', 
-            backgroundColor: '#003b6f', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '8px', 
-            cursor: 'pointer', 
-            fontSize: '1rem' 
+      {mensaje && (
+        <div style={{
+          backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
+          color: mensaje.includes('✅') ? '#1b5e20' : '#dc2626',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
+          {mensaje}
+        </div>
+      )}
+
+      {esSubgerente && (
+        <button
+          onClick={() => {
+            setMostrarForm(!mostrarForm)
+            setEditando(null)
+            setForm({ nombre: '', categoria: '', descripcion: '', precio: '', precio_mayor: '', cantidad_mayor: '', stock: '', sucursal_id: '' })
+          }}
+          style={{
+            marginBottom: '20px',
+            padding: '10px 20px',
+            backgroundColor: '#003b6f',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '1rem'
           }}
         >
           {mostrarForm ? '✕ Cancelar' : '➕ Nuevo Producto'}
         </button>
       )}
 
-      {!puedeEditar && (
-        <p style={{ color: '#999', marginBottom: '20px' }}>
-          👁️ Solo lectura. Contacta al administrador para agregar o eliminar productos.
-        </p>
-      )}
-
-      {mostrarForm && (
-        <form onSubmit={handleSubmit} style={{ 
-          backgroundColor: '#f5f7fb', 
-          padding: '25px', 
-          borderRadius: '12px', 
-          marginBottom: '25px', 
-          border: '2px solid #003b6f' 
+      {mostrarForm && esSubgerente && (
+        <form onSubmit={handleSubmit} style={{
+          backgroundColor: '#f5f7fb',
+          padding: '25px',
+          borderRadius: '12px',
+          marginBottom: '25px',
+          border: '2px solid #003b6f'
         }}>
-          <h3 style={{ marginTop: 0, color: '#003b6f' }}>Agregar Producto</h3>
+          <h3 style={{ marginTop: 0, color: '#003b6f' }}>
+            {editando ? '✏️ Editar Producto' : '➕ Agregar Producto'}
+          </h3>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             <div>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Nombre *</label>
-              <input 
-                type="text" 
-                value={form.nombre} 
-                onChange={(e) => setForm({ ...form, nombre: e.target.value })} 
-                required 
-                placeholder="Ej: Credencia 2 puertas" 
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }} 
+              <input
+                type="text"
+                value={form.nombre}
+                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                required
+                placeholder="Nombre del producto"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
             </div>
             <div>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Categoría</label>
-              <input 
-                type="text" 
-                value={form.categoria} 
-                onChange={(e) => setForm({ ...form, categoria: e.target.value })} 
-                placeholder="Ej: Credencias" 
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }} 
+              <input
+                type="text"
+                value={form.categoria}
+                onChange={(e) => setForm({ ...form, categoria: e.target.value })}
+                placeholder="Ej: Muebles, Sillas"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Descripción</label>
-              <textarea 
-                value={form.descripcion} 
-                onChange={(e) => setForm({ ...form, descripcion: e.target.value })} 
-                placeholder="Descripción del producto..." 
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', minHeight: '50px' }} 
+              <textarea
+                value={form.descripcion}
+                onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+                placeholder="Descripción del producto..."
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', minHeight: '50px' }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio (RD$)</label>
-              <input 
-                type="number" 
-                step="0.01" 
-                value={form.precio} 
-                onChange={(e) => setForm({ ...form, precio: e.target.value })} 
-                placeholder="0.00" 
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }} 
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Normal (RD$) *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.precio}
+                onChange={(e) => setForm({ ...form, precio: e.target.value })}
+                required
+                placeholder="0.00"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Stock Inicial</label>
-              <input 
-                type="number" 
-                value={form.stock} 
-                onChange={(e) => setForm({ ...form, stock: e.target.value })} 
-                placeholder="0" 
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }} 
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Precio Mayor (RD$)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.precio_mayor}
+                onChange={(e) => setForm({ ...form, precio_mayor: e.target.value })}
+                placeholder="0.00"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cant. Mín. Mayor</label>
+              <input
+                type="number"
+                min="0"
+                value={form.cantidad_mayor}
+                onChange={(e) => setForm({ ...form, cantidad_mayor: e.target.value })}
+                placeholder="10"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Stock</label>
+              <input
+                type="number"
+                min="0"
+                value={form.stock}
+                onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                placeholder="0"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Sucursal</label>
+              <select
+                value={form.sucursal_id}
+                onChange={(e) => setForm({ ...form, sucursal_id: e.target.value })}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              >
+                <option value="">Sin sucursal</option>
+                {sucursales.map(s => (
+                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                ))}
+              </select>
             </div>
           </div>
-          <button 
-            type="submit" 
-            disabled={cargando} 
-            style={{ 
-              marginTop: '15px', 
-              padding: '12px 30px', 
-              backgroundColor: '#4CAF50', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '8px', 
-              cursor: 'pointer', 
-              fontSize: '1rem' 
+
+          <button
+            type="submit"
+            disabled={cargando}
+            style={{
+              marginTop: '15px',
+              padding: '12px 30px',
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '1rem'
             }}
           >
-            {cargando ? 'Guardando...' : '✅ Guardar Producto'}
+            {cargando ? 'Guardando...' : editando ? '✅ Actualizar Producto' : '✅ Guardar Producto'}
           </button>
         </form>
       )}
 
-      <table style={{ 
-        width: '100%', 
-        borderCollapse: 'collapse', 
-        backgroundColor: 'white', 
-        borderRadius: '8px', 
-        overflow: 'hidden', 
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)' 
+      <div style={{
+        overflowX: 'auto',
+        backgroundColor: 'white',
+        borderRadius: '8px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
-        <thead>
-          <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
-            <th style={{ padding: '12px', textAlign: 'left' }}>ID</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Nombre</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Categoría</th>
-            <th style={{ padding: '12px', textAlign: 'right' }}>Precio</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Stock</th>
-            {puedeEditar && <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {productos.map((p) => (
-            <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td style={{ padding: '12px' }}>{p.id}</td>
-              <td style={{ padding: '12px' }}>{p.nombre}</td>
-              <td style={{ padding: '12px' }}>{p.categoria || 'N/A'}</td>
-              <td style={{ padding: '12px', textAlign: 'right' }}>RD$ {Number(p.precio).toFixed(2)}</td>
-              <td style={{ 
-                padding: '12px', 
-                textAlign: 'center',
-                color: (p.stock || 0) <= 0 ? '#f44336' : (p.stock || 0) <= 5 ? '#ff9800' : '#4CAF50',
-                fontWeight: (p.stock || 0) <= 5 ? 'bold' : 'normal'
-              }}>
-                {p.stock || 0}
-              </td>
-              {puedeEditar && (
-                <td style={{ padding: '12px', textAlign: 'center' }}>
-                  <button 
-                    onClick={() => handleDelete(p.id)} 
-                    style={{ 
-                      backgroundColor: '#f44336', 
-                      color: 'white', 
-                      border: 'none', 
-                      borderRadius: '6px', 
-                      padding: '4px 12px', 
-                      cursor: 'pointer' 
-                    }}
-                  >
-                    🗑️
-                  </button>
+        <table style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          overflow: 'hidden'
+        }}>
+          <thead>
+            <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
+              <th style={{ padding: '12px', textAlign: 'left' }}>ID</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Producto</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Categoría</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Precio</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Stock</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Precio Mayor</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {productos.length === 0 ? (
+              <tr>
+                <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                  No hay productos registrados
                 </td>
-              )}
-            </tr>
-          ))}
-          {productos.length === 0 && (
-            <tr>
-              <td colSpan={puedeEditar ? 6 : 5} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
-                No hay productos registrados
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+              </tr>
+            ) : (
+              productos.map((p) => (
+                <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '12px' }}>{p.id}</td>
+                  <td style={{ padding: '12px' }}>{p.nombre}</td>
+                  <td style={{ padding: '12px' }}>{p.categoria || 'N/A'}</td>
+                  <td style={{ padding: '12px', textAlign: 'right' }}>
+                    RD$ {Number(p.precio).toFixed(2)}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      value={p.stock || 0}
+                      onChange={(e) => {
+                        const nuevosProductos = productos.map(prod => {
+                          if (prod.id === p.id) {
+                            return { ...prod, stock: parseInt(e.target.value) || 0 }
+                          }
+                          return prod
+                        })
+                        setProductos(nuevosProductos)
+                      }}
+                      onBlur={(e) => {
+                        const nuevoStock = parseInt(e.target.value) || 0
+                        if (nuevoStock !== p.stock) {
+                          handleUpdateStock(p.id, nuevoStock)
+                        }
+                      }}
+                      style={{
+                        width: '80px',
+                        padding: '6px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        textAlign: 'center'
+                      }}
+                    />
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'right' }}>
+                    {p.precio_mayor ? `RD$ ${Number(p.precio_mayor).toFixed(2)}` : 'N/A'}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => handleEdit(p)}
+                      style={{
+                        backgroundColor: '#2196F3',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '4px 10px',
+                        cursor: 'pointer',
+                        marginRight: '5px'
+                      }}
+                    >
+                      ✏️ Editar
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      style={{
+                        backgroundColor: '#f44336',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '4px 10px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </AdminLayout>
   )
 }

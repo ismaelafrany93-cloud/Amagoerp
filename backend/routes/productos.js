@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /productos - Obtener productos con stock y precios
+// GET /productos - Obtener productos
 // ============================================
 router.get('/', async (req, res) => {
     try {
@@ -29,7 +29,6 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
-        // Filtrar por sucursal si se envía el parámetro
         if (sucursal_id) {
             query += ` AND (pi.sucursal_id = $${paramIndex} OR pi.sucursal_id IS NULL)`;
             params.push(sucursal_id);
@@ -84,7 +83,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ============================================
-// POST /productos - Crear producto con precios
+// POST /productos - Crear producto
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -147,7 +146,7 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
-// PUT /productos/:id - Actualizar producto con precios
+// PUT /productos/:id - ACTUALIZAR PRODUCTO COMPLETO
 // ============================================
 router.put('/:id', async (req, res) => {
     try {
@@ -163,6 +162,7 @@ router.put('/:id', async (req, res) => {
             sucursal_id
         } = req.body;
 
+        // Verificar que el producto existe
         const existe = await pool.query(
             'SELECT id FROM productos WHERE id = $1',
             [id]
@@ -175,6 +175,7 @@ router.put('/:id', async (req, res) => {
             });
         }
 
+        // Actualizar producto
         const result = await pool.query(
             `UPDATE productos
              SET nombre = $1, 
@@ -197,7 +198,8 @@ router.put('/:id', async (req, res) => {
             ]
         );
 
-        if (sucursal_id && stock !== undefined) {
+        // Si se especifica sucursal y stock, actualizar inventario
+        if (sucursal_id && stock !== undefined && stock !== null) {
             const existeInventario = await pool.query(
                 'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
                 [id, sucursal_id]
@@ -222,7 +224,7 @@ router.put('/:id', async (req, res) => {
         res.json({ 
             success: true, 
             producto: result.rows[0],
-            message: 'Producto actualizado correctamente'
+            message: '✅ Producto actualizado correctamente'
         });
         
     } catch (error) {
@@ -253,7 +255,10 @@ router.delete('/:id', async (req, res) => {
             });
         }
 
+        // Eliminar registros de inventario primero
         await pool.query('DELETE FROM producto_inventario WHERE producto_id = $1', [id]);
+        
+        // Eliminar producto
         await pool.query('DELETE FROM productos WHERE id = $1', [id]);
 
         res.json({ 
@@ -266,6 +271,80 @@ router.delete('/:id', async (req, res) => {
         res.status(500).json({ 
             success: false, 
             error: error.message 
+        });
+    }
+});
+
+// ============================================
+// PUT /productos/:id/stock - ACTUALIZAR SOLO STOCK
+// ============================================
+router.put('/:id/stock', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { stock, sucursal_id } = req.body;
+
+        if (stock === undefined || stock === null) {
+            return res.status(400).json({
+                success: false,
+                message: 'Stock es requerido'
+            });
+        }
+
+        // Verificar que el producto existe
+        const existe = await pool.query(
+            'SELECT id FROM productos WHERE id = $1',
+            [id]
+        );
+
+        if (existe.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Producto no encontrado'
+            });
+        }
+
+        const sucursalFinal = sucursal_id || 3;
+        const stockFinal = parseInt(stock) || 0;
+
+        // Actualizar en producto_inventario
+        const existeInventario = await pool.query(
+            'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
+            [id, sucursalFinal]
+        );
+
+        if (existeInventario.rows.length > 0) {
+            await pool.query(
+                `UPDATE producto_inventario 
+                 SET stock = $1, updated_at = NOW()
+                 WHERE producto_id = $2 AND sucursal_id = $3`,
+                [stockFinal, id, sucursalFinal]
+            );
+        } else {
+            await pool.query(
+                `INSERT INTO producto_inventario (producto_id, sucursal_id, stock)
+                 VALUES ($1, $2, $3)`,
+                [id, sucursalFinal, stockFinal]
+            );
+        }
+
+        // Actualizar también en productos
+        await pool.query(
+            `UPDATE productos SET stock = $1 WHERE id = $2`,
+            [stockFinal, id]
+        );
+
+        res.json({
+            success: true,
+            message: '✅ Stock actualizado correctamente',
+            stock: stockFinal,
+            sucursal_id: sucursalFinal
+        });
+
+    } catch (error) {
+        console.error('❌ Error en PUT /productos/:id/stock:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });

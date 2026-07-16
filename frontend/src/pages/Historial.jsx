@@ -12,6 +12,7 @@ function Historial() {
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+  const sucursalId = usuario?.sucursal_id || null
 
   // Estado para editar la factura
   const [carritoEdit, setCarritoEdit] = useState([])
@@ -32,7 +33,6 @@ function Historial() {
   const cargarHistorial = async () => {
     try {
       let url = `${API_URL}/historial`
-      // Si no es subgerente, solo ver sus propias ventas
       if (!esSubgerente) {
         url = `${API_URL}/ventas/usuario/${usuario.id}`
       }
@@ -48,10 +48,17 @@ function Historial() {
   }
 
   // ============================================
-  // FUNCIÓN PARA CANCELAR VENTA
+  // FUNCIÓN PARA CANCELAR VENTA (DEVUELVE STOCK)
   // ============================================
   const cancelarVenta = async (ventaId) => {
-    if (!window.confirm('⚠️ ¿Estás seguro de cancelar esta venta?\n\nEsta acción no se puede deshacer.')) return;
+    // Verificar si la venta es de la misma sucursal
+    const venta = ventas.find(v => v.id === ventaId);
+    if (venta && !esSubgerente && venta.sucursal_id !== sucursalId) {
+      alert('⚠️ Solo puedes cancelar ventas de tu sucursal');
+      return;
+    }
+
+    if (!window.confirm('⚠️ ¿Estás seguro de cancelar esta venta?\n\nEl stock se devolverá al inventario automáticamente.\nEsta acción no se puede deshacer.')) return;
 
     const motivo = prompt('📝 Motivo de la cancelación (opcional):') || 'Cancelado por el usuario';
 
@@ -68,7 +75,7 @@ function Historial() {
       const data = await response.json();
 
       if (data.success) {
-        setMensaje('✅ Venta cancelada correctamente');
+        setMensaje('✅ Venta cancelada correctamente. Stock devuelto al inventario.');
         cargarHistorial();
         setTimeout(() => setMensaje(''), 3000);
       } else {
@@ -87,7 +94,6 @@ function Historial() {
       if (data.success) {
         setVentaSeleccionada(data.venta)
         setDetalles(data.detalles)
-        // Preparar datos para edición
         setClienteEdit({
           nombre: data.venta.cliente_nombre || '',
           telefono: data.venta.cliente_telefono || '',
@@ -206,125 +212,138 @@ function Historial() {
         </div>
       )}
 
-      {/* Tabla de ventas */}
-      <table style={{
-        width: '100%',
-        borderCollapse: 'collapse',
+      <div style={{
+        overflowX: 'auto',
         backgroundColor: 'white',
         borderRadius: '8px',
-        overflow: 'hidden',
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
-        <thead>
-          <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
-            <th style={{ padding: '12px', textAlign: 'left' }}>#</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Cliente</th>
-            <th style={{ padding: '12px', textAlign: 'right' }}>Total</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Fecha</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Estado</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ventas.length === 0 ? (
-            <tr>
-              <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
-                No hay ventas registradas
-              </td>
+        <table style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          overflow: 'hidden'
+        }}>
+          <thead>
+            <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
+              <th style={{ padding: '12px', textAlign: 'left' }}>#</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Cliente</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Total</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Fecha</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Estado</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
-          ) : (
-            ventas.map((v) => (
-              <tr key={v.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '12px' }}>{v.id}</td>
-                <td style={{ padding: '12px' }}>{v.cliente_nombre || v.cliente || 'N/A'}</td>
-                <td style={{ padding: '12px', textAlign: 'right' }}>
-                  RD$ {Number(v.total).toFixed(2)}
-                </td>
-                <td style={{ padding: '12px', textAlign: 'center' }}>
-                  {new Date(v.fecha || v.created_at).toLocaleDateString()}
-                </td>
-                <td style={{ padding: '12px', textAlign: 'center' }}>
-                  {v.estado === 'cancelada' ? (
-                    <span style={{
-                      backgroundColor: '#f44336',
-                      color: 'white',
-                      padding: '2px 12px',
-                      borderRadius: '12px',
-                      fontSize: '0.8rem'
-                    }}>
-                      ❌ Cancelada
-                    </span>
-                  ) : v.estado === 'completada' ? (
-                    <span style={{
-                      backgroundColor: '#4CAF50',
-                      color: 'white',
-                      padding: '2px 12px',
-                      borderRadius: '12px',
-                      fontSize: '0.8rem'
-                    }}>
-                      ✅ Activa
-                    </span>
-                  ) : (
-                    <span style={{
-                      backgroundColor: '#ff9800',
-                      color: 'white',
-                      padding: '2px 12px',
-                      borderRadius: '12px',
-                      fontSize: '0.8rem'
-                    }}>
-                      ⏳ Pendiente
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: '12px', textAlign: 'center' }}>
-                  {/* Botón Editar */}
-                  {v.estado !== 'cancelada' && (
-                    <button
-                      onClick={() => verDetalle(v.id)}
-                      style={{
-                        backgroundColor: '#2196F3',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '4px 12px',
-                        cursor: 'pointer',
-                        marginRight: '5px'
-                      }}
-                    >
-                      ✏️ Editar
-                    </button>
-                  )}
-                  
-                  {/* 👇 BOTÓN CANCELAR */}
-                  {v.estado !== 'cancelada' && (
-                    <button
-                      onClick={() => cancelarVenta(v.id)}
-                      style={{
-                        backgroundColor: '#f44336',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '4px 12px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      ❌ Cancelar
-                    </button>
-                  )}
-                  {v.estado === 'cancelada' && (
-                    <span style={{ color: '#999', fontSize: '0.75rem' }}>
-                      {v.motivo_cancelacion || 'Cancelada'}
-                    </span>
-                  )}
+          </thead>
+          <tbody>
+            {ventas.length === 0 ? (
+              <tr>
+                <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                  No hay ventas registradas
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              ventas.map((v) => {
+                const esMismaSucursal = v.sucursal_id === sucursalId;
+                const puedeCancelar = esSubgerente || esMismaSucursal;
 
-      {/* Modal de edición */}
-      {mostrarEdicion && ventaSeleccionada && (
+                return (
+                  <tr key={v.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '12px' }}>{v.id}</td>
+                    <td style={{ padding: '12px' }}>{v.cliente_nombre || v.cliente || 'N/A'}</td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>
+                      RD$ {Number(v.total).toFixed(2)}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {new Date(v.fecha || v.created_at).toLocaleDateString()}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {v.estado === 'cancelada' ? (
+                        <span style={{
+                          backgroundColor: '#f44336',
+                          color: 'white',
+                          padding: '2px 12px',
+                          borderRadius: '12px',
+                          fontSize: '0.8rem'
+                        }}>
+                          ❌ Cancelada
+                        </span>
+                      ) : v.estado === 'activa' ? (
+                        <span style={{
+                          backgroundColor: '#4CAF50',
+                          color: 'white',
+                          padding: '2px 12px',
+                          borderRadius: '12px',
+                          fontSize: '0.8rem'
+                        }}>
+                          ✅ Activa
+                        </span>
+                      ) : (
+                        <span style={{
+                          backgroundColor: '#ff9800',
+                          color: 'white',
+                          padding: '2px 12px',
+                          borderRadius: '12px',
+                          fontSize: '0.8rem'
+                        }}>
+                          ⏳ Pendiente
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {/* Botón Editar - solo si está activa */}
+                      {v.estado === 'activa' && (
+                        <button
+                          onClick={() => verDetalle(v.id)}
+                          style={{
+                            backgroundColor: '#2196F3',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 12px',
+                            cursor: 'pointer',
+                            marginRight: '5px'
+                          }}
+                        >
+                          ✏️ Editar
+                        </button>
+                      )}
+                      
+                      {/* Botón Cancelar - solo si está activa y tiene permiso */}
+                      {v.estado === 'activa' && puedeCancelar && (
+                        <button
+                          onClick={() => cancelarVenta(v.id)}
+                          style={{
+                            backgroundColor: '#f44336',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 12px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ❌ Cancelar
+                        </button>
+                      )}
+                      {v.estado === 'cancelada' && (
+                        <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                          {v.motivo_cancelacion || 'Cancelada'}
+                        </span>
+                      )}
+                      {v.estado === 'activa' && !puedeCancelar && (
+                        <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                          Solo vendedor de esta sucursal
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal de edición - solo si está activa */}
+      {mostrarEdicion && ventaSeleccionada && ventaSeleccionada.estado === 'activa' && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -352,7 +371,6 @@ function Historial() {
 
             <hr style={{ margin: '15px 0' }} />
 
-            {/* Datos del cliente */}
             <h3>👤 Datos del Cliente</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               <div>
@@ -384,7 +402,6 @@ function Historial() {
               </div>
             </div>
 
-            {/* Opciones de venta */}
             <h3 style={{ marginTop: '20px' }}>📋 Opciones</h3>
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
               <label>
@@ -423,7 +440,6 @@ function Historial() {
               </label>
             </div>
 
-            {/* Carrito editable */}
             <h3 style={{ marginTop: '20px' }}>🛒 Productos</h3>
             {carritoEdit.map((item) => (
               <div key={item.id} style={{

@@ -36,7 +36,6 @@ router.post('/', async (req, res) => {
             cliente_es_mayorista
         } = req.body;
 
-        // 1. Obtener datos del usuario (sucursal_id)
         const usuarioData = await pool.query(
             'SELECT sucursal_id, rol FROM usuarios WHERE id = $1',
             [usuario_id]
@@ -51,7 +50,6 @@ router.post('/', async (req, res) => {
 
         const usuario = usuarioData.rows[0];
 
-        // 2. Verificar si el cliente existe, si no crearlo
         let clienteId = cliente_id;
 
         if (cliente_nombre) {
@@ -77,7 +75,7 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // 3. VERIFICAR AUTORIZACIÓN PARA DESCUENTO
+        // VERIFICAR AUTORIZACIÓN PARA DESCUENTO
         let autorizado = false;
         let descuentoAplicado = parseFloat(descuento) || 0;
 
@@ -107,7 +105,6 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // 4. Generar código de entrega (solo si es crédito o domicilio)
         let codigo = null;
         if (tipo_venta === 'credito' || tipo_entrega === 'domicilio') {
             let existe = true;
@@ -125,7 +122,7 @@ router.post('/', async (req, res) => {
         const costoEnvioFinal = parseFloat(costo_envio) || 0;
         const totalFinal = parseFloat(total) + costoEnvioFinal - (parseFloat(total) * (descuentoAplicado / 100));
 
-        // 5. Guardar venta
+        // Guardar venta
         const ventaResult = await pool.query(
             `INSERT INTO ventas (
                 usuario_id, 
@@ -148,7 +145,7 @@ router.post('/', async (req, res) => {
                 autorizado,
                 cliente_es_mayorista,
                 estado
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'completada')
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'activa')
             RETURNING *`,
             [
                 usuario_id, 
@@ -175,7 +172,7 @@ router.post('/', async (req, res) => {
 
         const ventaId = ventaResult.rows[0].id;
 
-        // 6. Guardar detalles de venta
+        // Guardar detalles de venta
         for (const item of carrito) {
             await pool.query(
                 `INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, precio)
@@ -184,7 +181,7 @@ router.post('/', async (req, res) => {
             );
         }
 
-        // 7. Si es CONTADO y RETIRO, descontar inventario
+        // Si es CONTADO y RETIRO, descontar inventario
         if (tipo_venta === 'contado' && tipo_entrega === 'retiro') {
             for (const item of carrito) {
                 await pool.query(
@@ -196,7 +193,7 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // 8. Si es CRÉDITO, crear cuenta por cobrar
+        // Si es CRÉDITO, crear cuenta por cobrar
         if (tipo_venta === 'credito') {
             await pool.query(
                 `INSERT INTO cuentas_por_cobrar (
@@ -213,7 +210,7 @@ router.post('/', async (req, res) => {
             );
         }
 
-        // 9. Si es DOMICILIO, crear entrega
+        // Si es DOMICILIO, crear entrega
         if (tipo_entrega === 'domicilio') {
             await pool.query(
                 `INSERT INTO entregas (venta_id, direccion, estado, codigo, fecha_salida)
@@ -312,7 +309,7 @@ router.get('/usuario/:id', async (req, res) => {
 });
 
 // ============================================
-// PUT /ventas/:id/cancelar - Cancelar una venta
+// PUT /ventas/:id/cancelar - Cancelar una venta (DEVUELVE STOCK)
 // ============================================
 router.put('/:id/cancelar', async (req, res) => {
     const client = await pool.connect();
@@ -346,7 +343,7 @@ router.put('/:id/cancelar', async (req, res) => {
             });
         }
 
-        // 3. Verificar permisos - solo el vendedor de la misma sucursal o subgerente
+        // 3. Verificar permisos - SOLO el vendedor que creó la venta o subgerente
         const usuario = await pool.query(
             'SELECT sucursal_id, rol FROM usuarios WHERE id = $1',
             [usuario_id]
@@ -361,35 +358,60 @@ router.put('/:id/cancelar', async (req, res) => {
 
         const usuarioData = usuario.rows[0];
         const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuarioData.rol);
-        const mismaSucursal = usuarioData.sucursal_id === venta.sucursal_id;
+        const mismoVendedor = parseInt(venta.usuario_id) === parseInt(usuario_id);
+        const mismaSucursal = parseInt(usuarioData.sucursal_id) === parseInt(venta.sucursal_id);
 
-        if (!esSubgerente && !mismaSucursal) {
+        // ✅ Permitir: subgerente, mismo vendedor, o vendedor de la misma sucursal
+        if (!esSubgerente && !mismoVendedor && !mismaSucursal) {
             return res.status(403).json({
                 success: false,
-                message: 'No tienes permiso para cancelar esta venta. Solo el vendedor de la misma sucursal o el subgerente pueden hacerlo.'
+                message: 'No tienes permiso para cancelar esta venta. Solo el vendedor que la creó, vendedores de la misma sucursal o el subgerente pueden hacerlo.'
             });
         }
 
         await client.query('BEGIN');
 
-        // 4. Devolver stock al inventario (solo si fue contado y retiro)
-        if (venta.tipo_venta === 'contado' && venta.tipo_entrega === 'retiro') {
-            const detalles = await client.query(
-                'SELECT * FROM detalle_ventas WHERE venta_id = $1',
-                [id]
-            );
+        // 4. OBTENER DETALLES DE LA VENTA
+        const detalles = await client.query(
+            'SELECT * FROM detalle_ventas WHERE venta_id = $1',
+            [id]
+        );
 
+        // 5. DEVOLVER STOCK AL INVENTARIO (solo si fue contado y retiro)
+        if (venta.tipo_venta === 'contado' && venta.tipo_entrega === 'retiro') {
             for (const item of detalles.rows) {
+                // Verificar si existe el registro en producto_inventario
+                const existeInventario = await client.query(
+                    'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
+                    [item.producto_id, venta.sucursal_id || 3]
+                );
+
+                if (existeInventario.rows.length > 0) {
+                    // ✅ DEVOLVER STOCK
+                    await client.query(
+                        `UPDATE producto_inventario 
+                         SET stock = stock + $1, updated_at = NOW()
+                         WHERE producto_id = $2 AND sucursal_id = $3`,
+                        [item.cantidad, item.producto_id, venta.sucursal_id || 3]
+                    );
+                } else {
+                    // Si no existe, crearlo con el stock devuelto
+                    await client.query(
+                        `INSERT INTO producto_inventario (producto_id, sucursal_id, stock)
+                         VALUES ($1, $2, $3)`,
+                        [item.producto_id, venta.sucursal_id || 3, item.cantidad]
+                    );
+                }
+
+                // También actualizar la tabla productos.stock
                 await client.query(
-                    `UPDATE producto_inventario 
-                     SET stock = stock + $1, updated_at = NOW()
-                     WHERE producto_id = $2 AND sucursal_id = $3`,
-                    [item.cantidad, item.producto_id, venta.sucursal_id || 3]
+                    `UPDATE productos SET stock = COALESCE(stock, 0) + $1 WHERE id = $2`,
+                    [item.cantidad, item.producto_id]
                 );
             }
         }
 
-        // 5. Si era crédito, cancelar la cuenta por cobrar
+        // 6. Si era crédito, cancelar la cuenta por cobrar
         if (venta.tipo_venta === 'credito') {
             const cuentas = await client.query(
                 'SELECT id FROM cuentas_por_cobrar WHERE venta_id = $1',
@@ -404,7 +426,7 @@ router.put('/:id/cancelar', async (req, res) => {
             }
         }
 
-        // 6. Si era domicilio, cancelar la entrega
+        // 7. Si era domicilio, cancelar la entrega
         if (venta.tipo_entrega === 'domicilio') {
             await client.query(
                 'UPDATE entregas SET estado = $1 WHERE venta_id = $2',
@@ -412,7 +434,7 @@ router.put('/:id/cancelar', async (req, res) => {
             );
         }
 
-        // 7. Cancelar la venta
+        // 8. CANCELAR LA VENTA
         await client.query(
             `UPDATE ventas 
              SET estado = 'cancelada', 
@@ -427,7 +449,7 @@ router.put('/:id/cancelar', async (req, res) => {
 
         res.json({
             success: true,
-            message: '✅ Venta cancelada correctamente',
+            message: '✅ Venta cancelada correctamente. El stock ha sido devuelto al inventario.',
             venta_id: id
         });
 

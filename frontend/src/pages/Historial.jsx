@@ -244,6 +244,8 @@ function Historial() {
               ventas.map((v) => {
                 const esMismaSucursal = v.sucursal_id === sucursalId;
                 const puedeCancelar = esSubgerente || esMismaSucursal;
+                // 👇 MOSTRAR BOTONES PARA ACTIVA O PENDIENTE
+                const puedeEditar = v.estado === 'activa' || v.estado === 'pendiente';
 
                 return (
                   <tr key={v.id} style={{ borderBottom: '1px solid #eee' }}>
@@ -276,7 +278,7 @@ function Historial() {
                         }}>
                           ✅ Activa
                         </span>
-                      ) : (
+                      ) : v.estado === 'pendiente' ? (
                         <span style={{
                           backgroundColor: '#ff9800',
                           color: 'white',
@@ -286,11 +288,21 @@ function Historial() {
                         }}>
                           ⏳ Pendiente
                         </span>
+                      ) : (
+                        <span style={{
+                          backgroundColor: '#757575',
+                          color: 'white',
+                          padding: '2px 12px',
+                          borderRadius: '12px',
+                          fontSize: '0.8rem'
+                        }}>
+                          {v.estado || 'Desconocido'}
+                        </span>
                       )}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
-                      {/* Botón Editar - solo si está activa */}
-                      {v.estado === 'activa' && (
+                      {/* Botón Editar - solo si está activa o pendiente */}
+                      {puedeEditar && (
                         <button
                           onClick={() => verDetalle(v.id)}
                           style={{
@@ -307,8 +319,8 @@ function Historial() {
                         </button>
                       )}
                       
-                      {/* Botón Cancelar - solo si está activa y tiene permiso */}
-                      {v.estado === 'activa' && puedeCancelar && (
+                      {/* Botón Cancelar - solo si está activa o pendiente y tiene permiso */}
+                      {puedeEditar && puedeCancelar && (
                         <button
                           onClick={() => cancelarVenta(v.id)}
                           style={{
@@ -328,7 +340,7 @@ function Historial() {
                           {v.motivo_cancelacion || 'Cancelada'}
                         </span>
                       )}
-                      {v.estado === 'activa' && !puedeCancelar && (
+                      {puedeEditar && !puedeCancelar && (
                         <span style={{ color: '#999', fontSize: '0.75rem' }}>
                           Solo vendedor de esta sucursal
                         </span>
@@ -342,8 +354,8 @@ function Historial() {
         </table>
       </div>
 
-      {/* Modal de edición - solo si está activa */}
-      {mostrarEdicion && ventaSeleccionada && ventaSeleccionada.estado === 'activa' && (
+      {/* Modal de edición - solo si está activa o pendiente */}
+      {mostrarEdicion && ventaSeleccionada && (ventaSeleccionada.estado === 'activa' || ventaSeleccionada.estado === 'pendiente') && (
         <div style={{
           position: 'fixed',
           top: 0,

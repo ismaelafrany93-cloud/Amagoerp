@@ -13,6 +13,70 @@ function generarCodigo() {
 }
 
 // ============================================
+// GET /ventas - Obtener ventas con filtro por sucursal
+// ============================================
+router.get('/', async (req, res) => {
+    try {
+        const { sucursal_id } = req.query;
+        
+        let query = `
+            SELECT 
+                v.id,
+                v.usuario_id,
+                v.sucursal_id,
+                v.total,
+                v.tipo_pago,
+                v.tipo_venta,
+                v.tipo_entrega,
+                v.cliente_nombre,
+                v.cliente_telefono,
+                v.cliente_direccion,
+                v.cliente_referencia,
+                v.cliente_id,
+                v.codigo_entrega,
+                v.estado_entrega,
+                v.detalles,
+                v.costo_envio,
+                v.descuento,
+                v.codigo_autorizacion,
+                v.autorizado,
+                v.cliente_es_mayorista,
+                v.estado,
+                v.fecha,
+                v.created_at,
+                v.fecha_cancelacion,
+                v.cancelado_por,
+                v.motivo_cancelacion,
+                c.nombre as cliente,
+                u.nombre as vendedor,
+                s.nombre as sucursal_nombre
+            FROM ventas v
+            LEFT JOIN clientes c ON v.cliente_id = c.id
+            LEFT JOIN usuarios u ON v.usuario_id = u.id
+            LEFT JOIN sucursales s ON v.sucursal_id = s.id
+            WHERE 1=1
+        `;
+        let params = [];
+        let paramIndex = 1;
+
+        // 👇 FILTRO POR SUCURSAL
+        if (sucursal_id) {
+            query += ` AND v.sucursal_id = $${paramIndex}`;
+            params.push(sucursal_id);
+            paramIndex++;
+        }
+
+        query += ` ORDER BY v.id DESC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('❌ Error en GET /ventas:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
 // POST /ventas - Crear venta
 // ============================================
 router.post('/', async (req, res) => {

@@ -14,7 +14,6 @@ function Historial() {
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
   const sucursalId = usuario?.sucursal_id || null
 
-  // Estado para editar la factura
   const [carritoEdit, setCarritoEdit] = useState([])
   const [clienteEdit, setClienteEdit] = useState({
     nombre: '',
@@ -32,10 +31,16 @@ function Historial() {
 
   const cargarHistorial = async () => {
     try {
-      let url = `${API_URL}/historial`
+      let url = `${API_URL}/ventas`
+      
+      // 👇 Si NO es subgerente, filtrar por su sucursal
       if (!esSubgerente) {
-        url = `${API_URL}/ventas/usuario/${usuario.id}`
+        // Obtener ventas de la misma sucursal
+        url = `${API_URL}/ventas?sucursal_id=${sucursalId}`
       }
+      
+      console.log('📜 Cargando historial desde:', url)
+      
       const response = await fetch(url)
       const data = await response.json()
       setVentas(Array.isArray(data) ? data : [])
@@ -48,7 +53,7 @@ function Historial() {
   }
 
   // ============================================
-  // FUNCIÓN PARA CANCELAR VENTA (CON ACTUALIZACIÓN)
+  // FUNCIÓN PARA CANCELAR VENTA
   // ============================================
   const cancelarVenta = async (ventaId) => {
     // Verificar si la venta es de la misma sucursal
@@ -76,14 +81,8 @@ function Historial() {
 
       if (data.success) {
         setMensaje('✅ Venta cancelada correctamente. Stock devuelto al inventario.');
-        
-        // 🔄 RECARGAR EL HISTORIAL
         cargarHistorial();
-        
-        // 🔄 ACTUALIZAR EL DASHBOARD (si está abierto en otra pestaña)
-        // Guardar un timestamp en localStorage para notificar al Dashboard
         localStorage.setItem('dashboard_updated', Date.now().toString());
-        
         setTimeout(() => setMensaje(''), 3000);
       } else {
         alert('❌ Error: ' + (data.message || data.error));
@@ -181,8 +180,6 @@ function Historial() {
         setMostrarEdicion(false)
         setVentaSeleccionada(null)
         cargarHistorial()
-        // Notificar al Dashboard
-        localStorage.setItem('dashboard_updated', Date.now().toString())
         setTimeout(() => setMensaje(''), 3000)
       } else {
         alert('❌ Error: ' + (data.error || 'No se pudo guardar'))
@@ -193,6 +190,15 @@ function Historial() {
     } finally {
       setCargando(false)
     }
+  }
+
+  // Obtener el nombre de la sucursal para mostrar
+  const getSucursalNombre = () => {
+    if (esSubgerente) return 'Todas las sucursales'
+    if (sucursalId === 1) return 'Baní'
+    if (sucursalId === 2) return 'Sabana'
+    if (sucursalId === 3) return 'Principal'
+    return 'Mi Sucursal'
   }
 
   if (cargando) {
@@ -207,7 +213,24 @@ function Historial() {
 
   return (
     <AdminLayout>
-      <h1>📜 Historial de Ventas</h1>
+      <h1>📜 Historial de Ventas - {getSucursalNombre()}</h1>
+
+      {!esSubgerente && (
+        <div style={{
+          backgroundColor: '#e3f2fd',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #003b6f'
+        }}>
+          <p style={{ margin: 0, color: '#003b6f' }}>
+            🏢 Mostrando ventas de tu sucursal: <strong>{getSucursalNombre()}</strong>
+          </p>
+          <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
+            Solo puedes cancelar ventas de tu sucursal
+          </p>
+        </div>
+      )}
 
       {mensaje && (
         <div style={{
@@ -246,7 +269,7 @@ function Historial() {
             {ventas.length === 0 ? (
               <tr>
                 <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
-                  No hay ventas registradas
+                  No hay ventas registradas en {getSucursalNombre()}
                 </td>
               </tr>
             ) : (

@@ -20,6 +20,8 @@ import Historial from './pages/Historial'
 import Sucursales from './pages/Sucursales'
 import Transferencias from './pages/Transferencias'
 import InventarioSabana from './pages/InventarioSabana'
+import NoEntregados from './pages/NoEntregados'
+
 
 function App() {
   return (
@@ -46,6 +48,7 @@ function App() {
         <Route path="/sucursales" element={<ProtectedRoute><Sucursales /></ProtectedRoute>} />
         <Route path="/transferencias" element={<ProtectedRoute><Transferencias /></ProtectedRoute>} />
         <Route path="/inventario-sabana" element={<ProtectedRoute><InventarioSabana /></ProtectedRoute>} />
+        <Route path="/no-entregados" element={<ProtectedRoute><NoEntregados /></ProtectedRoute>} />
         
       </Routes>
     </BrowserRouter>

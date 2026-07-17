@@ -8,7 +8,10 @@ function Entregas() {
   const [cargando, setCargando] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [mensaje, setMensaje] = useState('')
-  const [mostrarTodos, setMostrarTodos] = useState(false)
+  const [mostrarModal, setMostrarModal] = useState(false)
+  const [entregaSeleccionada, setEntregaSeleccionada] = useState(null)
+  const [motivoNoEntrega, setMotivoNoEntrega] = useState('')
+  const [recibidoPor, setRecibidoPor] = useState('')
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
@@ -21,7 +24,6 @@ function Entregas() {
     try {
       let url = `${API_URL}/entregas`
       
-      // Si no es subgerente, solo ver entregas de su sucursal
       if (!esSubgerente) {
         url = `${API_URL}/entregas?sucursal_id=${usuario.sucursal_id}`
       }
@@ -38,7 +40,6 @@ function Entregas() {
     }
   }
 
-  // 🔍 FUNCIÓN DE BÚSQUEDA POR CÓDIGO
   const handleBusqueda = (e) => {
     const valor = e.target.value.toUpperCase().trim()
     setBusqueda(valor)
@@ -48,7 +49,6 @@ function Entregas() {
       return
     }
 
-    // Buscar por código (incluye letras)
     const resultados = entregas.filter(entrega => 
       entrega.codigo && entrega.codigo.toUpperCase().includes(valor)
     )
@@ -56,7 +56,7 @@ function Entregas() {
   }
 
   const marcarComoEntregada = async (id) => {
-    if (!window.confirm('¿Confirmar que esta entrega fue realizada?')) return
+    if (!window.confirm('✅ ¿Confirmar que esta entrega fue realizada?')) return
 
     try {
       const response = await fetch(`${API_URL}/entregas/${id}/entregar`, {
@@ -74,6 +74,52 @@ function Entregas() {
     } catch (error) {
       console.error('Error:', error)
       setMensaje('❌ Error al marcar entrega')
+    }
+  }
+
+  // ============================================
+  // FUNCIÓN PARA NO ENTREGADO (CON MOTIVO)
+  // ============================================
+  const abrirModalNoEntregado = (entrega) => {
+    setEntregaSeleccionada(entrega)
+    setMotivoNoEntrega('')
+    setRecibidoPor('')
+    setMostrarModal(true)
+  }
+
+  const confirmarNoEntregado = async () => {
+    if (!motivoNoEntrega.trim()) {
+      alert('⚠️ Por favor, ingresa el motivo de la no entrega')
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/entregas/confirmar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo: entregaSeleccionada.codigo,
+          entregado: false,
+          motivo: motivoNoEntrega,
+          recibido_por: recibidoPor || 'Chofer',
+          chofer_id: usuario.id
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setMensaje('❌ No entrega registrada correctamente')
+        setMostrarModal(false)
+        setEntregaSeleccionada(null)
+        cargarEntregas()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        alert('❌ Error: ' + (data.message || data.error))
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('❌ Error al registrar no entrega')
     }
   }
 
@@ -103,7 +149,7 @@ function Entregas() {
         </div>
       )}
 
-      {/* 👇 BUSCADOR POR CÓDIGO */}
+      {/* Buscador */}
       <div style={{
         display: 'flex',
         gap: '15px',
@@ -129,9 +175,6 @@ function Entregas() {
               textTransform: 'uppercase'
             }}
           />
-          <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '5px' }}>
-            💡 Ingresa el código de entrega (ej: AMG-H8TMAC18) - Acepta letras y números
-          </p>
         </div>
 
         <div style={{ flex: 1 }}>
@@ -181,7 +224,7 @@ function Entregas() {
         </div>
       </div>
 
-      {/* 📊 Resumen rápido */}
+      {/* Resumen */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
@@ -204,11 +247,11 @@ function Entregas() {
           <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
             {entregas.filter(e => e.estado === 'cancelada').length}
           </span>
-          <p style={{ margin: 0, fontSize: '0.8rem', color: '#666' }}>❌ Canceladas</p>
+          <p style={{ margin: 0, fontSize: '0.8rem', color: '#666' }}>❌ No Entregadas</p>
         </div>
       </div>
 
-      {/* 📋 Tabla de entregas */}
+      {/* Tabla */}
       <div style={{
         overflowX: 'auto',
         backgroundColor: 'white',
@@ -251,24 +294,22 @@ function Entregas() {
                     }}>
                       {e.codigo || 'N/A'}
                     </strong>
-                    {e.codigo && (
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(e.codigo)
-                          alert('📋 Código copiado: ' + e.codigo)
-                        }}
-                        style={{
-                          marginLeft: '8px',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontSize: '0.8rem',
-                          color: '#003b6f'
-                        }}
-                      >
-                        📋 Copiar
-                      </button>
-                    )}
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(e.codigo)
+                        alert('📋 Código copiado: ' + e.codigo)
+                      }}
+                      style={{
+                        marginLeft: '8px',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        color: '#003b6f'
+                      }}
+                    >
+                      📋
+                    </button>
                   </td>
                   <td style={{ padding: '12px' }}>{e.cliente_nombre || 'N/A'}</td>
                   <td style={{ padding: '12px' }}>{e.direccion || 'N/A'}</td>
@@ -303,7 +344,7 @@ function Entregas() {
                         borderRadius: '12px',
                         fontSize: '0.8rem'
                       }}>
-                        ❌ Cancelada
+                        ❌ No Entregada
                       </span>
                     )}
                   </td>
@@ -312,25 +353,45 @@ function Entregas() {
                   </td>
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     {e.estado === 'pendiente' && (
-                      <button
-                        onClick={() => marcarComoEntregada(e.id)}
-                        style={{
-                          backgroundColor: '#4CAF50',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          padding: '6px 12px',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        ✅ Entregar
-                      </button>
+                      <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => marcarComoEntregada(e.id)}
+                          style={{
+                            backgroundColor: '#4CAF50',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '6px 12px',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem'
+                          }}
+                        >
+                          ✅ Entregar
+                        </button>
+                        {/* 👇 BOTÓN NO ENTREGADO */}
+                        <button
+                          onClick={() => abrirModalNoEntregado(e)}
+                          style={{
+                            backgroundColor: '#f44336',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '6px 12px',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem'
+                          }}
+                        >
+                          ❌ No Entregado
+                        </button>
+                      </div>
                     )}
                     {e.estado === 'entregada' && (
                       <span style={{ color: '#4CAF50' }}>✅ Completada</span>
                     )}
                     {e.estado === 'cancelada' && (
-                      <span style={{ color: '#f44336' }}>❌ Cancelada</span>
+                      <span style={{ color: '#f44336', fontSize: '0.75rem' }}>
+                        {e.comentario || 'No entregada'}
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -339,6 +400,121 @@ function Entregas() {
           </tbody>
         </table>
       </div>
+
+      {/* ========================================== */}
+      {/* MODAL PARA NO ENTREGADO */}
+      {/* ========================================== */}
+      {mostrarModal && entregaSeleccionada && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '30px',
+            maxWidth: '500px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <h2 style={{ color: '#f44336', marginTop: 0 }}>❌ No Entregado</h2>
+            <p style={{ color: '#666' }}>
+              <strong>Código:</strong> {entregaSeleccionada.codigo}
+            </p>
+            <p style={{ color: '#666' }}>
+              <strong>Cliente:</strong> {entregaSeleccionada.cliente_nombre}
+            </p>
+
+            <hr style={{ margin: '15px 0' }} />
+
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>
+                📝 Motivo de la no entrega *
+              </label>
+              <textarea
+                value={motivoNoEntrega}
+                onChange={(e) => setMotivoNoEntrega(e.target.value)}
+                placeholder="Ej: Cliente no estaba en la dirección, teléfono no contestó, etc."
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  minHeight: '80px',
+                  fontSize: '0.95rem'
+                }}
+              />
+            </div>
+
+            <div style={{ marginTop: '15px' }}>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>
+                👤 Recibido por (opcional)
+              </label>
+              <input
+                type="text"
+                value={recibidoPor}
+                onChange={(e) => setRecibidoPor(e.target.value)}
+                placeholder="Nombre de quien recibió la información"
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '0.95rem'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '15px', marginTop: '25px' }}>
+              <button
+                onClick={confirmarNoEntregado}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  backgroundColor: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '1rem'
+                }}
+              >
+                ❌ Confirmar No Entregado
+              </button>
+              <button
+                onClick={() => {
+                  setMostrarModal(false)
+                  setEntregaSeleccionada(null)
+                  setMotivoNoEntrega('')
+                  setRecibidoPor('')
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  backgroundColor: '#757575',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '1rem'
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   )
 }

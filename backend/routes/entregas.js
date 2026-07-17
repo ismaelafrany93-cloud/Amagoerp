@@ -2,11 +2,83 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
-// Obtener entregas pendientes
+// ============================================
+// GET /entregas - Obtener todas las entregas con filtros
+// ============================================
+router.get('/', async (req, res) => {
+    try {
+        const { sucursal_id, codigo, estado } = req.query;
+        
+        let query = `
+            SELECT 
+                e.id,
+                e.venta_id,
+                e.direccion,
+                e.estado,
+                e.codigo,
+                e.fecha_salida,
+                e.fecha_entrega,
+                e.created_at,
+                e.chofer_id,
+                e.comentario,
+                v.cliente_nombre,
+                v.cliente_telefono,
+                v.total,
+                v.sucursal_id,
+                s.nombre as sucursal_nombre,
+                u.nombre as chofer_nombre
+            FROM entregas e
+            JOIN ventas v ON e.venta_id = v.id
+            LEFT JOIN sucursales s ON v.sucursal_id = s.id
+            LEFT JOIN usuarios u ON e.chofer_id = u.id
+            WHERE 1=1
+        `;
+        let params = [];
+        let paramIndex = 1;
+
+        // Filtrar por sucursal
+        if (sucursal_id) {
+            query += ` AND v.sucursal_id = $${paramIndex}`;
+            params.push(sucursal_id);
+            paramIndex++;
+        }
+
+        // 👇 FILTRAR POR CÓDIGO (ACEPTA LETRAS)
+        if (codigo) {
+            query += ` AND e.codigo ILIKE $${paramIndex}`;
+            params.push(`%${codigo}%`);
+            paramIndex++;
+        }
+
+        // Filtrar por estado
+        if (estado) {
+            query += ` AND e.estado = $${paramIndex}`;
+            params.push(estado);
+            paramIndex++;
+        }
+
+        query += ` ORDER BY e.id DESC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('❌ Error en GET /entregas:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
+// GET /entregas/pendientes - Obtener entregas pendientes
+// ============================================
 router.get('/pendientes', async (req, res) => {
     try {
         const result = await pool.query(
-            `SELECT e.*, v.cliente_nombre, v.cliente_direccion, v.cliente_telefono
+            `SELECT 
+                e.*, 
+                v.cliente_nombre, 
+                v.cliente_direccion, 
+                v.cliente_telefono,
+                v.total
              FROM entregas e
              JOIN ventas v ON e.venta_id = v.id
              WHERE e.estado = 'pendiente'
@@ -15,30 +87,32 @@ router.get('/pendientes', async (req, res) => {
 
         res.json(result.rows);
     } catch (error) {
-        console.error(error);
+        console.error('❌ Error en GET /entregas/pendientes:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Obtener entrega por código numérico
+// ============================================
+// GET /entregas/codigo/:codigo - Buscar entrega por código (ALFANUMÉRICO)
+// ============================================
 router.get('/codigo/:codigo', async (req, res) => {
     try {
         const { codigo } = req.params;
-        const codigoNumero = parseInt(codigo);
 
-        if (isNaN(codigoNumero)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Código inválido. Debe ser un número.'
-            });
-        }
-
+        // Buscar por código alfanumérico (ej: AMG-H8TMAC18)
         const result = await pool.query(
-            `SELECT e.*, v.cliente_nombre, v.cliente_direccion, v.cliente_telefono, v.cliente_referencia, v.total
+            `SELECT 
+                e.*, 
+                v.cliente_nombre, 
+                v.cliente_direccion, 
+                v.cliente_telefono, 
+                v.cliente_referencia, 
+                v.total,
+                v.sucursal_id
              FROM entregas e
              JOIN ventas v ON e.venta_id = v.id
-             WHERE e.codigo_numero = $1 AND e.estado = 'pendiente'`,
-            [codigoNumero]
+             WHERE e.codigo = $1 AND e.estado = 'pendiente'`,
+            [codigo]
         );
 
         if (result.rows.length === 0) {
@@ -50,6 +124,7 @@ router.get('/codigo/:codigo', async (req, res) => {
 
         const entrega = result.rows[0];
 
+        // Obtener detalles de la venta
         const detalles = await pool.query(
             `SELECT dv.*, p.nombre as producto_nombre
              FROM detalle_ventas dv
@@ -67,33 +142,28 @@ router.get('/codigo/:codigo', async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
+        console.error('❌ Error en GET /entregas/codigo/:codigo:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Confirmar entrega
+// ============================================
+// POST /entregas/confirmar - Confirmar entrega
+// ============================================
 router.post('/confirmar', async (req, res) => {
     try {
         const { codigo, entregado, motivo, recibido_por, chofer_id } = req.body;
 
-        const codigoNumero = parseInt(codigo);
-        if (isNaN(codigoNumero)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Código inválido. Debe ser un número.'
-            });
-        }
-
+        // Buscar por código alfanumérico
         const entregaResult = await pool.query(
-            'SELECT * FROM entregas WHERE codigo_numero = $1',
-            [codigoNumero]
+            'SELECT * FROM entregas WHERE codigo = $1 AND estado = $2',
+            [codigo, 'pendiente']
         );
 
         if (entregaResult.rows.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Código no encontrado'
+                message: 'Código no encontrado o ya procesado'
             });
         }
 
@@ -102,18 +172,20 @@ router.post('/confirmar', async (req, res) => {
 
         // Obtener datos de la venta
         const ventaData = await pool.query(
-            `SELECT cliente_nombre, cliente_telefono, cliente_direccion 
+            `SELECT cliente_nombre, cliente_telefono, cliente_direccion, sucursal_id
              FROM ventas WHERE id = $1`,
             [ventaId]
         );
 
         if (entregado) {
-            // ✅ ENTREGADO
+            // ✅ ENTREGADO - Marcar como entregada
             await pool.query(
                 `UPDATE entregas 
-                 SET estado = 'entregado', fecha_entrega = NOW(), chofer_id = $1
-                 WHERE codigo_numero = $2`,
-                [chofer_id, codigoNumero]
+                 SET estado = 'entregada', 
+                     fecha_entrega = NOW(), 
+                     chofer_id = $1
+                 WHERE codigo = $2`,
+                [chofer_id, codigo]
             );
 
             await pool.query(
@@ -122,7 +194,7 @@ router.post('/confirmar', async (req, res) => {
                 [ventaId]
             );
 
-            // Descontar inventario
+            // Descontar inventario (si es contado y retiro ya se descontó, pero aquí se descuenta para domicilio)
             const detalles = await pool.query(
                 'SELECT producto_id, cantidad FROM detalle_ventas WHERE venta_id = $1',
                 [ventaId]
@@ -130,14 +202,16 @@ router.post('/confirmar', async (req, res) => {
 
             for (const item of detalles.rows) {
                 await pool.query(
-                    `UPDATE productos SET stock = stock - $1 WHERE id = $2`,
-                    [item.cantidad, item.producto_id]
+                    `UPDATE producto_inventario 
+                     SET stock = stock - $1 
+                     WHERE producto_id = $2 AND sucursal_id = $3`,
+                    [item.cantidad, item.producto_id, ventaData.rows[0].sucursal_id || 3]
                 );
             }
 
             res.json({
                 success: true,
-                message: '✅ Entrega confirmada'
+                message: '✅ Entrega confirmada y stock actualizado'
             });
 
         } else {
@@ -147,9 +221,12 @@ router.post('/confirmar', async (req, res) => {
             // Actualizar entrega
             await pool.query(
                 `UPDATE entregas 
-                 SET estado = 'fallido', comentario = $1, chofer_id = $2
-                 WHERE codigo_numero = $3`,
-                [motivo, chofer_id, codigoNumero]
+                 SET estado = 'cancelada', 
+                     comentario = $1, 
+                     chofer_id = $2,
+                     fecha_entrega = NOW()
+                 WHERE codigo = $3`,
+                [motivo || 'No entregado', chofer_id, codigo]
             );
 
             // Actualizar venta
@@ -163,7 +240,7 @@ router.post('/confirmar', async (req, res) => {
             await pool.query(
                 `INSERT INTO productos_no_entregados (
                     entrega_id, venta_id, cliente_nombre, cliente_telefono, 
-                    cliente_direccion, codigo_numero, motivo, recibido_por
+                    cliente_direccion, codigo, motivo, recibido_por
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
                 [
                     entrega.id,
@@ -171,8 +248,8 @@ router.post('/confirmar', async (req, res) => {
                     ventaData.rows[0]?.cliente_nombre || 'N/A',
                     ventaData.rows[0]?.cliente_telefono || 'N/A',
                     ventaData.rows[0]?.cliente_direccion || 'N/A',
-                    codigoNumero,
-                    motivo,
+                    codigo,
+                    motivo || 'No entregado',
                     recibidoPorFinal
                 ]
             );
@@ -184,7 +261,7 @@ router.post('/confirmar', async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error en /confirmar:', error);
+        console.error('❌ Error en POST /entregas/confirmar:', error.message);
         res.status(500).json({
             success: false,
             error: error.message
@@ -192,7 +269,88 @@ router.post('/confirmar', async (req, res) => {
     }
 });
 
-// Obtener productos no entregados
+// ============================================
+// PUT /entregas/:id/entregar - Marcar entrega como entregada (desde el frontend)
+// ============================================
+router.put('/:id/entregar', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const existe = await pool.query(
+            'SELECT id, estado, venta_id FROM entregas WHERE id = $1',
+            [id]
+        );
+
+        if (existe.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Entrega no encontrada'
+            });
+        }
+
+        if (existe.rows[0].estado === 'entregada') {
+            return res.status(400).json({
+                success: false,
+                message: 'Esta entrega ya fue completada'
+            });
+        }
+
+        const ventaId = existe.rows[0].venta_id;
+
+        await pool.query(
+            `UPDATE entregas 
+             SET estado = 'entregada', 
+                 fecha_entrega = NOW()
+             WHERE id = $1`,
+            [id]
+        );
+
+        await pool.query(
+            `UPDATE ventas 
+             SET estado_entrega = 'entregado', fecha_entrega = NOW()
+             WHERE id = $1`,
+            [ventaId]
+        );
+
+        // Descontar inventario
+        const detalles = await pool.query(
+            'SELECT producto_id, cantidad FROM detalle_ventas WHERE venta_id = $1',
+            [ventaId]
+        );
+
+        // Obtener sucursal de la venta
+        const ventaData = await pool.query(
+            'SELECT sucursal_id FROM ventas WHERE id = $1',
+            [ventaId]
+        );
+        const sucursalId = ventaData.rows[0]?.sucursal_id || 3;
+
+        for (const item of detalles.rows) {
+            await pool.query(
+                `UPDATE producto_inventario 
+                 SET stock = stock - $1 
+                 WHERE producto_id = $2 AND sucursal_id = $3`,
+                [item.cantidad, item.producto_id, sucursalId]
+            );
+        }
+
+        res.json({
+            success: true,
+            message: '✅ Entrega marcada como completada'
+        });
+
+    } catch (error) {
+        console.error('❌ Error en PUT /entregas/:id/entregar:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================
+// GET /entregas/no-entregados - Obtener productos no entregados
+// ============================================
 router.get('/no-entregados', async (req, res) => {
     try {
         const result = await pool.query(
@@ -201,12 +359,14 @@ router.get('/no-entregados', async (req, res) => {
         );
         res.json(result.rows);
     } catch (error) {
-        console.error(error);
+        console.error('❌ Error en GET /entregas/no-entregados:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Marcar como revisado
+// ============================================
+// PUT /entregas/no-entregados/:id - Marcar como revisado
+// ============================================
 router.put('/no-entregados/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -216,7 +376,37 @@ router.put('/no-entregados/:id', async (req, res) => {
         );
         res.json({ success: true });
     } catch (error) {
-        console.error(error);
+        console.error('❌ Error en PUT /entregas/no-entregados/:id:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// GET /entregas/por-codigo/:codigo - Búsqueda rápida por código
+// ============================================
+router.get('/por-codigo/:codigo', async (req, res) => {
+    try {
+        const { codigo } = req.params;
+
+        const result = await pool.query(
+            `SELECT 
+                e.*,
+                v.cliente_nombre,
+                v.cliente_telefono,
+                v.cliente_direccion,
+                v.total,
+                v.sucursal_id,
+                s.nombre as sucursal_nombre
+             FROM entregas e
+             JOIN ventas v ON e.venta_id = v.id
+             LEFT JOIN sucursales s ON v.sucursal_id = s.id
+             WHERE e.codigo ILIKE $1`,
+            [`%${codigo}%`]
+        );
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('❌ Error en GET /entregas/por-codigo/:codigo:', error.message);
         res.status(500).json({ error: error.message });
     }
 });

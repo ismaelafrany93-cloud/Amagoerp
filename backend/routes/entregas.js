@@ -36,21 +36,18 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
-        // Filtrar por sucursal
         if (sucursal_id) {
             query += ` AND v.sucursal_id = $${paramIndex}`;
             params.push(sucursal_id);
             paramIndex++;
         }
 
-        // 👇 FILTRAR POR CÓDIGO (ACEPTA LETRAS)
         if (codigo) {
             query += ` AND e.codigo ILIKE $${paramIndex}`;
             params.push(`%${codigo}%`);
             paramIndex++;
         }
 
-        // Filtrar por estado
         if (estado) {
             query += ` AND e.estado = $${paramIndex}`;
             params.push(estado);
@@ -99,7 +96,6 @@ router.get('/codigo/:codigo', async (req, res) => {
     try {
         const { codigo } = req.params;
 
-        // Buscar por código alfanumérico (ej: AMG-H8TMAC18)
         const result = await pool.query(
             `SELECT 
                 e.*, 
@@ -124,7 +120,6 @@ router.get('/codigo/:codigo', async (req, res) => {
 
         const entrega = result.rows[0];
 
-        // Obtener detalles de la venta
         const detalles = await pool.query(
             `SELECT dv.*, p.nombre as producto_nombre
              FROM detalle_ventas dv
@@ -154,6 +149,8 @@ router.post('/confirmar', async (req, res) => {
     try {
         const { codigo, entregado, motivo, recibido_por, chofer_id } = req.body;
 
+        console.log('📝 Confirmando entrega:', { codigo, entregado, motivo, chofer_id });
+
         // Buscar por código alfanumérico
         const entregaResult = await pool.query(
             'SELECT * FROM entregas WHERE codigo = $1 AND estado = $2',
@@ -178,7 +175,9 @@ router.post('/confirmar', async (req, res) => {
         );
 
         if (entregado) {
-            // ✅ ENTREGADO - Marcar como entregada
+            // ✅ ENTREGADO
+            console.log('✅ Marcando como entregado:', codigo);
+
             await pool.query(
                 `UPDATE entregas 
                  SET estado = 'entregada', 
@@ -194,7 +193,7 @@ router.post('/confirmar', async (req, res) => {
                 [ventaId]
             );
 
-            // Descontar inventario (si es contado y retiro ya se descontó, pero aquí se descuenta para domicilio)
+            // Descontar inventario
             const detalles = await pool.query(
                 'SELECT producto_id, cantidad FROM detalle_ventas WHERE venta_id = $1',
                 [ventaId]
@@ -216,6 +215,9 @@ router.post('/confirmar', async (req, res) => {
 
         } else {
             // ❌ NO ENTREGADO
+            console.log('❌ Marcando como NO entregado:', codigo);
+            console.log('📝 Motivo:', motivo);
+
             const recibidoPorFinal = recibido_por || 'Chofer';
 
             // Actualizar entrega
@@ -236,23 +238,41 @@ router.post('/confirmar', async (req, res) => {
                 [ventaId]
             );
 
-            // Insertar en productos_no_entregados
-            await pool.query(
-                `INSERT INTO productos_no_entregados (
-                    entrega_id, venta_id, cliente_nombre, cliente_telefono, 
-                    cliente_direccion, codigo, motivo, recibido_por
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [
-                    entrega.id,
-                    ventaId,
-                    ventaData.rows[0]?.cliente_nombre || 'N/A',
-                    ventaData.rows[0]?.cliente_telefono || 'N/A',
-                    ventaData.rows[0]?.cliente_direccion || 'N/A',
-                    codigo,
-                    motivo || 'No entregado',
-                    recibidoPorFinal
-                ]
-            );
+            // 👇 INSERTAR EN productos_no_entregados
+            try {
+                console.log('📝 Insertando en productos_no_entregados...');
+                
+                await pool.query(
+                    `INSERT INTO productos_no_entregados (
+                        entrega_id, 
+                        venta_id, 
+                        cliente_nombre, 
+                        cliente_telefono, 
+                        cliente_direccion, 
+                        codigo, 
+                        motivo, 
+                        recibido_por,
+                        fecha,
+                        estado
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 'pendiente')`,
+                    [
+                        entrega.id,
+                        ventaId,
+                        ventaData.rows[0]?.cliente_nombre || 'N/A',
+                        ventaData.rows[0]?.cliente_telefono || 'N/A',
+                        ventaData.rows[0]?.cliente_direccion || 'N/A',
+                        codigo,
+                        motivo || 'No entregado',
+                        recibidoPorFinal
+                    ]
+                );
+                
+                console.log('✅ Registro en productos_no_entregados creado exitosamente');
+
+            } catch (insertError) {
+                console.error('❌ Error al insertar en productos_no_entregados:', insertError.message);
+                // No detenemos el flujo, solo registramos el error
+            }
 
             res.json({
                 success: true,
@@ -318,7 +338,6 @@ router.put('/:id/entregar', async (req, res) => {
             [ventaId]
         );
 
-        // Obtener sucursal de la venta
         const ventaData = await pool.query(
             'SELECT sucursal_id FROM ventas WHERE id = $1',
             [ventaId]
@@ -354,7 +373,19 @@ router.put('/:id/entregar', async (req, res) => {
 router.get('/no-entregados', async (req, res) => {
     try {
         const result = await pool.query(
-            `SELECT * FROM productos_no_entregados 
+            `SELECT 
+                id,
+                entrega_id,
+                venta_id,
+                cliente_nombre,
+                cliente_telefono,
+                cliente_direccion,
+                codigo,
+                motivo,
+                recibido_por,
+                fecha,
+                estado
+             FROM productos_no_entregados 
              ORDER BY fecha DESC`
         );
         res.json(result.rows);

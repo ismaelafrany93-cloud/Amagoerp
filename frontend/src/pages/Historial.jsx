@@ -33,9 +33,7 @@ function Historial() {
     try {
       let url = `${API_URL}/ventas`
       
-      // 👇 Si NO es subgerente, filtrar por su sucursal
       if (!esSubgerente) {
-        // Obtener ventas de la misma sucursal
         url = `${API_URL}/ventas?sucursal_id=${sucursalId}`
       }
       
@@ -52,11 +50,7 @@ function Historial() {
     }
   }
 
-  // ============================================
-  // FUNCIÓN PARA CANCELAR VENTA
-  // ============================================
   const cancelarVenta = async (ventaId) => {
-    // Verificar si la venta es de la misma sucursal
     const venta = ventas.find(v => v.id === ventaId);
     if (venta && !esSubgerente && venta.sucursal_id !== sucursalId) {
       alert('⚠️ Solo puedes cancelar ventas de tu sucursal');
@@ -91,7 +85,7 @@ function Historial() {
       console.error('Error cancelando venta:', error);
       alert('❌ Error al cancelar la venta');
     }
-  };
+  }
 
   const verDetalle = async (id) => {
     try {
@@ -192,7 +186,6 @@ function Historial() {
     }
   }
 
-  // Obtener el nombre de la sucursal para mostrar
   const getSucursalNombre = () => {
     if (esSubgerente) return 'Todas las sucursales'
     if (sucursalId === 1) return 'Baní'
@@ -226,9 +219,6 @@ function Historial() {
           <p style={{ margin: 0, color: '#003b6f' }}>
             🏢 Mostrando ventas de tu sucursal: <strong>{getSucursalNombre()}</strong>
           </p>
-          <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
-            Solo puedes cancelar ventas de tu sucursal
-          </p>
         </div>
       )}
 
@@ -259,6 +249,7 @@ function Historial() {
             <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
               <th style={{ padding: '12px', textAlign: 'left' }}>#</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Cliente</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>👤 Vendedor</th>
               <th style={{ padding: '12px', textAlign: 'right' }}>Total</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Fecha</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Estado</th>
@@ -268,7 +259,7 @@ function Historial() {
           <tbody>
             {ventas.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                   No hay ventas registradas en {getSucursalNombre()}
                 </td>
               </tr>
@@ -282,6 +273,7 @@ function Historial() {
                   <tr key={v.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '12px' }}>{v.id}</td>
                     <td style={{ padding: '12px' }}>{v.cliente_nombre || v.cliente || 'N/A'}</td>
+                    <td style={{ padding: '12px' }}>{v.vendedor || v.usuario_id || 'N/A'}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
                       RD$ {Number(v.total).toFixed(2)}
                     </td>
@@ -409,6 +401,7 @@ function Historial() {
           }}>
             <h2 style={{ color: '#003b6f' }}>✏️ Editar Factura #{ventaSeleccionada.id}</h2>
             <p style={{ color: '#666' }}>Cliente: {ventaSeleccionada.cliente_nombre}</p>
+            <p style={{ color: '#666' }}>👤 Vendedor: {ventaSeleccionada.vendedor || 'N/A'}</p>
 
             <hr style={{ margin: '15px 0' }} />
 

@@ -7,7 +7,9 @@ const Factura = forwardRef(({
   total, 
   tipoVenta, 
   tipoEntrega, 
-  codigoEntrega 
+  codigoEntrega,
+  vendedor,
+  formato = 'A4' // 'A4' o 'POS80'
 }, ref) => {
   const fecha = new Date().toLocaleDateString('es-DO', {
     year: 'numeric',
@@ -20,64 +22,142 @@ const Factura = forwardRef(({
   const tipoPagoTexto = tipoVenta === 'credito' ? 'Crédito' : 'Contado'
   const tipoEntregaTexto = tipoEntrega === 'domicilio' ? 'Entrega a domicilio' : 'Retiro en tienda'
 
-  return (
-    <div ref={ref} style={{
-      width: '210mm',
-      minHeight: '297mm',
-      padding: '20px',
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '14px',
+  // Estilos según formato
+  const isPOS = formato === 'POS80'
+  
+  const styles = {
+    container: {
+      width: isPOS ? '80mm' : '210mm',
+      minHeight: isPOS ? 'auto' : '297mm',
+      padding: isPOS ? '8px' : '20px',
+      fontFamily: isPOS ? "'Courier New', monospace" : 'Arial, sans-serif',
+      fontSize: isPOS ? '10px' : '14px',
       backgroundColor: 'white',
       color: 'black',
       margin: '0 auto',
-      boxShadow: '0 0 10px rgba(0,0,0,0.1)'
-    }}>
+      boxShadow: isPOS ? 'none' : '0 0 10px rgba(0,0,0,0.1)'
+    },
+    header: {
+      textAlign: 'center',
+      borderBottom: isPOS ? '1px dashed #003b6f' : '3px solid #003b6f',
+      paddingBottom: isPOS ? '5px' : '15px',
+      marginBottom: isPOS ? '5px' : '15px'
+    },
+    title: {
+      margin: 0,
+      fontSize: isPOS ? '16px' : '28px',
+      color: '#003b6f',
+      fontWeight: 'bold'
+    },
+    codigoContainer: {
+      margin: isPOS ? '5px 0 8px 0' : '10px 0 15px 0',
+      backgroundColor: '#e3f2fd',
+      border: isPOS ? '1px solid #003b6f' : '2px solid #003b6f',
+      borderRadius: isPOS ? '4px' : '8px',
+      padding: isPOS ? '8px' : '15px',
+      textAlign: 'center'
+    },
+    codigoTexto: {
+      margin: isPOS ? '2px 0 0 0' : '5px 0 0 0',
+      fontSize: isPOS ? '18px' : '32px',
+      fontWeight: 'bold',
+      color: '#003b6f',
+      letterSpacing: isPOS ? '2px' : '4px'
+    },
+    clienteContainer: {
+      border: '1px solid #ddd',
+      borderRadius: isPOS ? '2px' : '4px',
+      padding: isPOS ? '6px' : '12px',
+      marginBottom: isPOS ? '8px' : '15px',
+      backgroundColor: '#f9f9f9',
+      fontSize: isPOS ? '9px' : '13px'
+    },
+    table: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: isPOS ? '9px' : '13px',
+      marginBottom: isPOS ? '8px' : '15px'
+    },
+    th: {
+      padding: isPOS ? '3px' : '8px',
+      textAlign: 'left',
+      backgroundColor: '#003b6f',
+      color: 'white',
+      fontSize: isPOS ? '8px' : '13px'
+    },
+    td: {
+      padding: isPOS ? '3px' : '8px',
+      textAlign: 'left',
+      borderBottom: isPOS ? '1px dotted #eee' : '1px solid #eee'
+    },
+    total: {
+      fontSize: isPOS ? '14px' : '18px',
+      fontWeight: 'bold',
+      color: '#003b6f'
+    },
+    footer: {
+      textAlign: 'center',
+      borderTop: isPOS ? '1px dashed #003b6f' : '2px solid #003b6f',
+      paddingTop: isPOS ? '5px' : '15px',
+      marginTop: isPOS ? '5px' : '15px',
+      fontSize: isPOS ? '8px' : '12px',
+      color: '#555'
+    }
+  }
+
+  return (
+    <div ref={ref} style={styles.container}>
       {/* Encabezado */}
-      <div style={{ textAlign: 'center', borderBottom: '3px solid #003b6f', paddingBottom: '15px', marginBottom: '15px' }}>
-        <h1 style={{ margin: 0, fontSize: '28px', color: '#003b6f' }}>AMAGO MUEBLES</h1>
-        <p style={{ margin: '5px 0', fontSize: '14px' }}>Muebles · Cocinas · Closets</p>
-        <p style={{ margin: '2px 0', fontSize: '12px', color: '#555' }}>Tel: 809-555-0000 | Santo Domingo, R.D.</p>
+      <div style={styles.header}>
+        <h1 style={styles.title}>AMAGO MUEBLES</h1>
+        {!isPOS && <p style={{ margin: '5px 0', fontSize: '14px' }}>Muebles · Cocinas · Closets</p>}
+        <p style={{ margin: isPOS ? '2px 0' : '2px 0', fontSize: isPOS ? '8px' : '12px', color: '#555' }}>
+          Tel: 809-555-0000 | Santo Domingo, R.D.
+        </p>
+        {!isPOS && <p style={{ margin: '2px 0', fontSize: '12px', color: '#555' }}>www.amagomuebles.com</p>}
       </div>
 
-      {/* CÓDIGO DE ENTREGA - DESTACADO */}
+      {/* CÓDIGO DE ENTREGA */}
       {codigoEntrega && codigoEntrega !== 'null' && (
-        <div style={{ 
-          margin: '10px 0 15px 0',
-          backgroundColor: '#e3f2fd',
-          border: '2px solid #003b6f',
-          borderRadius: '8px',
-          padding: '15px',
-          textAlign: 'center'
-        }}>
-          <p style={{ margin: 0, fontSize: '14px', color: '#003b6f' }}>
+        <div style={styles.codigoContainer}>
+          <p style={{ margin: 0, fontSize: isPOS ? '8px' : '14px', color: '#003b6f' }}>
             🔑 <strong>CÓDIGO DE ENTREGA</strong>
           </p>
-          <p style={{ 
-            margin: '5px 0 0 0', 
-            fontSize: '32px', 
-            fontWeight: 'bold',
-            color: '#003b6f',
-            letterSpacing: '4px'
-          }}>
+          <p style={styles.codigoTexto}>
             {codigoEntrega}
           </p>
-          <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#555' }}>
-            Presente este código al chofer para la entrega
-          </p>
+          {!isPOS && (
+            <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#555' }}>
+              Presente este código al chofer para la entrega
+            </p>
+          )}
         </div>
       )}
 
-      {/* Resto de la factura... */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px', fontSize: '13px' }}>
+      {/* Información de la venta */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: isPOS ? '1fr' : '1fr 1fr', 
+        gap: isPOS ? '3px' : '10px', 
+        marginBottom: isPOS ? '5px' : '15px', 
+        fontSize: isPOS ? '9px' : '13px' 
+      }}>
         <div>
-          <p style={{ margin: '4px 0' }}><strong>Factura:</strong> #{venta?.id || 'N/A'}</p>
-          <p style={{ margin: '4px 0' }}><strong>Fecha:</strong> {fecha}</p>
+          <p style={{ margin: isPOS ? '1px 0' : '4px 0' }}>
+            <strong>Factura:</strong> #{venta?.id || 'N/A'}
+          </p>
+          <p style={{ margin: isPOS ? '1px 0' : '4px 0' }}>
+            <strong>Fecha:</strong> {fecha}
+          </p>
+          <p style={{ margin: isPOS ? '1px 0' : '4px 0' }}>
+            <strong>Vendedor:</strong> {vendedor || 'N/A'}
+          </p>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ margin: '4px 0' }}>
+        <div style={{ textAlign: isPOS ? 'left' : 'right' }}>
+          <p style={{ margin: isPOS ? '1px 0' : '4px 0' }}>
             <strong>Tipo:</strong> {tipoPagoTexto}
           </p>
-          <p style={{ margin: '4px 0' }}>
+          <p style={{ margin: isPOS ? '1px 0' : '4px 0' }}>
             <strong>Entrega:</strong> {tipoEntregaTexto}
           </p>
         </div>
@@ -86,87 +166,101 @@ const Factura = forwardRef(({
       {tipoVenta === 'credito' && (
         <div style={{ 
           backgroundColor: '#ffebee', 
-          padding: '10px', 
+          padding: isPOS ? '4px' : '10px', 
           borderRadius: '4px',
-          marginBottom: '15px',
+          marginBottom: isPOS ? '5px' : '15px',
           textAlign: 'center'
         }}>
-          <p style={{ margin: 0, color: '#c62828', fontWeight: 'bold' }}>
+          <p style={{ margin: 0, color: '#c62828', fontWeight: 'bold', fontSize: isPOS ? '9px' : '14px' }}>
             ⚠️ PENDIENTE DE PAGO
           </p>
         </div>
       )}
 
       {/* Datos del Cliente */}
-      <div style={{ 
-        border: '1px solid #ddd', 
-        borderRadius: '4px', 
-        padding: '12px', 
-        marginBottom: '15px',
-        backgroundColor: '#f9f9f9'
-      }}>
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#003b6f' }}>👤 DATOS DEL CLIENTE</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px', fontSize: '13px' }}>
-          <p style={{ margin: '2px 0' }}><strong>Nombre:</strong> {cliente?.nombre || 'N/A'}</p>
-          <p style={{ margin: '2px 0' }}><strong>Teléfono:</strong> {cliente?.telefono || 'N/A'}</p>
-          <p style={{ margin: '2px 0', gridColumn: '1 / -1' }}><strong>Dirección:</strong> {cliente?.direccion || 'N/A'}</p>
-          {cliente?.referencia && <p style={{ margin: '2px 0', gridColumn: '1 / -1' }}><strong>Referencia:</strong> {cliente.referencia}</p>}
+      <div style={styles.clienteContainer}>
+        <h3 style={{ margin: '0 0 4px 0', fontSize: isPOS ? '9px' : '14px', color: '#003b6f' }}>
+          {isPOS ? 'CLIENTE' : '👤 DATOS DEL CLIENTE'}
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: isPOS ? '1fr' : '1fr 1fr', gap: isPOS ? '1px' : '5px', fontSize: isPOS ? '9px' : '13px' }}>
+          <p style={{ margin: isPOS ? '1px 0' : '2px 0' }}>
+            <strong>Nombre:</strong> {cliente?.nombre || 'N/A'}
+          </p>
+          <p style={{ margin: isPOS ? '1px 0' : '2px 0' }}>
+            <strong>Teléfono:</strong> {cliente?.telefono || 'N/A'}
+          </p>
+          <p style={{ margin: isPOS ? '1px 0' : '2px 0', gridColumn: isPOS ? '1 / -1' : '1 / -1' }}>
+            <strong>Dirección:</strong> {cliente?.direccion || 'N/A'}
+          </p>
+          {cliente?.referencia && (
+            <p style={{ margin: isPOS ? '1px 0' : '2px 0', gridColumn: '1 / -1' }}>
+              <strong>Referencia:</strong> {cliente.referencia}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Detalle de productos */}
-      <h3 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#003b6f' }}>📋 PRODUCTOS</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', marginBottom: '15px' }}>
+      {/* Productos */}
+      <h3 style={{ margin: '0 0 4px 0', fontSize: isPOS ? '9px' : '14px', color: '#003b6f' }}>
+        {isPOS ? 'PRODUCTOS' : '📋 PRODUCTOS'}
+      </h3>
+      <table style={styles.table}>
         <thead>
           <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
-            <th style={{ padding: '8px', textAlign: 'left' }}>Cant</th>
-            <th style={{ padding: '8px', textAlign: 'left' }}>Producto</th>
-            <th style={{ padding: '8px', textAlign: 'right' }}>Precio</th>
-            <th style={{ padding: '8px', textAlign: 'right' }}>Total</th>
+            <th style={styles.th}>Cant</th>
+            <th style={styles.th}>Producto</th>
+            <th style={{ ...styles.th, textAlign: 'right' }}>Precio</th>
+            <th style={{ ...styles.th, textAlign: 'right' }}>Total</th>
           </tr>
         </thead>
         <tbody>
           {carrito && carrito.length > 0 ? (
             carrito.map((item, index) => (
-              <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '8px', textAlign: 'left' }}>{item.cantidad}</td>
-                <td style={{ padding: '8px', textAlign: 'left' }}>{item.nombre}</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>RD$ {Number(item.precio).toFixed(2)}</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>RD$ {(Number(item.precio) * item.cantidad).toFixed(2)}</td>
+              <tr key={index}>
+                <td style={styles.td}>{item.cantidad}</td>
+                <td style={styles.td}>
+                  {isPOS ? item.nombre.substring(0, 20) : item.nombre}
+                  {isPOS && item.nombre.length > 20 ? '...' : ''}
+                </td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>
+                  {isPOS ? `$${Number(item.precio).toFixed(2)}` : `RD$ ${Number(item.precio).toFixed(2)}`}
+                </td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>
+                  {isPOS ? `$${(Number(item.precio) * item.cantidad).toFixed(2)}` : `RD$ ${(Number(item.precio) * item.cantidad).toFixed(2)}`}
+                </td>
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan="4" style={{ textAlign: 'center', padding: '10px' }}>Sin productos</td>
+              <td colSpan="4" style={{ textAlign: 'center', padding: isPOS ? '5px' : '10px' }}>Sin productos</td>
             </tr>
           )}
         </tbody>
         <tfoot>
-          <tr style={{ borderTop: '3px solid #003b6f' }}>
-            <td colSpan="3" style={{ padding: '12px 0', textAlign: 'right', fontWeight: 'bold', fontSize: '16px' }}>TOTAL:</td>
-            <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: 'bold', fontSize: '18px', color: '#003b6f' }}>
-              RD$ {Number(total).toFixed(2)}
+          <tr style={{ borderTop: isPOS ? '1px solid #003b6f' : '3px solid #003b6f' }}>
+            <td colSpan="3" style={{ padding: isPOS ? '5px 0' : '12px 0', textAlign: 'right', fontWeight: 'bold', fontSize: isPOS ? '12px' : '16px' }}>
+              TOTAL:
+            </td>
+            <td style={{ padding: isPOS ? '5px 0' : '12px 0', textAlign: 'right', fontWeight: 'bold', fontSize: isPOS ? '14px' : '18px', color: '#003b6f' }}>
+              {isPOS ? `$${Number(total).toFixed(2)}` : `RD$ ${Number(total).toFixed(2)}`}
             </td>
           </tr>
         </tfoot>
       </table>
 
       {/* Pie de página */}
-      <div style={{ 
-        textAlign: 'center', 
-        borderTop: '2px solid #003b6f', 
-        paddingTop: '15px', 
-        marginTop: '15px', 
-        fontSize: '12px', 
-        color: '#555'
-      }}>
-        <p style={{ margin: '2px 0' }}>¡Gracias por su compra!</p>
-        {tipoVenta === 'credito' && (
+      <div style={styles.footer}>
+        <p style={{ margin: isPOS ? '1px 0' : '2px 0' }}>
+          {isPOS ? '¡GRACIAS!' : '¡Gracias por su compra!'}
+        </p>
+        {tipoVenta === 'credito' && !isPOS && (
           <p style={{ margin: '2px 0', color: '#c62828', fontWeight: 'bold' }}>
             ⚠️ Recuerde pagar su factura a tiempo
           </p>
         )}
-        <p style={{ margin: '2px 0', fontSize: '10px' }}>AMAGO MUEBLES - Todos los derechos reservados</p>
+        {!isPOS && (
+          <p style={{ margin: '2px 0', fontSize: '10px' }}>AMAGO MUEBLES - Todos los derechos reservados</p>
+        )}
       </div>
     </div>
   )

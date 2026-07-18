@@ -32,9 +32,36 @@ function POS() {
   const esSucursalPrincipal = usuario.sucursal_id === 3
   const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
 
-  const handlePrint = useReactToPrint({
+  const handlePrintA4 = useReactToPrint({
     content: () => facturaRef.current,
     documentTitle: `Factura_${Date.now()}`,
+    pageStyle: `
+      @page {
+        size: A4;
+        margin: 10mm;
+      }
+      @media print {
+        body { background: white; }
+      }
+    `,
+    onAfterPrint: () => {
+      nuevaVenta()
+    }
+  })
+
+  const handlePrintPOS80 = useReactToPrint({
+    content: () => facturaRef.current,
+    documentTitle: `Ticket_${Date.now()}`,
+    pageStyle: `
+      @page {
+        size: 80mm 297mm;
+        margin: 3mm;
+      }
+      @media print {
+        body { background: white; font-size: 10px; }
+        .no-print { display: none !important; }
+      }
+    `,
     onAfterPrint: () => {
       nuevaVenta()
     }
@@ -68,22 +95,15 @@ function POS() {
     }
   }
 
-  // 🔑 FUNCIÓN PARA CALCULAR PRECIO (SOLO PRINCIPAL USA MAYORISTA)
   const calcularPrecio = (producto, cantidad) => {
-    // ✅ SOLO la sucursal principal puede usar precios mayoristas
     if (esSucursalPrincipal) {
-      // Si el cliente es mayorista, siempre aplicar precio mayor
       if (cliente.es_mayorista && producto.precio_mayor) {
         return parseFloat(producto.precio_mayor)
       }
-      
-      // Si no es mayorista, aplicar regla de cantidad
       if (producto.precio_mayor && producto.cantidad_mayor && cantidad >= producto.cantidad_mayor) {
         return parseFloat(producto.precio_mayor)
       }
     }
-    
-    // Para sucursales o si no aplica mayorista, usar precio normal
     return parseFloat(producto.precio)
   }
 
@@ -312,7 +332,7 @@ function POS() {
             </p>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
               <button 
-                onClick={() => window.print()} 
+                onClick={handlePrintA4}
                 style={{
                   padding: '12px 30px',
                   backgroundColor: '#003b6f',
@@ -323,13 +343,27 @@ function POS() {
                   fontSize: '1rem'
                 }}
               >
-                🖨️ Imprimir Factura
+                🖨️ Factura A4
+              </button>
+              <button 
+                onClick={handlePrintPOS80}
+                style={{
+                  padding: '12px 30px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '1rem'
+                }}
+              >
+                🧾 Ticket POS80
               </button>
               <button 
                 onClick={nuevaVenta} 
                 style={{
                   padding: '12px 30px',
-                  backgroundColor: '#4CAF50',
+                  backgroundColor: '#ff9800',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
@@ -360,6 +394,8 @@ function POS() {
               tipoVenta={tipoPago === 'credito' ? 'credito' : 'contado'}
               tipoEntrega={tipoEntrega}
               codigoEntrega={codigoEntrega}
+              vendedor={usuario.nombre}
+              formato="A4"
             />
           </div>
         </div>
@@ -386,7 +422,6 @@ function POS() {
         </div>
       )}
 
-      {/* 👇 SOLO LA PRINCIPAL PUEDE MARCAR CLIENTES MAYORISTAS */}
       {esSucursalPrincipal && (
         <div style={{
           backgroundColor: '#e3f2fd',
@@ -554,7 +589,6 @@ function POS() {
               style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
             />
           </div>
-          {/* 👇 SOLO SUCURSAL PRINCIPAL PUEDE MARCAR CLIENTES MAYORISTAS */}
           {esSucursalPrincipal && (
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{
@@ -636,7 +670,6 @@ function POS() {
                   <p style={{ margin: '5px 0', fontSize: '1.1rem', fontWeight: 'bold', color: '#003b6f' }}>
                     RD$ {Number(producto.precio || 0).toFixed(2)}
                   </p>
-                  {/* 👇 SOLO SUCURSAL PRINCIPAL MUESTRA PRECIO MAYOR */}
                   {esSucursalPrincipal && producto.precio_mayor && (
                     <p style={{ margin: '2px 0', fontSize: '0.8rem', color: '#4CAF50' }}>
                       Mayor: RD$ {Number(producto.precio_mayor).toFixed(2)} (mín. {producto.cantidad_mayor || 10}u)
@@ -692,7 +725,6 @@ function POS() {
                       <button onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} style={{ cursor: 'pointer', padding: '2px 8px' }}>+</button>
                     </div>
                     <span>
-                      {/* 👇 SOLO PRINCIPAL MUESTRA ETIQUETA MAYOR */}
                       {esSucursalPrincipal && (cliente.es_mayorista || (item.cantidad >= item.cantidad_mayor)) ? '💰 Mayor' : '🛒 Detal'}
                       {' '}
                       RD$ {(Number(item.precio_unitario || item.precio) * item.cantidad).toFixed(2)}

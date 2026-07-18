@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /ventas - Obtener todas las ventas (con filtro por sucursal)
+// GET /ventas - Obtener todas las ventas
 // ============================================
 router.get('/', async (req, res) => {
     try {
@@ -33,7 +33,6 @@ router.get('/', async (req, res) => {
                 v.cliente_es_mayorista,
                 v.estado,
                 v.fecha,
-                v.created_at,
                 v.fecha_cancelacion,
                 v.cancelado_por,
                 v.motivo_cancelacion,

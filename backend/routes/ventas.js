@@ -13,7 +13,7 @@ function generarCodigo() {
 }
 
 // ============================================
-// GET /ventas - Obtener ventas con filtro por sucursal
+// GET /ventas - Obtener todas las ventas (con filtro por sucursal)
 // ============================================
 router.get('/', async (req, res) => {
     try {
@@ -59,7 +59,7 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
-        // 👇 FILTRO POR SUCURSAL
+        // Filtro por sucursal
         if (sucursal_id) {
             query += ` AND v.sucursal_id = $${paramIndex}`;
             params.push(sucursal_id);
@@ -373,7 +373,7 @@ router.get('/usuario/:id', async (req, res) => {
 });
 
 // ============================================
-// PUT /ventas/:id/cancelar - Cancelar una venta (CON ENTREGAS SIEMPRE)
+// PUT /ventas/:id/cancelar - Cancelar una venta
 // ============================================
 router.put('/:id/cancelar', async (req, res) => {
     const client = await pool.connect();
@@ -464,9 +464,7 @@ router.put('/:id/cancelar', async (req, res) => {
             );
         }
 
-        // ============================================
         // 6. ✅ SIEMPRE cancelar la entrega si existe
-        // ============================================
         const entregaExiste = await client.query(
             'SELECT id FROM entregas WHERE venta_id = $1',
             [id]

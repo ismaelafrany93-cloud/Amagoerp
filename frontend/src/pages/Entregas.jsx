@@ -12,9 +12,14 @@ function Entregas() {
   const [entregaSeleccionada, setEntregaSeleccionada] = useState(null)
   const [motivoNoEntrega, setMotivoNoEntrega] = useState('')
   const [recibidoPor, setRecibidoPor] = useState('')
+  const [estadoFiltro, setEstadoFiltro] = useState('todos')
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+  const rol = usuario?.rol || ''
+  
+  // 👇 SOLO estos roles pueden gestionar entregas
+  const puedeGestionar = ['chofer', 'subgerente', 'dueno', 'dueño', 'admin'].includes(rol)
+  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
 
   useEffect(() => {
     cargarEntregas()
@@ -24,7 +29,10 @@ function Entregas() {
     try {
       let url = `${API_URL}/entregas`
       
-      if (!esSubgerente) {
+      // Si es chofer, solo ver entregas de su sucursal
+      if (rol === 'chofer') {
+        url = `${API_URL}/entregas?sucursal_id=${usuario.sucursal_id}`
+      } else if (!esSubgerente) {
         url = `${API_URL}/entregas?sucursal_id=${usuario.sucursal_id}`
       }
       
@@ -53,6 +61,16 @@ function Entregas() {
       entrega.codigo && entrega.codigo.toUpperCase().includes(valor)
     )
     setFiltradas(resultados)
+  }
+
+  const handleFiltroEstado = (e) => {
+    const estado = e.target.value
+    setEstadoFiltro(estado)
+    if (estado === 'todos') {
+      setFiltradas(entregas)
+    } else {
+      setFiltradas(entregas.filter(e => e.estado === estado))
+    }
   }
 
   const marcarComoEntregada = async (id) => {
@@ -149,7 +167,38 @@ function Entregas() {
         </div>
       )}
 
-      {/* Buscador */}
+      {rol === 'chofer' && (
+        <div style={{
+          backgroundColor: '#e3f2fd',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #003b6f'
+        }}>
+          <p style={{ margin: 0, color: '#003b6f' }}>
+            🚚 <strong>Chofer</strong> - Aquí puedes gestionar tus entregas pendientes
+          </p>
+          <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
+            Marca las entregas como <strong>✅ Entregada</strong> o <strong>❌ No Entregada</strong>
+          </p>
+        </div>
+      )}
+
+      {!puedeGestionar && (
+        <div style={{
+          backgroundColor: '#fff3e0',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #ff9800'
+        }}>
+          <p style={{ margin: 0, color: '#e65100' }}>
+            👁️ <strong>Solo visualización</strong> - Solo puedes ver las entregas, no gestionarlas
+          </p>
+        </div>
+      )}
+
+      {/* Buscador y Filtros */}
       <div style={{
         display: 'flex',
         gap: '15px',
@@ -159,7 +208,7 @@ function Entregas() {
       }}>
         <div style={{ flex: 2, minWidth: '250px' }}>
           <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>
-            🔍 Buscar por Código de Entrega
+            🔍 Buscar por Código
           </label>
           <input
             type="text"
@@ -182,14 +231,8 @@ function Entregas() {
             📊 Filtrar por estado
           </label>
           <select
-            onChange={(e) => {
-              const estado = e.target.value
-              if (estado === 'todos') {
-                setFiltradas(entregas)
-              } else {
-                setFiltradas(entregas.filter(e => e.estado === estado))
-              }
-            }}
+            value={estadoFiltro}
+            onChange={handleFiltroEstado}
             style={{
               width: '100%',
               padding: '10px 15px',
@@ -201,7 +244,7 @@ function Entregas() {
             <option value="todos">📋 Todos</option>
             <option value="pendiente">⏳ Pendientes</option>
             <option value="entregada">✅ Entregadas</option>
-            <option value="cancelada">❌ Canceladas</option>
+            <option value="cancelada">❌ No Entregadas</option>
           </select>
         </div>
 
@@ -352,7 +395,7 @@ function Entregas() {
                     {new Date(e.fecha_salida || e.created_at).toLocaleDateString()}
                   </td>
                   <td style={{ padding: '12px', textAlign: 'center' }}>
-                    {e.estado === 'pendiente' && (
+                    {e.estado === 'pendiente' && puedeGestionar && (
                       <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', flexWrap: 'wrap' }}>
                         <button
                           onClick={() => marcarComoEntregada(e.id)}
@@ -368,7 +411,6 @@ function Entregas() {
                         >
                           ✅ Entregar
                         </button>
-                        {/* 👇 BOTÓN NO ENTREGADO */}
                         <button
                           onClick={() => abrirModalNoEntregado(e)}
                           style={{
@@ -384,6 +426,11 @@ function Entregas() {
                           ❌ No Entregado
                         </button>
                       </div>
+                    )}
+                    {e.estado === 'pendiente' && !puedeGestionar && (
+                      <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                        ⏳ Esperando gestión
+                      </span>
                     )}
                     {e.estado === 'entregada' && (
                       <span style={{ color: '#4CAF50' }}>✅ Completada</span>
@@ -434,6 +481,9 @@ function Entregas() {
             <p style={{ color: '#666' }}>
               <strong>Cliente:</strong> {entregaSeleccionada.cliente_nombre}
             </p>
+            <p style={{ color: '#666' }}>
+              <strong>Dirección:</strong> {entregaSeleccionada.direccion || 'N/A'}
+            </p>
 
             <hr style={{ margin: '15px 0' }} />
 
@@ -444,7 +494,7 @@ function Entregas() {
               <textarea
                 value={motivoNoEntrega}
                 onChange={(e) => setMotivoNoEntrega(e.target.value)}
-                placeholder="Ej: Cliente no estaba en la dirección, teléfono no contestó, etc."
+                placeholder="Ej: Cliente no estaba en la dirección, teléfono no contestó, el cliente canceló, etc."
                 style={{
                   width: '100%',
                   padding: '10px',
@@ -454,6 +504,9 @@ function Entregas() {
                   fontSize: '0.95rem'
                 }}
               />
+              <p style={{ fontSize: '0.75rem', color: '#999', marginTop: '5px' }}>
+                ⚠️ Este motivo aparecerá en el módulo de "No Entregados"
+              </p>
             </div>
 
             <div style={{ marginTop: '15px' }}>

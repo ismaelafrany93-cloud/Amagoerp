@@ -29,7 +29,6 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
-        // 👇 FILTRO CORRECTO - SOLO productos de la sucursal
         if (sucursal_id) {
             query += ` AND pi.sucursal_id = $${paramIndex}`;
             params.push(sucursal_id);
@@ -53,6 +52,14 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        
+        if (isNaN(id) || parseInt(id) <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de producto inválido'
+            });
+        }
+
         const result = await pool.query(
             `SELECT 
                 p.*,
@@ -68,7 +75,7 @@ router.get('/:id', async (req, res) => {
         if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Producto no encontrado'
+                message: `Producto con ID ${id} no encontrado`
             });
         }
 
@@ -147,7 +154,7 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
-// PUT /productos/:id - ACTUALIZAR PRODUCTO (SIN updated_at)
+// PUT /productos/:id - Actualizar producto
 // ============================================
 router.put('/:id', async (req, res) => {
     try {
@@ -162,6 +169,13 @@ router.put('/:id', async (req, res) => {
             stock,
             sucursal_id
         } = req.body;
+
+        if (isNaN(id) || parseInt(id) <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de producto inválido'
+            });
+        }
 
         const existe = await pool.query(
             'SELECT id FROM productos WHERE id = $1',
@@ -234,26 +248,68 @@ router.put('/:id', async (req, res) => {
 });
 
 // ============================================
-// DELETE /productos/:id - Eliminar producto
+// DELETE /productos/:id - Eliminar producto (CON VALIDACIONES)
 // ============================================
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Validar ID
+        if (isNaN(id) || parseInt(id) <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de producto inválido'
+            });
+        }
+
+        console.log(`🗑️ Intentando eliminar producto ID: ${id}`);
+
+        // 1. Verificar que el producto existe
         const existe = await pool.query(
-            'SELECT id FROM productos WHERE id = $1',
+            'SELECT id, nombre FROM productos WHERE id = $1',
             [id]
         );
 
         if (existe.rows.length === 0) {
+            console.log(`⚠️ Producto ${id} no encontrado`);
             return res.status(404).json({
                 success: false,
-                message: 'Producto no encontrado'
+                message: `Producto con ID ${id} no encontrado`
             });
         }
 
-        await pool.query('DELETE FROM producto_inventario WHERE producto_id = $1', [id]);
+        console.log(`📦 Producto encontrado: ${existe.rows[0].nombre} (ID: ${id})`);
+
+        // 2. Verificar si tiene ventas asociadas
+        const ventas = await pool.query(
+            'SELECT id FROM detalle_ventas WHERE producto_id = $1 LIMIT 1',
+            [id]
+        );
+
+        if (ventas.rows.length > 0) {
+            console.log(`⚠️ Producto ${id} tiene ventas asociadas, no se puede eliminar`);
+            return res.status(400).json({
+                success: false,
+                message: 'No se puede eliminar el producto porque tiene ventas asociadas'
+            });
+        }
+
+        // 3. Verificar si tiene inventario
+        const inventario = await pool.query(
+            'SELECT id FROM producto_inventario WHERE producto_id = $1',
+            [id]
+        );
+
+        if (inventario.rows.length > 0) {
+            console.log(`📦 Eliminando ${inventario.rows.length} registros de inventario para producto ${id}`);
+            await pool.query('DELETE FROM producto_inventario WHERE producto_id = $1', [id]);
+        }
+        
+        // 4. Eliminar producto
+        console.log(`🗑️ Eliminando producto ${id}`);
         await pool.query('DELETE FROM productos WHERE id = $1', [id]);
+
+        console.log(`✅ Producto ${id} eliminado correctamente`);
 
         res.json({ 
             success: true,
@@ -262,6 +318,7 @@ router.delete('/:id', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Error en DELETE /productos/:id:', error.message);
+        console.error('Stack:', error.stack);
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -270,7 +327,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // ============================================
-// PUT /productos/:id/stock - ACTUALIZAR SOLO STOCK
+// PUT /productos/:id/stock - Actualizar solo stock
 // ============================================
 router.put('/:id/stock', async (req, res) => {
     try {
@@ -281,6 +338,13 @@ router.put('/:id/stock', async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Stock es requerido'
+            });
+        }
+
+        if (isNaN(id) || parseInt(id) <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de producto inválido'
             });
         }
 

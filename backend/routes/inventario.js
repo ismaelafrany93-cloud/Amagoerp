@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /inventario - Obtener inventario con precios por sucursal
+// GET /inventario - Obtener inventario filtrado por sucursal
 // ============================================
 router.get('/', async (req, res) => {
     try {
@@ -15,9 +15,7 @@ router.get('/', async (req, res) => {
                 p.nombre, 
                 p.categoria, 
                 p.descripcion,
-                COALESCE(pi.precio, p.precio) as precio,
-                COALESCE(pi.precio_mayor, p.precio_mayor) as precio_mayor,
-                COALESCE(pi.cantidad_mayor, p.cantidad_mayor) as cantidad_mayor,
+                p.precio,
                 COALESCE(pi.stock, 0) as stock,
                 pi.sucursal_id,
                 s.nombre as sucursal_nombre
@@ -29,16 +27,11 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
+        // 👇 FILTRO CORRECTO - SOLO productos de la sucursal
         if (sucursal_id) {
-            if (parseInt(sucursal_id) === 3) {
-                query += ` AND (pi.sucursal_id = $${paramIndex} OR pi.sucursal_id IS NULL)`;
-                params.push(sucursal_id);
-                paramIndex++;
-            } else {
-                query += ` AND pi.sucursal_id = $${paramIndex}`;
-                params.push(sucursal_id);
-                paramIndex++;
-            }
+            query += ` AND pi.sucursal_id = $${paramIndex}`;
+            params.push(sucursal_id);
+            paramIndex++;
         }
 
         query += ` ORDER BY p.nombre`;
@@ -53,18 +46,11 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// POST /inventario - Agregar producto a una sucursal con precio
+// POST /inventario - Agregar producto a una sucursal
 // ============================================
 router.post('/', async (req, res) => {
     try {
-        const { 
-            producto_id, 
-            sucursal_id, 
-            stock,
-            precio,
-            precio_mayor,
-            cantidad_mayor
-        } = req.body;
+        const { producto_id, sucursal_id, stock, precio, precio_mayor, cantidad_mayor } = req.body;
 
         if (!producto_id || !sucursal_id) {
             return res.status(400).json({
@@ -99,8 +85,6 @@ router.post('/', async (req, res) => {
 
         const stockFinal = parseInt(stock) || 0;
         const precioFinal = parseFloat(precio) || 0;
-        const precioMayorFinal = parseFloat(precio_mayor) || null;
-        const cantidadMayorFinal = parseInt(cantidad_mayor) || 0;
 
         const existe = await pool.query(
             'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
@@ -113,16 +97,15 @@ router.post('/', async (req, res) => {
                  SET stock = stock + $1, 
                      precio = $2,
                      precio_mayor = $3,
-                     cantidad_mayor = $4,
-                     updated_at = NOW()
+                     cantidad_mayor = $4
                  WHERE producto_id = $5 AND sucursal_id = $6`,
-                [stockFinal, precioFinal, precioMayorFinal, cantidadMayorFinal, producto_id, sucursal_id]
+                [stockFinal, precioFinal, precio_mayor || null, cantidad_mayor || 0, producto_id, sucursal_id]
             );
         } else {
             await pool.query(
                 `INSERT INTO producto_inventario (producto_id, sucursal_id, stock, precio, precio_mayor, cantidad_mayor)
                  VALUES ($1, $2, $3, $4, $5, $6)`,
-                [producto_id, sucursal_id, stockFinal, precioFinal, precioMayorFinal, cantidadMayorFinal]
+                [producto_id, sucursal_id, stockFinal, precioFinal, precio_mayor || null, cantidad_mayor || 0]
             );
         }
 
@@ -172,8 +155,7 @@ router.put('/:id', async (req, res) => {
              SET stock = $1, 
                  precio = $2,
                  precio_mayor = $3,
-                 cantidad_mayor = $4,
-                 updated_at = NOW()
+                 cantidad_mayor = $4
              WHERE producto_id = $5 AND sucursal_id = $6`,
             [stock || 0, precio || 0, precio_mayor || null, cantidad_mayor || 0, id, sucursal_id]
         );

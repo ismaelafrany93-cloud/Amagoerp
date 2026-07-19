@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /productos - Obtener productos
+// GET /productos - Obtener productos filtrados por sucursal
 // ============================================
 router.get('/', async (req, res) => {
     try {
@@ -29,8 +29,9 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
+        // 👇 FILTRO CORRECTO - SOLO productos de la sucursal
         if (sucursal_id) {
-            query += ` AND (pi.sucursal_id = $${paramIndex} OR pi.sucursal_id IS NULL)`;
+            query += ` AND pi.sucursal_id = $${paramIndex}`;
             params.push(sucursal_id);
             paramIndex++;
         }
@@ -146,7 +147,7 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
-// PUT /productos/:id - ACTUALIZAR PRODUCTO COMPLETO
+// PUT /productos/:id - ACTUALIZAR PRODUCTO (SIN updated_at)
 // ============================================
 router.put('/:id', async (req, res) => {
     try {
@@ -162,7 +163,6 @@ router.put('/:id', async (req, res) => {
             sucursal_id
         } = req.body;
 
-        // Verificar que el producto existe
         const existe = await pool.query(
             'SELECT id FROM productos WHERE id = $1',
             [id]
@@ -175,7 +175,6 @@ router.put('/:id', async (req, res) => {
             });
         }
 
-        // Actualizar producto
         const result = await pool.query(
             `UPDATE productos
              SET nombre = $1, 
@@ -183,8 +182,7 @@ router.put('/:id', async (req, res) => {
                  descripcion = $3, 
                  precio = $4,
                  precio_mayor = $5,
-                 cantidad_mayor = $6,
-                 updated_at = NOW()
+                 cantidad_mayor = $6
              WHERE id = $7
              RETURNING *`,
             [
@@ -198,7 +196,6 @@ router.put('/:id', async (req, res) => {
             ]
         );
 
-        // Si se especifica sucursal y stock, actualizar inventario
         if (sucursal_id && stock !== undefined && stock !== null) {
             const existeInventario = await pool.query(
                 'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
@@ -208,7 +205,7 @@ router.put('/:id', async (req, res) => {
             if (existeInventario.rows.length > 0) {
                 await pool.query(
                     `UPDATE producto_inventario 
-                     SET stock = $1, updated_at = NOW()
+                     SET stock = $1
                      WHERE producto_id = $2 AND sucursal_id = $3`,
                     [stock, id, sucursal_id]
                 );
@@ -255,10 +252,7 @@ router.delete('/:id', async (req, res) => {
             });
         }
 
-        // Eliminar registros de inventario primero
         await pool.query('DELETE FROM producto_inventario WHERE producto_id = $1', [id]);
-        
-        // Eliminar producto
         await pool.query('DELETE FROM productos WHERE id = $1', [id]);
 
         res.json({ 
@@ -290,7 +284,6 @@ router.put('/:id/stock', async (req, res) => {
             });
         }
 
-        // Verificar que el producto existe
         const existe = await pool.query(
             'SELECT id FROM productos WHERE id = $1',
             [id]
@@ -306,7 +299,6 @@ router.put('/:id/stock', async (req, res) => {
         const sucursalFinal = sucursal_id || 3;
         const stockFinal = parseInt(stock) || 0;
 
-        // Actualizar en producto_inventario
         const existeInventario = await pool.query(
             'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
             [id, sucursalFinal]
@@ -315,7 +307,7 @@ router.put('/:id/stock', async (req, res) => {
         if (existeInventario.rows.length > 0) {
             await pool.query(
                 `UPDATE producto_inventario 
-                 SET stock = $1, updated_at = NOW()
+                 SET stock = $1
                  WHERE producto_id = $2 AND sucursal_id = $3`,
                 [stockFinal, id, sucursalFinal]
             );
@@ -327,7 +319,6 @@ router.put('/:id/stock', async (req, res) => {
             );
         }
 
-        // Actualizar también en productos
         await pool.query(
             `UPDATE productos SET stock = $1 WHERE id = $2`,
             [stockFinal, id]

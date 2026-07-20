@@ -13,33 +13,16 @@ function Dashboard() {
   })
   const [topProductos, setTopProductos] = useState([])
   const [cargando, setCargando] = useState(true)
-  const [resetDate, setResetDate] = useState(null)
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+  const esSucursalPrincipal = usuario.sucursal_id === 3
 
   // ============================================
   // FUNCIONES PARA CARGAR DATOS
   // ============================================
   const cargarDashboard = async () => {
     try {
-      // Verificar si hay un reset activo
-      const resetTimestamp = localStorage.getItem('dashboard_reset')
-      const resetDate = resetTimestamp ? new Date(parseInt(resetTimestamp)).toDateString() : null
-      const hoy = new Date().toDateString()
-
-      // Si el reset es de hoy, mostrar 0
-      if (resetDate === hoy) {
-        setDatos({
-          ventas_hoy: 0,
-          produccion_hoy: 0,
-          entregas_pendientes: 0,
-          ventas_mes: 0
-        })
-        setCargando(false)
-        return
-      }
-
       const response = await fetch(`${API_URL}/reportes/dashboard`)
       const data = await response.json()
       setDatos(data)
@@ -53,32 +36,9 @@ function Dashboard() {
       const response = await fetch(`${API_URL}/reportes/top-productos`)
       const data = await response.json()
       setTopProductos(data)
-    } catch (error) {
-      console.error('Error cargando top productos:', error)
     } finally {
       setCargando(false)
     }
-  }
-
-  // ============================================
-  // FUNCIÓN PARA RESETEAR DASHBOARD
-  // ============================================
-  const resetearDashboard = () => {
-    if (!window.confirm('⚠️ ¿Estás seguro de resetear el Dashboard a 0?\n\nEsto solo afecta los números del dashboard (ventas hoy y ventas mes).\nNo elimina ventas ni afecta el inventario.')) return;
-
-    const ahora = Date.now()
-    localStorage.setItem('dashboard_reset', ahora.toString())
-    localStorage.setItem('dashboard_reset_date', ahora.toString())
-    setResetDate(new Date(ahora).toLocaleDateString())
-    
-    setDatos({
-      ventas_hoy: 0,
-      produccion_hoy: 0,
-      entregas_pendientes: 0,
-      ventas_mes: 0
-    })
-    
-    alert('✅ Dashboard reseteado a 0')
   }
 
   // ============================================
@@ -87,12 +47,6 @@ function Dashboard() {
   useEffect(() => {
     cargarDashboard()
     cargarTopProductos()
-
-    // Cargar fecha de último reset
-    const lastReset = localStorage.getItem('dashboard_reset_date')
-    if (lastReset) {
-      setResetDate(new Date(parseInt(lastReset)).toLocaleDateString())
-    }
 
     // 👇 ACTUALIZAR CUANDO LA PESTAÑA SE ACTIVA
     const handleVisibilityChange = () => {
@@ -107,11 +61,6 @@ function Dashboard() {
     const handleStorageChange = (e) => {
       if (e.key === 'dashboard_updated') {
         console.log('🔄 Dashboard actualizado desde otra pestaña')
-        cargarDashboard()
-        cargarTopProductos()
-      }
-      if (e.key === 'dashboard_reset') {
-        console.log('🔄 Dashboard reseteado')
         cargarDashboard()
         cargarTopProductos()
       }
@@ -141,32 +90,7 @@ function Dashboard() {
 
   return (
     <AdminLayout>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
-        <h1>📊 Dashboard</h1>
-        {esSubgerente && (
-          <button
-            onClick={resetearDashboard}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#ff9800',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              marginBottom: '10px'
-            }}
-          >
-            🔄 Resetear Dashboard
-          </button>
-        )}
-      </div>
-
-      {resetDate && (
-        <p style={{ color: '#999', fontSize: '0.8rem', marginBottom: '15px' }}>
-          📅 Último reset: {resetDate}
-        </p>
-      )}
+      <h1>📊 Dashboard</h1>
 
       <div style={{
         display: 'grid',

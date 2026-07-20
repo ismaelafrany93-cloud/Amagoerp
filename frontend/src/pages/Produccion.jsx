@@ -12,6 +12,11 @@ function Produccion() {
   const [mensaje, setMensaje] = useState('')
   const [editando, setEditando] = useState(null)
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0])
+  
+  // 👇 ESTADOS PARA GESTIÓN DE OPERARIOS
+  const [mostrarGestionOperarios, setMostrarGestionOperarios] = useState(false)
+  const [nuevoOperario, setNuevoOperario] = useState('')
+  const [operarioEditando, setOperarioEditando] = useState(null)
 
   const [form, setForm] = useState({
     operario: '',
@@ -26,6 +31,7 @@ function Produccion() {
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSupervisor = ['supervisor', 'subgerente', 'dueno', 'dueño', 'admin'].includes(usuario.rol)
+  const puedeGestionarOperarios = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
 
   useEffect(() => {
     cargarProductos()
@@ -83,6 +89,63 @@ function Produccion() {
       setOperarios(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando operarios:', error)
+      setOperarios([])
+    }
+  }
+
+  // ============================================
+  // GESTIÓN DE OPERARIOS
+  // ============================================
+  const handleAgregarOperario = async (e) => {
+    e.preventDefault()
+    if (!nuevoOperario.trim()) {
+      alert('⚠️ Ingresa un nombre de operario')
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/operarios`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: nuevoOperario.trim() })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setMensaje('✅ Operario agregado correctamente')
+        setNuevoOperario('')
+        cargarOperarios()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        alert('❌ Error: ' + (data.message || 'No se pudo agregar'))
+      }
+    } catch (error) {
+      console.error(error)
+      alert('❌ Error agregando operario')
+    }
+  }
+
+  const handleEliminarOperario = async (id, nombre) => {
+    if (!window.confirm(`¿Estás seguro de eliminar a "${nombre}"?`)) return
+
+    try {
+      const response = await fetch(`${API_URL}/operarios/${id}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setMensaje('✅ Operario eliminado correctamente')
+        cargarOperarios()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        alert('❌ Error eliminando operario')
+      }
+    } catch (error) {
+      console.error(error)
+      alert('❌ Error eliminando operario')
     }
   }
 
@@ -262,6 +325,106 @@ function Produccion() {
           marginBottom: '20px'
         }}>
           {mensaje}
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* GESTIÓN DE OPERARIOS - PANEL FLOTANTE */}
+      {/* ========================================== */}
+      {puedeGestionarOperarios && (
+        <div style={{
+          border: '2px solid #ff9800',
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '20px',
+          backgroundColor: '#fff8e1'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, color: '#e65100' }}>👷 Gestión de Operarios</h3>
+            <button
+              onClick={() => setMostrarGestionOperarios(!mostrarGestionOperarios)}
+              style={{
+                padding: '6px 16px',
+                backgroundColor: '#ff9800',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              {mostrarGestionOperarios ? '✕ Cerrar' : '📋 Gestionar'}
+            </button>
+          </div>
+
+          {mostrarGestionOperarios && (
+            <div style={{ marginTop: '15px' }}>
+              <form onSubmit={handleAgregarOperario} style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                <input
+                  type="text"
+                  value={nuevoOperario}
+                  onChange={(e) => setNuevoOperario(e.target.value)}
+                  placeholder="Nombre del nuevo operario"
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px'
+                  }}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    padding: '8px 20px',
+                    backgroundColor: '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✅ Agregar
+                </button>
+              </form>
+
+              {operarios.length === 0 ? (
+                <p style={{ color: '#999', textAlign: 'center', padding: '10px' }}>No hay operarios registrados</p>
+              ) : (
+                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f0f4f8' }}>
+                        <th style={{ padding: '6px', textAlign: 'left' }}>Operario</th>
+                        <th style={{ padding: '6px', textAlign: 'center' }}>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {operarios.map((op) => (
+                        <tr key={op.id} style={{ borderBottom: '1px solid #eee' }}>
+                          <td style={{ padding: '6px' }}>{op.nombre}</td>
+                          <td style={{ padding: '6px', textAlign: 'center' }}>
+                            <button
+                              onClick={() => handleEliminarOperario(op.id, op.nombre)}
+                              style={{
+                                backgroundColor: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '2px 10px',
+                                cursor: 'pointer',
+                                fontSize: '0.8rem'
+                              }}
+                            >
+                              🗑️
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

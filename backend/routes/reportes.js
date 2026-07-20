@@ -26,6 +26,14 @@ router.get('/dashboard', async (req, res) => {
             WHERE estado = 'pendiente'
         `);
 
+        // ✅ CORRECTO - Solo ventas completadas (no canceladas)
+const ventasHoy = await pool.query(
+    `SELECT COALESCE(SUM(total), 0) as total
+     FROM ventas 
+     WHERE DATE(fecha) = CURRENT_DATE 
+     AND estado = 'completada'`  // ← FILTRO CLAVE
+);
+
         // Ventas del mes
         const ventasMes = await pool.query(`
             SELECT COALESCE(SUM(total), 0) total

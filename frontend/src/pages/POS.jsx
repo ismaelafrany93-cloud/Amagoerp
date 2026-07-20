@@ -27,11 +27,18 @@ function POS() {
     es_mayorista: false
   })
 
+  // ============================================
+  // REFERENCIA PARA IMPRESIÓN
+  // ============================================
   const facturaRef = useRef()
+
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSucursalPrincipal = usuario.sucursal_id === 3
   const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
 
+  // ============================================
+  // FUNCIONES DE IMPRESIÓN
+  // ============================================
   const handlePrintA4 = useReactToPrint({
     content: () => facturaRef.current,
     documentTitle: `Factura_${Date.now()}`,
@@ -42,6 +49,7 @@ function POS() {
       }
       @media print {
         body { background: white; }
+        .no-print { display: none !important; }
       }
     `,
     onAfterPrint: () => {
@@ -80,8 +88,6 @@ function POS() {
         url = `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`;
       }
       
-      console.log('📦 Cargando productos desde:', url);
-      
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Error ${response.status}: ${response.statusText}`);
@@ -95,6 +101,9 @@ function POS() {
     }
   }
 
+  // ============================================
+  // FUNCIÓN PARA CALCULAR PRECIO
+  // ============================================
   const calcularPrecio = (producto, cantidad) => {
     if (esSucursalPrincipal) {
       if (cliente.es_mayorista && producto.precio_mayor) {
@@ -375,15 +384,21 @@ function POS() {
               </button>
             </div>
           </div>
-          <div id="factura-para-imprimir" style={{ 
+          {/* ========================================== */}
+          {/* COMPONENTE FACTURA PARA IMPRIMIR */}
+          {/* ========================================== */}
+          <div style={{ 
             position: 'fixed', 
             left: '0', 
             top: '0',
-            width: '100mm',
+            width: '210mm',
             backgroundColor: 'white',
-            padding: '15px',
+            padding: '20px',
             zIndex: 9999,
-            visibility: 'hidden'
+            opacity: 0,
+            pointerEvents: 'none',
+            transform: 'scale(0.7)',
+            transformOrigin: 'top left'
           }}>
             <Factura
               ref={facturaRef}
@@ -403,6 +418,9 @@ function POS() {
     )
   }
 
+  // ============================================
+  // RESTO DEL POS (el formulario de venta)
+  // ============================================
   return (
     <AdminLayout>
       <h1>🛒 Punto de Venta</h1>

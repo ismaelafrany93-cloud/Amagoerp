@@ -19,14 +19,11 @@ router.get('/', async (req, res) => {
                 p.created_at,
                 p.updated_at,
                 p.supervisor_id,
-                p.sucursal_id,
                 prod.nombre as producto_nombre,
-                u.nombre as supervisor_nombre,
-                s.nombre as sucursal_nombre
+                u.nombre as supervisor_nombre
             FROM produccion p
             LEFT JOIN productos prod ON p.producto_id = prod.id
             LEFT JOIN usuarios u ON p.supervisor_id = u.id
-            LEFT JOIN sucursales s ON p.sucursal_id = s.id
             ORDER BY p.fecha DESC, p.id DESC
             LIMIT 100`
         );
@@ -77,7 +74,6 @@ router.post('/', async (req, res) => {
             cantidad, 
             observacion,
             supervisor_id,
-            sucursal_id,
             fecha
         } = req.body;
 
@@ -89,12 +85,12 @@ router.post('/', async (req, res) => {
         }
 
         const fechaFinal = fecha || new Date().toISOString().split('T')[0];
-        const sucursalFinal = sucursal_id || 3;
+        const sucursalFinal = 3; // Sucursal principal por defecto
 
         const result = await pool.query(
             `INSERT INTO produccion 
-             (producto_id, operario, cantidad, observacion, supervisor_id, sucursal_id, fecha)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             (producto_id, operario, cantidad, observacion, supervisor_id, fecha)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
             [
                 producto_id, 
@@ -102,7 +98,6 @@ router.post('/', async (req, res) => {
                 cantidad, 
                 observacion || '', 
                 supervisor_id || null,
-                sucursalFinal,
                 fechaFinal
             ]
         );
@@ -156,7 +151,6 @@ router.put('/:id', async (req, res) => {
             cantidad, 
             observacion,
             supervisor_id,
-            sucursal_id,
             fecha
         } = req.body;
 
@@ -174,18 +168,17 @@ router.put('/:id', async (req, res) => {
         }
 
         const produccionAnterior = existe.rows[0];
+        const sucursalFinal = 3; // Sucursal principal por defecto
 
         await client.query('BEGIN');
 
         // 1. Devolver stock anterior (restar)
-        if (produccionAnterior.sucursal_id) {
-            await client.query(
-                `UPDATE producto_inventario 
-                 SET stock = stock - $1
-                 WHERE producto_id = $2 AND sucursal_id = $3`,
-                [produccionAnterior.cantidad, produccionAnterior.producto_id, produccionAnterior.sucursal_id]
-            );
-        }
+        await client.query(
+            `UPDATE producto_inventario 
+             SET stock = stock - $1
+             WHERE producto_id = $2 AND sucursal_id = $3`,
+            [produccionAnterior.cantidad, produccionAnterior.producto_id, sucursalFinal]
+        );
 
         // 2. Actualizar el registro
         const result = await client.query(
@@ -195,10 +188,9 @@ router.put('/:id', async (req, res) => {
                  cantidad = $3, 
                  observacion = $4,
                  supervisor_id = $5,
-                 sucursal_id = $6,
-                 fecha = $7,
+                 fecha = $6,
                  updated_at = NOW()
-             WHERE id = $8
+             WHERE id = $7
              RETURNING *`,
             [
                 producto_id, 
@@ -206,34 +198,18 @@ router.put('/:id', async (req, res) => {
                 cantidad, 
                 observacion || '', 
                 supervisor_id || null,
-                sucursal_id || 3,
                 fecha,
                 id
             ]
         );
 
         // 3. Sumar nuevo stock
-        if (sucursal_id) {
-            const existeInventario = await client.query(
-                'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
-                [producto_id, sucursal_id]
-            );
-
-            if (existeInventario.rows.length > 0) {
-                await client.query(
-                    `UPDATE producto_inventario 
-                     SET stock = stock + $1
-                     WHERE producto_id = $2 AND sucursal_id = $3`,
-                    [cantidad, producto_id, sucursal_id]
-                );
-            } else {
-                await client.query(
-                    `INSERT INTO producto_inventario (producto_id, sucursal_id, stock)
-                     VALUES ($1, $2, $3)`,
-                    [producto_id, sucursal_id, cantidad]
-                );
-            }
-        }
+        await client.query(
+            `UPDATE producto_inventario 
+             SET stock = stock + $1
+             WHERE producto_id = $2 AND sucursal_id = $3`,
+            [cantidad, producto_id, sucursalFinal]
+        );
 
         await client.query('COMMIT');
 
@@ -277,18 +253,17 @@ router.delete('/:id', async (req, res) => {
         }
 
         const produccion = existe.rows[0];
+        const sucursalFinal = 3; // Sucursal principal por defecto
 
         await client.query('BEGIN');
 
         // Devolver stock (restar la producción eliminada)
-        if (produccion.sucursal_id) {
-            await client.query(
-                `UPDATE producto_inventario 
-                 SET stock = stock - $1
-                 WHERE producto_id = $2 AND sucursal_id = $3`,
-                [produccion.cantidad, produccion.producto_id, produccion.sucursal_id]
-            );
-        }
+        await client.query(
+            `UPDATE producto_inventario 
+             SET stock = stock - $1
+             WHERE producto_id = $2 AND sucursal_id = $3`,
+            [produccion.cantidad, produccion.producto_id, sucursalFinal]
+        );
 
         // Eliminar el registro
         await client.query('DELETE FROM produccion WHERE id = $1', [id]);

@@ -32,7 +32,9 @@ function Creditos() {
                 throw new Error(`Error ${response.status}`)
             }
             const data = await response.json()
-            setCuentas(Array.isArray(data) ? data : [])
+            // Filtrar solo los que tienen saldo pendiente
+            const conDeuda = Array.isArray(data) ? data.filter(c => (c.saldo_pendiente || 0) > 0.01) : []
+            setCuentas(conDeuda)
         } catch (error) {
             console.error('Error cargando créditos:', error)
             setMensaje('❌ Error cargando créditos')
@@ -42,7 +44,7 @@ function Creditos() {
 
     const cargarClientes = async () => {
         try {
-            const response = await fetch(`${API_URL}/clientes`)
+            const response = await fetch(`${API_URL}/creditos/clientes`)
             if (!response.ok) {
                 throw new Error(`Error ${response.status}`)
             }
@@ -164,7 +166,7 @@ function Creditos() {
                 <div style={{ backgroundColor: '#e8f5e9', padding: '20px', borderRadius: '12px' }}>
                     <h3 style={{ margin: 0, color: '#1b5e20' }}>👥 Clientes con Deuda</h3>
                     <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
-                        {cuentas.filter(c => c.saldo_pendiente > 0).length}
+                        {clientes.length}
                     </p>
                 </div>
                 <div style={{ backgroundColor: '#fff3e0', padding: '20px', borderRadius: '12px' }}>
@@ -200,6 +202,11 @@ function Creditos() {
                                     </option>
                                 ))}
                             </select>
+                            {clientes.length === 0 && (
+                                <p style={{ fontSize: '0.8rem', color: '#4CAF50', marginTop: '5px' }}>
+                                    ✅ No hay clientes con deuda
+                                </p>
+                            )}
                         </div>
                         <div>
                             <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Monto del Abono *</label>
@@ -227,49 +234,56 @@ function Creditos() {
                     </div>
                     <button
                         type="submit"
+                        disabled={clientes.length === 0}
                         style={{
                             marginTop: '15px',
                             padding: '12px 30px',
-                            backgroundColor: '#4CAF50',
+                            backgroundColor: clientes.length === 0 ? '#999' : '#4CAF50',
                             color: 'white',
                             border: 'none',
                             borderRadius: '8px',
-                            cursor: 'pointer',
-                            fontSize: '1rem'
+                            cursor: clientes.length === 0 ? 'not-allowed' : 'pointer',
+                            fontSize: '1rem',
+                            opacity: clientes.length === 0 ? 0.6 : 1
                         }}
                     >
-                        ✅ Registrar Abono
+                        {clientes.length === 0 ? '✅ Todos los clientes han pagado' : '✅ Registrar Abono'}
                     </button>
                 </form>
             </div>
 
             <h2>📋 Clientes con Deuda</h2>
-            <table style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                backgroundColor: 'white',
-                borderRadius: '8px',
-                overflow: 'hidden',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-            }}>
-                <thead>
-                    <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
-                        <th style={{ padding: '12px', textAlign: 'left' }}>Cliente</th>
-                        <th style={{ padding: '12px', textAlign: 'right' }}>Teléfono</th>
-                        <th style={{ padding: '12px', textAlign: 'right' }}>Total Ventas</th>
-                        <th style={{ padding: '12px', textAlign: 'right' }}>Abonado</th>
-                        <th style={{ padding: '12px', textAlign: 'right' }}>Saldo Pendiente</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {cuentas.length === 0 ? (
-                        <tr>
-                            <td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
-                                No hay cuentas por cobrar
-                            </td>
+            {cuentas.length === 0 ? (
+                <div style={{
+                    backgroundColor: '#e8f5e9',
+                    padding: '30px',
+                    borderRadius: '8px',
+                    textAlign: 'center',
+                    border: '2px solid #4CAF50'
+                }}>
+                    <h3 style={{ margin: 0, color: '#1b5e20' }}>🎉 ¡Todos los clientes han pagado!</h3>
+                    <p style={{ color: '#666' }}>No hay cuentas pendientes por cobrar</p>
+                </div>
+            ) : (
+                <table style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                }}>
+                    <thead>
+                        <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
+                            <th style={{ padding: '12px', textAlign: 'left' }}>Cliente</th>
+                            <th style={{ padding: '12px', textAlign: 'right' }}>Teléfono</th>
+                            <th style={{ padding: '12px', textAlign: 'right' }}>Total Ventas</th>
+                            <th style={{ padding: '12px', textAlign: 'right' }}>Abonado</th>
+                            <th style={{ padding: '12px', textAlign: 'right' }}>Saldo Pendiente</th>
                         </tr>
-                    ) : (
-                        cuentas.map((c, index) => (
+                    </thead>
+                    <tbody>
+                        {cuentas.map((c, index) => (
                             <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
                                 <td style={{ padding: '12px' }}>{c.cliente_nombre || c.cliente_venta || 'N/A'}</td>
                                 <td style={{ padding: '12px', textAlign: 'right' }}>{c.cliente_telefono || 'N/A'}</td>
@@ -282,16 +296,16 @@ function Creditos() {
                                 <td style={{
                                     padding: '12px',
                                     textAlign: 'right',
-                                    color: (c.saldo_pendiente || 0) > 0 ? '#d32f2f' : '#4CAF50',
-                                    fontWeight: (c.saldo_pendiente || 0) > 0 ? 'bold' : 'normal'
+                                    color: '#d32f2f',
+                                    fontWeight: 'bold'
                                 }}>
                                     RD$ {formatearNumero(c.saldo_pendiente)}
                                 </td>
                             </tr>
-                        ))
-                    )}
-                </tbody>
-            </table>
+                        ))}
+                    </tbody>
+                </table>
+            )}
         </AdminLayout>
     )
 }

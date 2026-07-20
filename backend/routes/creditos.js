@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /creditos - Obtener todas las cuentas por cobrar
+// GET /creditos - Obtener SOLO cuentas con saldo pendiente
 // ============================================
 router.get('/', async (req, res) => {
     try {
@@ -25,7 +25,8 @@ router.get('/', async (req, res) => {
              FROM cuentas_por_cobrar c
              LEFT JOIN clientes cl ON c.cliente_id = cl.id
              LEFT JOIN ventas v ON c.venta_id = v.id
-             WHERE c.estado = 'pendiente' OR c.estado IS NULL
+             WHERE (c.estado = 'pendiente' OR c.estado IS NULL)
+               AND COALESCE(c.saldo_pendiente, 0) > 0.01
              ORDER BY c.created_at DESC`
         );
 
@@ -37,7 +38,7 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// GET /creditos/clientes - Obtener clientes con deuda
+// GET /creditos/clientes - Obtener SOLO clientes con deuda
 // ============================================
 router.get('/clientes', async (req, res) => {
     try {
@@ -49,7 +50,7 @@ router.get('/clientes', async (req, res) => {
                 c.direccion,
                 COALESCE(c.saldo_pendiente, 0) as saldo_pendiente
             FROM clientes c
-            WHERE COALESCE(c.saldo_pendiente, 0) > 0
+            WHERE COALESCE(c.saldo_pendiente, 0) > 0.01
             ORDER BY c.nombre
         `);
 
@@ -72,7 +73,8 @@ router.get('/resumen', async (req, res) => {
                 COALESCE(SUM(saldo_pendiente), 0) as saldo_total,
                 COALESCE(SUM(abonado), 0) as total_abonado
              FROM cuentas_por_cobrar 
-             WHERE estado = 'pendiente' OR estado IS NULL`
+             WHERE (estado = 'pendiente' OR estado IS NULL)
+               AND COALESCE(saldo_pendiente, 0) > 0.01`
         );
 
         res.json(result.rows[0] || {
@@ -160,9 +162,10 @@ router.post('/abonos', async (req, res) => {
             [monto, cliente_id]
         );
 
-        // También actualizar la cuenta por cobrar correspondiente
+        // Buscar la cuenta con saldo pendiente y actualizarla
         const cuenta = await client.query(
-            `SELECT id FROM cuentas_por_cobrar 
+            `SELECT id, total_venta, abonado, saldo_pendiente 
+             FROM cuentas_por_cobrar 
              WHERE cliente_id = $1 AND estado = 'pendiente'
              ORDER BY created_at ASC
              LIMIT 1`,
@@ -171,13 +174,8 @@ router.post('/abonos', async (req, res) => {
 
         if (cuenta.rows.length > 0) {
             const cuentaId = cuenta.rows[0].id;
-            const cuentaActual = await client.query(
-                'SELECT * FROM cuentas_por_cobrar WHERE id = $1',
-                [cuentaId]
-            );
-
-            const nuevoAbonado = parseFloat(cuentaActual.rows[0].abonado) + parseFloat(monto);
-            const nuevoSaldo = parseFloat(cuentaActual.rows[0].total_venta) - nuevoAbonado;
+            const nuevoAbonado = parseFloat(cuenta.rows[0].abonado) + parseFloat(monto);
+            const nuevoSaldo = parseFloat(cuenta.rows[0].total_venta) - nuevoAbonado;
 
             await client.query(
                 `UPDATE cuentas_por_cobrar 
@@ -188,7 +186,7 @@ router.post('/abonos', async (req, res) => {
                 [
                     nuevoAbonado,
                     nuevoSaldo,
-                    nuevoSaldo <= 0 ? 'pagado' : 'pendiente',
+                    nuevoSaldo <= 0.01 ? 'pagado' : 'pendiente',
                     cuentaId
                 ]
             );
@@ -258,7 +256,7 @@ router.put('/:id/abonar', async (req, res) => {
             [
                 nuevoAbonado,
                 nuevoSaldo,
-                nuevoSaldo <= 0 ? 'pagado' : 'pendiente',
+                nuevoSaldo <= 0.01 ? 'pagado' : 'pendiente',
                 id
             ]
         );

@@ -49,9 +49,11 @@ function Produccion() {
     try {
       const response = await fetch(`${API_URL}/produccion`)
       const data = await response.json()
+      console.log('📦 Producciones cargadas:', data)
       setProducciones(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando producciones:', error)
+      setProducciones([])
     }
   }
 
@@ -62,6 +64,7 @@ function Produccion() {
       setResumen(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando resumen:', error)
+      setResumen([])
     }
   }
 
@@ -72,6 +75,7 @@ function Produccion() {
       setOperarios(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando operarios:', error)
+      setOperarios([])
     }
   }
 
@@ -121,9 +125,6 @@ function Produccion() {
     }
   }
 
-  // ============================================
-  // FUNCIÓN PARA EDITAR
-  // ============================================
   const handleEdit = (produccion) => {
     setForm({
       producto_id: produccion.producto_id || '',
@@ -137,9 +138,6 @@ function Produccion() {
     setMostrarForm(true)
   }
 
-  // ============================================
-  // FUNCIÓN PARA ELIMINAR
-  // ============================================
   const handleDelete = async (id) => {
     if (!window.confirm('⚠️ ¿Estás seguro de eliminar este registro de producción?\n\nEl stock se ajustará automáticamente.')) return
 
@@ -216,6 +214,16 @@ function Produccion() {
     }
   }
 
+  if (cargando) {
+    return (
+      <AdminLayout>
+        <div style={{ textAlign: 'center', padding: '60px' }}>
+          <h2>Cargando...</h2>
+        </div>
+      </AdminLayout>
+    )
+  }
+
   return (
     <AdminLayout>
       <h1>🏭 Producción</h1>
@@ -232,7 +240,6 @@ function Produccion() {
         </div>
       )}
 
-      {/* Gestión de Operarios (Solo Dueño/Subgerente) */}
       {puedeGestionarOperarios && (
         <div style={{
           border: '2px solid #ff9800',
@@ -326,7 +333,6 @@ function Produccion() {
         </div>
       )}
 
-      {/* Botón para nuevo registro (Solo supervisores) */}
       {esSupervisor && (
         <button
           onClick={() => {
@@ -349,7 +355,6 @@ function Produccion() {
         </button>
       )}
 
-      {/* Formulario de registro/edición */}
       {mostrarForm && esSupervisor && (
         <div style={{
           border: '2px solid #003b6f',
@@ -460,7 +465,6 @@ function Produccion() {
         </div>
       )}
 
-      {/* Resumen de producción hoy */}
       <h2>📊 Resumen de producción hoy</h2>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
         <thead>
@@ -485,66 +489,68 @@ function Produccion() {
         </tbody>
       </table>
 
-      {/* Historial de producción con editar y eliminar */}
       <h2>📋 Historial de Producción</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-        {producciones.map((prod) => (
-          <div key={prod.id} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
-            {prod.foto && (
-              <img
-                src={`${API_URL}${prod.foto}`}
-                alt="Producción"
-                style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '6px', marginBottom: '10px' }}
-              />
-            )}
-            <h3 style={{ margin: '0 0 5px 0' }}>{prod.producto_nombre}</h3>
-            <p><strong>Operario:</strong> {prod.operario}</p>
-            <p><strong>Cantidad:</strong> {prod.cantidad}</p>
-            <p><strong>Supervisor:</strong> {prod.supervisor_nombre}</p>
-            <p><strong>Fecha:</strong> {new Date(prod.fecha).toLocaleDateString()}</p>
-            {prod.observacion && <p><strong>Observación:</strong> {prod.observacion}</p>}
-            
-            {/* 👇 BOTONES DE ACCIÓN (SOLO SUPERVISORES) */}
-            {esSupervisor && (
-              <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={() => handleEdit(prod)}
-                  style={{
-                    flex: 1,
-                    padding: '6px 12px',
-                    backgroundColor: '#2196F3',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ✏️ Editar
-                </button>
-                <button
-                  onClick={() => handleDelete(prod.id)}
-                  style={{
-                    flex: 1,
-                    padding: '6px 12px',
-                    backgroundColor: '#f44336',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  🗑️ Eliminar
-                </button>
-              </div>
-            )}
-            {!esSupervisor && (
-              <p style={{ marginTop: '10px', color: '#999', fontSize: '0.75rem' }}>
-                Solo supervisores pueden editar/eliminar
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
+      {producciones.length === 0 ? (
+        <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>No hay registros de producción</p>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+          {producciones.map((prod) => (
+            <div key={prod.id} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
+              {prod.foto && (
+                <img
+                  src={`${API_URL}${prod.foto}`}
+                  alt="Producción"
+                  style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '6px', marginBottom: '10px' }}
+                />
+              )}
+              <h3 style={{ margin: '0 0 5px 0' }}>{prod.producto_nombre || 'Producto sin nombre'}</h3>
+              <p><strong>Operario:</strong> {prod.operario || 'N/A'}</p>
+              <p><strong>Cantidad:</strong> {prod.cantidad}</p>
+              <p><strong>Supervisor:</strong> {prod.supervisor_nombre || 'N/A'}</p>
+              <p><strong>Fecha:</strong> {prod.fecha ? new Date(prod.fecha).toLocaleDateString() : 'N/A'}</p>
+              {prod.observacion && <p><strong>Observación:</strong> {prod.observacion}</p>}
+              
+              {esSupervisor && (
+                <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={() => handleEdit(prod)}
+                    style={{
+                      flex: 1,
+                      padding: '6px 12px',
+                      backgroundColor: '#2196F3',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✏️ Editar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(prod.id)}
+                    style={{
+                      flex: 1,
+                      padding: '6px 12px',
+                      backgroundColor: '#f44336',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🗑️ Eliminar
+                  </button>
+                </div>
+              )}
+              {!esSupervisor && (
+                <p style={{ marginTop: '10px', color: '#999', fontSize: '0.75rem' }}>
+                  Solo supervisores pueden editar/eliminar
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </AdminLayout>
   )
 }

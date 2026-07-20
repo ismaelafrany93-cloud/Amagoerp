@@ -7,10 +7,8 @@ const pool = require('../db');
 // ============================================
 router.get('/', async (req, res) => {
     try {
-        const { sucursal_id, fecha } = req.query;
-        
-        let query = `
-            SELECT 
+        const result = await pool.query(
+            `SELECT 
                 p.id,
                 p.producto_id,
                 p.operario,
@@ -21,6 +19,7 @@ router.get('/', async (req, res) => {
                 p.created_at,
                 p.updated_at,
                 p.supervisor_id,
+                p.sucursal_id,
                 prod.nombre as producto_nombre,
                 u.nombre as supervisor_nombre,
                 s.nombre as sucursal_nombre
@@ -28,26 +27,11 @@ router.get('/', async (req, res) => {
             LEFT JOIN productos prod ON p.producto_id = prod.id
             LEFT JOIN usuarios u ON p.supervisor_id = u.id
             LEFT JOIN sucursales s ON p.sucursal_id = s.id
-            WHERE 1=1
-        `;
-        let params = [];
-        let paramIndex = 1;
-
-        if (sucursal_id) {
-            query += ` AND p.sucursal_id = $${paramIndex}`;
-            params.push(sucursal_id);
-            paramIndex++;
-        }
-
-        if (fecha) {
-            query += ` AND DATE(p.fecha) = $${paramIndex}`;
-            params.push(fecha);
-            paramIndex++;
-        }
-
-        query += ` ORDER BY p.fecha DESC, p.id DESC`;
-
-        const result = await pool.query(query, params);
+            ORDER BY p.fecha DESC, p.id DESC
+            LIMIT 100`
+        );
+        
+        console.log('📦 Producción encontrada:', result.rows.length);
         res.json(result.rows || []);
         
     } catch (error) {

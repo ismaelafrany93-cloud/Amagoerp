@@ -9,7 +9,7 @@ const Factura = forwardRef(({
   tipoEntrega, 
   codigoEntrega,
   vendedor,
-  formato = 'A4' // 'A4' o 'POS80'
+  formato = 'A4'
 }, ref) => {
   const fecha = new Date().toLocaleDateString('es-DO', {
     year: 'numeric',
@@ -22,7 +22,6 @@ const Factura = forwardRef(({
   const tipoPagoTexto = tipoVenta === 'credito' ? 'Crédito' : 'Contado'
   const tipoEntregaTexto = tipoEntrega === 'domicilio' ? 'Entrega a domicilio' : 'Retiro en tienda'
 
-  // Estilos según formato
   const isPOS = formato === 'POS80'
   
   const styles = {
@@ -63,45 +62,6 @@ const Factura = forwardRef(({
       fontWeight: 'bold',
       color: '#003b6f',
       letterSpacing: isPOS ? '2px' : '4px'
-    },
-    clienteContainer: {
-      border: '1px solid #ddd',
-      borderRadius: isPOS ? '2px' : '4px',
-      padding: isPOS ? '6px' : '12px',
-      marginBottom: isPOS ? '8px' : '15px',
-      backgroundColor: '#f9f9f9',
-      fontSize: isPOS ? '9px' : '13px'
-    },
-    table: {
-      width: '100%',
-      borderCollapse: 'collapse',
-      fontSize: isPOS ? '9px' : '13px',
-      marginBottom: isPOS ? '8px' : '15px'
-    },
-    th: {
-      padding: isPOS ? '3px' : '8px',
-      textAlign: 'left',
-      backgroundColor: '#003b6f',
-      color: 'white',
-      fontSize: isPOS ? '8px' : '13px'
-    },
-    td: {
-      padding: isPOS ? '3px' : '8px',
-      textAlign: 'left',
-      borderBottom: isPOS ? '1px dotted #eee' : '1px solid #eee'
-    },
-    total: {
-      fontSize: isPOS ? '14px' : '18px',
-      fontWeight: 'bold',
-      color: '#003b6f'
-    },
-    footer: {
-      textAlign: 'center',
-      borderTop: isPOS ? '1px dashed #003b6f' : '2px solid #003b6f',
-      paddingTop: isPOS ? '5px' : '15px',
-      marginTop: isPOS ? '5px' : '15px',
-      fontSize: isPOS ? '8px' : '12px',
-      color: '#555'
     }
   }
 
@@ -117,15 +77,13 @@ const Factura = forwardRef(({
         {!isPOS && <p style={{ margin: '2px 0', fontSize: '12px', color: '#555' }}>www.amagomuebles.com</p>}
       </div>
 
-      {/* CÓDIGO DE ENTREGA */}
+      {/* Código de entrega */}
       {codigoEntrega && codigoEntrega !== 'null' && (
         <div style={styles.codigoContainer}>
           <p style={{ margin: 0, fontSize: isPOS ? '8px' : '14px', color: '#003b6f' }}>
             🔑 <strong>CÓDIGO DE ENTREGA</strong>
           </p>
-          <p style={styles.codigoTexto}>
-            {codigoEntrega}
-          </p>
+          <p style={styles.codigoTexto}>{codigoEntrega}</p>
           {!isPOS && (
             <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#555' }}>
               Presente este código al chofer para la entrega
@@ -177,8 +135,15 @@ const Factura = forwardRef(({
         </div>
       )}
 
-      {/* Datos del Cliente */}
-      <div style={styles.clienteContainer}>
+      {/* Cliente */}
+      <div style={{
+        border: '1px solid #ddd',
+        borderRadius: isPOS ? '2px' : '4px',
+        padding: isPOS ? '6px' : '12px',
+        marginBottom: isPOS ? '8px' : '15px',
+        backgroundColor: '#f9f9f9',
+        fontSize: isPOS ? '9px' : '13px'
+      }}>
         <h3 style={{ margin: '0 0 4px 0', fontSize: isPOS ? '9px' : '14px', color: '#003b6f' }}>
           {isPOS ? 'CLIENTE' : '👤 DATOS DEL CLIENTE'}
         </h3>
@@ -204,29 +169,34 @@ const Factura = forwardRef(({
       <h3 style={{ margin: '0 0 4px 0', fontSize: isPOS ? '9px' : '14px', color: '#003b6f' }}>
         {isPOS ? 'PRODUCTOS' : '📋 PRODUCTOS'}
       </h3>
-      <table style={styles.table}>
+      <table style={{
+        width: '100%',
+        borderCollapse: 'collapse',
+        fontSize: isPOS ? '9px' : '13px',
+        marginBottom: isPOS ? '8px' : '15px'
+      }}>
         <thead>
           <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
-            <th style={styles.th}>Cant</th>
-            <th style={styles.th}>Producto</th>
-            <th style={{ ...styles.th, textAlign: 'right' }}>Precio</th>
-            <th style={{ ...styles.th, textAlign: 'right' }}>Total</th>
+            <th style={{ padding: isPOS ? '3px' : '8px', textAlign: 'left' }}>Cant</th>
+            <th style={{ padding: isPOS ? '3px' : '8px', textAlign: 'left' }}>Producto</th>
+            <th style={{ padding: isPOS ? '3px' : '8px', textAlign: 'right' }}>Precio</th>
+            <th style={{ padding: isPOS ? '3px' : '8px', textAlign: 'right' }}>Total</th>
           </tr>
         </thead>
         <tbody>
           {carrito && carrito.length > 0 ? (
             carrito.map((item, index) => (
-              <tr key={index}>
-                <td style={styles.td}>{item.cantidad}</td>
-                <td style={styles.td}>
+              <tr key={index} style={{ borderBottom: isPOS ? '1px dotted #eee' : '1px solid #eee' }}>
+                <td style={{ padding: isPOS ? '3px' : '8px', textAlign: 'left' }}>{item.cantidad}</td>
+                <td style={{ padding: isPOS ? '3px' : '8px', textAlign: 'left' }}>
                   {isPOS ? item.nombre.substring(0, 20) : item.nombre}
                   {isPOS && item.nombre.length > 20 ? '...' : ''}
                 </td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>
-                  {isPOS ? `$${Number(item.precio).toFixed(2)}` : `RD$ ${Number(item.precio).toFixed(2)}`}
+                <td style={{ padding: isPOS ? '3px' : '8px', textAlign: 'right' }}>
+                  {isPOS ? `$${Number(item.precio_unitario || item.precio).toFixed(2)}` : `RD$ ${Number(item.precio_unitario || item.precio).toFixed(2)}`}
                 </td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>
-                  {isPOS ? `$${(Number(item.precio) * item.cantidad).toFixed(2)}` : `RD$ ${(Number(item.precio) * item.cantidad).toFixed(2)}`}
+                <td style={{ padding: isPOS ? '3px' : '8px', textAlign: 'right' }}>
+                  {isPOS ? `$${(Number(item.precio_unitario || item.precio) * item.cantidad).toFixed(2)}` : `RD$ ${(Number(item.precio_unitario || item.precio) * item.cantidad).toFixed(2)}`}
                 </td>
               </tr>
             ))
@@ -249,7 +219,14 @@ const Factura = forwardRef(({
       </table>
 
       {/* Pie de página */}
-      <div style={styles.footer}>
+      <div style={{
+        textAlign: 'center',
+        borderTop: isPOS ? '1px dashed #003b6f' : '2px solid #003b6f',
+        paddingTop: isPOS ? '5px' : '15px',
+        marginTop: isPOS ? '5px' : '15px',
+        fontSize: isPOS ? '8px' : '12px',
+        color: '#555'
+      }}>
         <p style={{ margin: isPOS ? '1px 0' : '2px 0' }}>
           {isPOS ? '¡GRACIAS!' : '¡Gracias por su compra!'}
         </p>

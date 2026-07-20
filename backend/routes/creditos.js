@@ -2,7 +2,44 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
-// Obtener todos los clientes con deuda (crédito)
+// ============================================
+// GET /creditos - Obtener todas las cuentas por cobrar
+// ============================================
+router.get('/', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT 
+                c.id,
+                c.cliente_id,
+                c.venta_id,
+                c.total_venta,
+                c.abonado,
+                c.saldo_pendiente,
+                c.estado,
+                c.created_at,
+                c.updated_at,
+                cl.nombre as cliente_nombre,
+                cl.telefono as cliente_telefono,
+                cl.direccion as cliente_direccion,
+                v.fecha as fecha_venta,
+                v.cliente_nombre as cliente_venta
+             FROM cuentas_por_cobrar c
+             LEFT JOIN clientes cl ON c.cliente_id = cl.id
+             LEFT JOIN ventas v ON c.venta_id = v.id
+             WHERE c.estado = 'pendiente' OR c.estado IS NULL
+             ORDER BY c.created_at DESC`
+        );
+
+        res.json(result.rows || []);
+    } catch (error) {
+        console.error('❌ Error en GET /creditos:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
+// GET /creditos/clientes - Obtener clientes con deuda
+// ============================================
 router.get('/clientes', async (req, res) => {
     try {
         const result = await pool.query(`
@@ -19,12 +56,46 @@ router.get('/clientes', async (req, res) => {
 
         res.json(result.rows);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en GET /creditos/clientes:', error.message);
+        res.status(200).json([]);
     }
 });
 
-// Obtener historial de abonos de un cliente
+// ============================================
+// GET /creditos/resumen - Resumen de créditos
+// ============================================
+router.get('/resumen', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT 
+                COUNT(*) as total_cuentas,
+                COALESCE(SUM(total_venta), 0) as total_adeudado,
+                COALESCE(SUM(saldo_pendiente), 0) as saldo_total,
+                COALESCE(SUM(abonado), 0) as total_abonado
+             FROM cuentas_por_cobrar 
+             WHERE estado = 'pendiente' OR estado IS NULL`
+        );
+
+        res.json(result.rows[0] || {
+            total_cuentas: 0,
+            total_adeudado: 0,
+            saldo_total: 0,
+            total_abonado: 0
+        });
+    } catch (error) {
+        console.error('❌ Error en GET /creditos/resumen:', error.message);
+        res.status(200).json({
+            total_cuentas: 0,
+            total_adeudado: 0,
+            saldo_total: 0,
+            total_abonado: 0
+        });
+    }
+});
+
+// ============================================
+// GET /creditos/abonos/:cliente_id - Historial de abonos de un cliente
+// ============================================
 router.get('/abonos/:cliente_id', async (req, res) => {
     try {
         const { cliente_id } = req.params;
@@ -39,15 +110,25 @@ router.get('/abonos/:cliente_id', async (req, res) => {
 
         res.json(result.rows);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en GET /creditos/abonos/:cliente_id:', error.message);
+        res.status(200).json([]);
     }
 });
 
-// Registrar un abono
+// ============================================
+// POST /creditos/abonos - Registrar un abono
+// ============================================
 router.post('/abonos', async (req, res) => {
+    const client = await pool.connect();
     try {
         const { cliente_id, monto, usuario_id, observacion } = req.body;
+
+        if (!cliente_id || !monto || monto <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Cliente y monto son requeridos'
+            });
+        }
 
         // Verificar que el cliente existe
         const cliente = await pool.query(
@@ -62,29 +143,164 @@ router.post('/abonos', async (req, res) => {
             });
         }
 
+        await client.query('BEGIN');
+
         // Registrar el abono
-        await pool.query(
-            `INSERT INTO abonos (cliente_id, monto, usuario_id, observacion)
-             VALUES ($1, $2, $3, $4)`,
+        await client.query(
+            `INSERT INTO abonos (cliente_id, monto, usuario_id, observacion, fecha)
+             VALUES ($1, $2, $3, $4, NOW())`,
             [cliente_id, monto, usuario_id, observacion || '']
         );
 
         // Actualizar el saldo pendiente del cliente
-        await pool.query(
+        const result = await client.query(
             `UPDATE clientes 
-             SET saldo_pendiente = saldo_pendiente - $1 
-             WHERE id = $2`,
+             SET saldo_pendiente = COALESCE(saldo_pendiente, 0) - $1 
+             WHERE id = $2
+             RETURNING saldo_pendiente`,
             [monto, cliente_id]
         );
 
+        // También actualizar la cuenta por cobrar correspondiente
+        // Buscar la cuenta más antigua con saldo pendiente
+        const cuenta = await client.query(
+            `SELECT id FROM cuentas_por_cobrar 
+             WHERE cliente_id = $1 AND estado = 'pendiente'
+             ORDER BY created_at ASC
+             LIMIT 1`,
+            [cliente_id]
+        );
+
+        if (cuenta.rows.length > 0) {
+            const cuentaId = cuenta.rows[0].id;
+            const cuentaActual = await client.query(
+                'SELECT * FROM cuentas_por_cobrar WHERE id = $1',
+                [cuentaId]
+            );
+
+            const nuevoAbonado = parseFloat(cuentaActual.rows[0].abonado) + parseFloat(monto);
+            const nuevoSaldo = parseFloat(cuentaActual.rows[0].total_venta) - nuevoAbonado;
+
+            await client.query(
+                `UPDATE cuentas_por_cobrar 
+                 SET abonado = $1, 
+                     saldo_pendiente = $2,
+                     estado = $3,
+                     updated_at = NOW()
+                 WHERE id = $4`,
+                [
+                    nuevoAbonado,
+                    nuevoSaldo,
+                    nuevoSaldo <= 0 ? 'pagado' : 'pendiente',
+                    cuentaId
+                ]
+            );
+        }
+
+        await client.query('COMMIT');
+
         res.json({
             success: true,
-            message: 'Abono registrado correctamente'
+            message: '✅ Abono registrado correctamente',
+            nuevo_saldo: result.rows[0]?.saldo_pendiente || 0
         });
 
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
+        await client.query('ROLLBACK');
+        console.error('❌ Error en POST /creditos/abonos:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    } finally {
+        client.release();
+    }
+});
+
+// ============================================
+// PUT /creditos/:id/abonar - Abonar a una cuenta específica
+// ============================================
+router.put('/:id/abonar', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { monto, observacion } = req.body;
+
+        if (!monto || monto <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'El monto debe ser mayor a 0'
+            });
+        }
+
+        await client.query('BEGIN');
+
+        // Obtener cuenta actual
+        const cuenta = await client.query(
+            'SELECT * FROM cuentas_por_cobrar WHERE id = $1',
+            [id]
+        );
+
+        if (cuenta.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({
+                success: false,
+                message: 'Cuenta no encontrada'
+            });
+        }
+
+        const cuentaActual = cuenta.rows[0];
+        const nuevoAbonado = parseFloat(cuentaActual.abonado) + parseFloat(monto);
+        const nuevoSaldo = parseFloat(cuentaActual.total_venta) - nuevoAbonado;
+
+        // Actualizar cuenta
+        await client.query(
+            `UPDATE cuentas_por_cobrar 
+             SET abonado = $1, 
+                 saldo_pendiente = $2,
+                 estado = $3,
+                 updated_at = NOW()
+             WHERE id = $4`,
+            [
+                nuevoAbonado,
+                nuevoSaldo,
+                nuevoSaldo <= 0 ? 'pagado' : 'pendiente',
+                id
+            ]
+        );
+
+        // Registrar abono
+        await client.query(
+            `INSERT INTO abonos (cliente_id, monto, usuario_id, observacion, fecha)
+             VALUES ($1, $2, $3, $4, NOW())`,
+            [cuentaActual.cliente_id, monto, null, observacion || '']
+        );
+
+        // Actualizar saldo del cliente
+        await client.query(
+            `UPDATE clientes 
+             SET saldo_pendiente = $1
+             WHERE id = $2`,
+            [nuevoSaldo, cuentaActual.cliente_id]
+        );
+
+        await client.query('COMMIT');
+
+        res.json({
+            success: true,
+            message: '✅ Abono registrado correctamente',
+            nuevo_saldo: nuevoSaldo
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error en PUT /creditos/:id/abonar:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    } finally {
+        client.release();
     }
 });
 

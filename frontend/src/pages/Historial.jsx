@@ -50,6 +50,9 @@ function Historial() {
     }
   }
 
+  // ============================================
+  // FUNCIÓN PARA CANCELAR VENTA
+  // ============================================
   const cancelarVenta = async (ventaId) => {
     const venta = ventas.find(v => v.id === ventaId);
     if (venta && !esSubgerente && venta.sucursal_id !== sucursalId) {
@@ -76,7 +79,10 @@ function Historial() {
       if (data.success) {
         setMensaje('✅ Venta cancelada correctamente. Stock devuelto al inventario.');
         cargarHistorial();
+        
+        // 🔄 NOTIFICAR AL DASHBOARD
         localStorage.setItem('dashboard_updated', Date.now().toString());
+        
         setTimeout(() => setMensaje(''), 3000);
       } else {
         alert('❌ Error: ' + (data.message || data.error));
@@ -174,6 +180,10 @@ function Historial() {
         setMostrarEdicion(false)
         setVentaSeleccionada(null)
         cargarHistorial()
+        
+        // 🔄 NOTIFICAR AL DASHBOARD
+        localStorage.setItem('dashboard_updated', Date.now().toString())
+        
         setTimeout(() => setMensaje(''), 3000)
       } else {
         alert('❌ Error: ' + (data.error || 'No se pudo guardar'))

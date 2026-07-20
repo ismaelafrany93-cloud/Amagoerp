@@ -9,11 +9,14 @@ function Dashboard() {
     ventas_hoy: 0,
     produccion_hoy: 0,
     entregas_pendientes: 0,
-    ventas_mes: 0
+    ventas_mes: 0,
+    total_ventas: 0,
+    numero_ventas_hoy: 0
   })
   const [topProductos, setTopProductos] = useState([])
+  const [entregasPendientes, setEntregasPendientes] = useState([])
   const [cargando, setCargando] = useState(true)
-  const [resetDate, setResetDate] = useState(null)
+  const [mostrarEntregas, setMostrarEntregas] = useState(false)
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
@@ -23,23 +26,6 @@ function Dashboard() {
   // ============================================
   const cargarDashboard = async () => {
     try {
-      // Verificar si hay un reset activo
-      const resetTimestamp = localStorage.getItem('dashboard_reset')
-      const resetDate = resetTimestamp ? new Date(parseInt(resetTimestamp)).toDateString() : null
-      const hoy = new Date().toDateString()
-
-      // Si el reset es de hoy, mostrar 0
-      if (resetDate === hoy) {
-        setDatos({
-          ventas_hoy: 0,
-          produccion_hoy: 0,
-          entregas_pendientes: 0,
-          ventas_mes: 0
-        })
-        setCargando(false)
-        return
-      }
-
       const response = await fetch(`${API_URL}/reportes/dashboard`)
       const data = await response.json()
       setDatos(data)
@@ -55,30 +41,17 @@ function Dashboard() {
       setTopProductos(data)
     } catch (error) {
       console.error('Error cargando top productos:', error)
-    } finally {
-      setCargando(false)
     }
   }
 
-  // ============================================
-  // FUNCIÓN PARA RESETEAR DASHBOARD
-  // ============================================
-  const resetearDashboard = () => {
-    if (!window.confirm('⚠️ ¿Estás seguro de resetear el Dashboard a 0?\n\nEsto solo afecta los números del dashboard (ventas hoy y ventas mes).\nNo elimina ventas ni afecta el inventario.')) return;
-
-    const ahora = Date.now()
-    localStorage.setItem('dashboard_reset', ahora.toString())
-    localStorage.setItem('dashboard_reset_date', ahora.toString())
-    setResetDate(new Date(ahora).toLocaleDateString())
-    
-    setDatos({
-      ventas_hoy: 0,
-      produccion_hoy: 0,
-      entregas_pendientes: 0,
-      ventas_mes: 0
-    })
-    
-    alert('✅ Dashboard reseteado a 0')
+  const cargarEntregasPendientes = async () => {
+    try {
+      const response = await fetch(`${API_URL}/reportes/entregas-pendientes`)
+      const data = await response.json()
+      setEntregasPendientes(data)
+    } catch (error) {
+      console.error('Error cargando entregas pendientes:', error)
+    }
   }
 
   // ============================================
@@ -87,33 +60,23 @@ function Dashboard() {
   useEffect(() => {
     cargarDashboard()
     cargarTopProductos()
+    cargarEntregasPendientes()
 
-    // Cargar fecha de último reset
-    const lastReset = localStorage.getItem('dashboard_reset_date')
-    if (lastReset) {
-      setResetDate(new Date(parseInt(lastReset)).toLocaleDateString())
-    }
-
-    // 👇 ACTUALIZAR CUANDO LA PESTAÑA SE ACTIVA
+    // Actualizar cuando la pestaña se activa
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        console.log('🔄 Dashboard visible - Recargando datos...')
         cargarDashboard()
         cargarTopProductos()
+        cargarEntregasPendientes()
       }
     }
 
-    // 👇 ACTUALIZAR CUANDO SE CANCELA UNA VENTA (desde otra pestaña)
+    // Actualizar cuando se cancela una venta
     const handleStorageChange = (e) => {
       if (e.key === 'dashboard_updated') {
-        console.log('🔄 Dashboard actualizado desde otra pestaña')
         cargarDashboard()
         cargarTopProductos()
-      }
-      if (e.key === 'dashboard_reset') {
-        console.log('🔄 Dashboard reseteado')
-        cargarDashboard()
-        cargarTopProductos()
+        cargarEntregasPendientes()
       }
     }
 
@@ -126,9 +89,6 @@ function Dashboard() {
     }
   }, [])
 
-  // ============================================
-  // RENDER
-  // ============================================
   if (cargando) {
     return (
       <AdminLayout>
@@ -143,109 +103,122 @@ function Dashboard() {
     <AdminLayout>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
         <h1>📊 Dashboard</h1>
-        {esSubgerente && (
-          <button
-            onClick={resetearDashboard}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#ff9800',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              marginBottom: '10px'
-            }}
-          >
-            🔄 Resetear Dashboard
-          </button>
-        )}
+        <p style={{ color: '#999', fontSize: '0.85rem' }}>
+          📅 {new Date().toLocaleDateString('es-DO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        </p>
       </div>
 
-      {resetDate && (
-        <p style={{ color: '#999', fontSize: '0.8rem', marginBottom: '15px' }}>
-          📅 Último reset: {resetDate}
-        </p>
-      )}
-
+      {/* Tarjetas de resumen */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
         gap: '20px',
         marginBottom: '30px'
       }}>
-        <div style={{ backgroundColor: '#e3f2fd', padding: '20px', borderRadius: '12px' }}>
-          <h3 style={{ margin: 0, color: '#0d47a1' }}>💰 Ventas Hoy</h3>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
+        <div style={{ backgroundColor: '#e3f2fd', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, color: '#0d47a1', fontSize: '0.9rem' }}>💰 Ventas Hoy</h3>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '5px 0' }}>
             RD$ {datos.ventas_hoy?.toFixed(2) || '0.00'}
           </p>
-          <p style={{ fontSize: '0.8rem', color: '#666', margin: '5px 0 0 0' }}>
-            Total de ventas del día
+          <p style={{ fontSize: '0.75rem', color: '#666', margin: 0 }}>
+            {datos.numero_ventas_hoy || 0} ventas realizadas
           </p>
         </div>
 
-        <div style={{ backgroundColor: '#e8f5e9', padding: '20px', borderRadius: '12px' }}>
-          <h3 style={{ margin: 0, color: '#1b5e20' }}>🏭 Producción Hoy</h3>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
-            {datos.produccion_hoy || 0} unidades
+        <div style={{ backgroundColor: '#e8f5e9', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, color: '#1b5e20', fontSize: '0.9rem' }}>🏭 Producción Hoy</h3>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '5px 0' }}>
+            {datos.produccion_hoy || 0}
           </p>
-          <p style={{ fontSize: '0.8rem', color: '#666', margin: '5px 0 0 0' }}>
-            Unidades producidas hoy
-          </p>
+          <p style={{ fontSize: '0.75rem', color: '#666', margin: 0 }}>unidades producidas</p>
         </div>
 
-        <div style={{ backgroundColor: '#fff3e0', padding: '20px', borderRadius: '12px' }}>
-          <h3 style={{ margin: 0, color: '#e65100' }}>🚚 Entregas Pendientes</h3>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
+        <div style={{ backgroundColor: '#fff3e0', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, color: '#e65100', fontSize: '0.9rem' }}>🚚 Entregas Pendientes</h3>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '5px 0' }}>
             {datos.entregas_pendientes || 0}
           </p>
-          <p style={{ fontSize: '0.8rem', color: '#666', margin: '5px 0 0 0' }}>
-            Entregas pendientes
-          </p>
+          <p style={{ fontSize: '0.75rem', color: '#666', margin: 0 }}>pendientes de entregar</p>
         </div>
 
-        <div style={{ backgroundColor: '#f3e5f5', padding: '20px', borderRadius: '12px' }}>
-          <h3 style={{ margin: 0, color: '#4a148c' }}>📆 Ventas del Mes</h3>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
+        <div style={{ backgroundColor: '#f3e5f5', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, color: '#4a148c', fontSize: '0.9rem' }}>📆 Ventas del Mes</h3>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '5px 0' }}>
             RD$ {datos.ventas_mes?.toFixed(2) || '0.00'}
           </p>
-          <p style={{ fontSize: '0.8rem', color: '#666', margin: '5px 0 0 0' }}>
-            Total del mes actual
+          <p style={{ fontSize: '0.75rem', color: '#666', margin: 0 }}>total del mes actual</p>
+        </div>
+
+        <div style={{ backgroundColor: '#e0f7fa', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, color: '#00695c', fontSize: '0.9rem' }}>📊 Total Ventas</h3>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '5px 0' }}>
+            RD$ {datos.total_ventas?.toFixed(2) || '0.00'}
           </p>
+          <p style={{ fontSize: '0.75rem', color: '#666', margin: 0 }}>todas las ventas registradas</p>
         </div>
       </div>
 
-      {/* Tarjeta de acceso a Inventario Baní (solo subgerente) */}
-      {esSubgerente && (
+      {/* Detalle de entregas pendientes */}
+      {datos.entregas_pendientes > 0 && (
         <div style={{
-          backgroundColor: 'white',
-          padding: '20px',
+          backgroundColor: '#fff8e1',
+          padding: '15px',
           borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          cursor: 'pointer',
-          transition: 'transform 0.2s',
-          border: '2px solid #003b6f',
-          textAlign: 'center',
-          marginBottom: '30px'
+          marginBottom: '20px',
+          border: '1px solid #ff9800'
         }}>
-          <h3>🏢 Inventario Baní</h3>
-          <p style={{ color: '#666', fontSize: '0.9rem' }}>
-            Gestionar inventario de la sucursal Baní
-          </p>
-          <button 
-            onClick={() => navigate('/inventario-bani')}
-            style={{
-              backgroundColor: '#003b6f',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '10px 20px',
-              cursor: 'pointer',
-              marginTop: '10px'
-            }}
-          >
-            Ver Inventario Baní →
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, color: '#e65100' }}>🚚 Entregas Pendientes ({datos.entregas_pendientes})</h3>
+            <button
+              onClick={() => setMostrarEntregas(!mostrarEntregas)}
+              style={{
+                padding: '4px 12px',
+                backgroundColor: '#ff9800',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              {mostrarEntregas ? 'Ocultar' : 'Ver detalles'}
+            </button>
+          </div>
+          {mostrarEntregas && (
+            <div style={{ marginTop: '15px', overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f5f5f5' }}>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>Código</th>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>Cliente</th>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>Dirección</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entregasPendientes.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" style={{ padding: '15px', textAlign: 'center', color: '#999' }}>
+                        No hay entregas pendientes
+                      </td>
+                    </tr>
+                  ) : (
+                    entregasPendientes.map((e) => (
+                      <tr key={e.id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '8px', fontFamily: 'monospace', fontWeight: 'bold', color: '#003b6f' }}>
+                          {e.codigo}
+                        </td>
+                        <td style={{ padding: '8px' }}>{e.cliente_nombre}</td>
+                        <td style={{ padding: '8px' }}>{e.direccion}</td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>
+                          RD$ {Number(e.total).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -262,12 +235,13 @@ function Dashboard() {
           <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
             <th style={{ padding: '12px', textAlign: 'left' }}>Producto</th>
             <th style={{ padding: '12px', textAlign: 'center' }}>Cantidad Vendida</th>
+            <th style={{ padding: '12px', textAlign: 'center' }}>Ventas</th>
           </tr>
         </thead>
         <tbody>
           {topProductos.length === 0 ? (
             <tr>
-              <td colSpan="2" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+              <td colSpan="3" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
                 No hay datos de ventas aún
               </td>
             </tr>
@@ -275,7 +249,10 @@ function Dashboard() {
             topProductos.map((item, idx) => (
               <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: '12px' }}>{item.nombre}</td>
-                <td style={{ padding: '12px', textAlign: 'center' }}>{item.total_vendido}</td>
+                <td style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold', color: '#003b6f' }}>
+                  {item.total_vendido}
+                </td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>{item.numero_ventas || 0}</td>
               </tr>
             ))
           )}

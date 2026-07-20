@@ -17,7 +17,6 @@ router.get('/', async (req, res) => {
                 c.saldo_pendiente,
                 c.estado,
                 c.created_at,
-                c.updated_at,
                 cl.nombre as cliente_nombre,
                 cl.telefono as cliente_telefono,
                 cl.direccion as cliente_direccion,
@@ -162,7 +161,6 @@ router.post('/abonos', async (req, res) => {
         );
 
         // También actualizar la cuenta por cobrar correspondiente
-        // Buscar la cuenta más antigua con saldo pendiente
         const cuenta = await client.query(
             `SELECT id FROM cuentas_por_cobrar 
              WHERE cliente_id = $1 AND estado = 'pendiente'
@@ -185,8 +183,7 @@ router.post('/abonos', async (req, res) => {
                 `UPDATE cuentas_por_cobrar 
                  SET abonado = $1, 
                      saldo_pendiente = $2,
-                     estado = $3,
-                     updated_at = NOW()
+                     estado = $3
                  WHERE id = $4`,
                 [
                     nuevoAbonado,
@@ -235,7 +232,6 @@ router.put('/:id/abonar', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Obtener cuenta actual
         const cuenta = await client.query(
             'SELECT * FROM cuentas_por_cobrar WHERE id = $1',
             [id]
@@ -253,13 +249,11 @@ router.put('/:id/abonar', async (req, res) => {
         const nuevoAbonado = parseFloat(cuentaActual.abonado) + parseFloat(monto);
         const nuevoSaldo = parseFloat(cuentaActual.total_venta) - nuevoAbonado;
 
-        // Actualizar cuenta
         await client.query(
             `UPDATE cuentas_por_cobrar 
              SET abonado = $1, 
                  saldo_pendiente = $2,
-                 estado = $3,
-                 updated_at = NOW()
+                 estado = $3
              WHERE id = $4`,
             [
                 nuevoAbonado,
@@ -269,14 +263,12 @@ router.put('/:id/abonar', async (req, res) => {
             ]
         );
 
-        // Registrar abono
         await client.query(
             `INSERT INTO abonos (cliente_id, monto, usuario_id, observacion, fecha)
              VALUES ($1, $2, $3, $4, NOW())`,
             [cuentaActual.cliente_id, monto, null, observacion || '']
         );
 
-        // Actualizar saldo del cliente
         await client.query(
             `UPDATE clientes 
              SET saldo_pendiente = $1

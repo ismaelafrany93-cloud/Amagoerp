@@ -2,179 +2,116 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
-// ============================================
-// GET /reportes/dashboard - Datos del dashboard
-// ============================================
+// Dashboard - Resumen general
 router.get('/dashboard', async (req, res) => {
     try {
-        // 1. Ventas de hoy
-        const ventasHoy = await pool.query(
-            `SELECT COALESCE(SUM(total), 0) as total
-             FROM ventas 
-             WHERE DATE(fecha) = CURRENT_DATE 
-             AND estado = 'completada'`
-        );
+        // Ventas del día
+        const ventas = await pool.query(`
+            SELECT COALESCE(SUM(total), 0) total
+            FROM ventas
+            WHERE DATE(fecha) = CURRENT_DATE
+        `);
 
-        // 2. Producción de hoy
-        const produccionHoy = await pool.query(
-            `SELECT COALESCE(SUM(cantidad), 0) as total
-             FROM produccion 
-             WHERE DATE(fecha) = CURRENT_DATE`
-        );
+        // Producción del día
+        const produccion = await pool.query(`
+            SELECT COALESCE(SUM(cantidad), 0) total
+            FROM produccion
+            WHERE fecha = CURRENT_DATE
+        `);
 
-        // 3. Entregas pendientes
-        const entregasPendientes = await pool.query(
-            `SELECT COUNT(*) as total
-             FROM entregas 
-             WHERE estado = 'pendiente'`
-        );
+        // Entregas pendientes
+        const entregas = await pool.query(`
+            SELECT COUNT(*) total
+            FROM entregas
+            WHERE estado = 'pendiente'
+        `);
 
-        // 4. Ventas del mes
-        const ventasMes = await pool.query(
-            `SELECT COALESCE(SUM(total), 0) as total
-             FROM ventas 
-             WHERE EXTRACT(MONTH FROM fecha) = EXTRACT(MONTH FROM CURRENT_DATE)
-             AND EXTRACT(YEAR FROM fecha) = EXTRACT(YEAR FROM CURRENT_DATE)
-             AND estado = 'completada'`
-        );
-
-        // 5. Total de ventas
-        const totalVentas = await pool.query(
-            `SELECT COALESCE(SUM(total), 0) as total
-             FROM ventas 
-             WHERE estado = 'completada'`
-        );
-
-        // 6. Número de ventas hoy
-        const numeroVentasHoy = await pool.query(
-            `SELECT COUNT(*) as total
-             FROM ventas 
-             WHERE DATE(fecha) = CURRENT_DATE 
-             AND estado = 'completada'`
-        );
+        // Ventas del mes
+        const ventasMes = await pool.query(`
+            SELECT COALESCE(SUM(total), 0) total
+            FROM ventas
+            WHERE EXTRACT(MONTH FROM fecha) = EXTRACT(MONTH FROM CURRENT_DATE)
+            AND EXTRACT(YEAR FROM fecha) = EXTRACT(YEAR FROM CURRENT_DATE)
+        `);
 
         res.json({
-            ventas_hoy: parseFloat(ventasHoy.rows[0].total) || 0,
-            produccion_hoy: parseInt(produccionHoy.rows[0].total) || 0,
-            entregas_pendientes: parseInt(entregasPendientes.rows[0].total) || 0,
-            ventas_mes: parseFloat(ventasMes.rows[0].total) || 0,
-            total_ventas: parseFloat(totalVentas.rows[0].total) || 0,
-            numero_ventas_hoy: parseInt(numeroVentasHoy.rows[0].total) || 0
+            ventas_hoy: parseFloat(ventas.rows[0].total) || 0,
+            produccion_hoy: parseInt(produccion.rows[0].total) || 0,
+            entregas_pendientes: parseInt(entregas.rows[0].total) || 0,
+            ventas_mes: parseFloat(ventasMes.rows[0].total) || 0
         });
 
     } catch (error) {
-        console.error('❌ Error en /reportes/dashboard:', error.message);
-        res.status(200).json({
+        console.error(error);
+        res.status(500).json({ 
+            error: error.message,
             ventas_hoy: 0,
             produccion_hoy: 0,
             entregas_pendientes: 0,
-            ventas_mes: 0,
-            total_ventas: 0,
-            numero_ventas_hoy: 0
+            ventas_mes: 0
         });
     }
 });
 
-// ============================================
-// GET /reportes/top-productos - Productos más vendidos
-// ============================================
+// Top productos más vendidos
 router.get('/top-productos', async (req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT 
-                p.nombre,
-                COALESCE(SUM(dv.cantidad), 0) as total_vendido,
-                COUNT(DISTINCT v.id) as numero_ventas
-             FROM detalle_ventas dv
-             JOIN productos p ON dv.producto_id = p.id
-             JOIN ventas v ON dv.venta_id = v.id
-             WHERE v.estado = 'completada'
-             GROUP BY p.id, p.nombre
-             ORDER BY total_vendido DESC
-             LIMIT 10`
-        );
+        const result = await pool.query(`
+            SELECT 
+                p.nombre, 
+                COALESCE(SUM(dv.cantidad), 0) as total_vendido
+            FROM productos p
+            LEFT JOIN detalle_ventas dv ON p.id = dv.producto_id
+            LEFT JOIN ventas v ON dv.venta_id = v.id
+            WHERE v.fecha >= CURRENT_DATE - INTERVAL '30 days' OR v.fecha IS NULL
+            GROUP BY p.id, p.nombre
+            ORDER BY total_vendido DESC
+            LIMIT 10
+        `);
 
-        res.json(result.rows || []);
+        res.json(result.rows);
     } catch (error) {
-        console.error('❌ Error en /reportes/top-productos:', error.message);
-        res.status(200).json([]);
+        console.error(error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-// ============================================
-// GET /reportes/entregas-pendientes - Lista de entregas pendientes
-// ============================================
-router.get('/entregas-pendientes', async (req, res) => {
+// Producción por operario
+router.get('/produccion-operarios', async (req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT 
-                e.id,
-                e.codigo,
-                e.direccion,
-                e.fecha_salida,
-                v.cliente_nombre,
-                v.cliente_telefono,
-                v.total,
-                s.nombre as sucursal_nombre
-             FROM entregas e
-             JOIN ventas v ON e.venta_id = v.id
-             LEFT JOIN sucursales s ON v.sucursal_id = s.id
-             WHERE e.estado = 'pendiente'
-             ORDER BY e.fecha_salida ASC`
-        );
+        const result = await pool.query(`
+            SELECT 
+                operario, 
+                COALESCE(SUM(cantidad), 0) as total_producido
+            FROM produccion
+            WHERE fecha >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY operario
+            ORDER BY total_producido DESC
+        `);
 
-        res.json(result.rows || []);
+        res.json(result.rows);
     } catch (error) {
-        console.error('❌ Error en /reportes/entregas-pendientes:', error.message);
-        res.status(200).json([]);
+        res.status(500).json({ error: error.message });
     }
 });
 
-// ============================================
-// GET /reportes/ventas-por-sucursal - Ventas por sucursal
-// ============================================
-router.get('/ventas-por-sucursal', async (req, res) => {
+// Ventas del mes por día
+router.get('/ventas-mes', async (req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT 
-                s.nombre as sucursal,
-                COALESCE(SUM(v.total), 0) as total,
-                COUNT(v.id) as cantidad_ventas
-             FROM ventas v
-             LEFT JOIN sucursales s ON v.sucursal_id = s.id
-             WHERE v.estado = 'completada'
-             GROUP BY s.id, s.nombre
-             ORDER BY total DESC`
-        );
+        const result = await pool.query(`
+            SELECT 
+                DATE(fecha) as fecha,
+                COALESCE(SUM(total), 0) as total
+            FROM ventas
+            WHERE EXTRACT(MONTH FROM fecha) = EXTRACT(MONTH FROM CURRENT_DATE)
+            AND EXTRACT(YEAR FROM fecha) = EXTRACT(YEAR FROM CURRENT_DATE)
+            GROUP BY DATE(fecha)
+            ORDER BY fecha ASC
+        `);
 
-        res.json(result.rows || []);
+        res.json(result.rows);
     } catch (error) {
-        console.error('❌ Error en /reportes/ventas-por-sucursal:', error.message);
-        res.status(200).json([]);
-    }
-});
-
-// ============================================
-// GET /reportes/ventas-por-dia - Ventas agrupadas por día (últimos 7 días)
-// ============================================
-router.get('/ventas-por-dia', async (req, res) => {
-    try {
-        const result = await pool.query(
-            `SELECT 
-                DATE(fecha) as dia,
-                COALESCE(SUM(total), 0) as total,
-                COUNT(id) as cantidad
-             FROM ventas 
-             WHERE estado = 'completada'
-             AND fecha >= CURRENT_DATE - INTERVAL '7 days'
-             GROUP BY DATE(fecha)
-             ORDER BY dia DESC`
-        );
-
-        res.json(result.rows || []);
-    } catch (error) {
-        console.error('❌ Error en /reportes/ventas-por-dia:', error.message);
-        res.status(200).json([]);
+        res.status(500).json({ error: error.message });
     }
 });
 

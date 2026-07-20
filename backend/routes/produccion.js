@@ -35,6 +35,115 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
+// GET /produccion/detalle-por-operario - Detalle por operario (CON PRODUCTOS)
+// ============================================
+router.get('/detalle-por-operario', async (req, res) => {
+    try {
+        const { fecha } = req.query;
+        const fechaFinal = fecha || new Date().toISOString().split('T')[0];
+
+        const result = await pool.query(
+            `SELECT 
+                p.operario,
+                p.producto_id,
+                prod.nombre as producto_nombre,
+                COALESCE(SUM(p.cantidad), 0) as total_cantidad,
+                COUNT(p.id) as numero_registros,
+                STRING_AGG(DISTINCT prod.nombre, ', ') as productos_lista
+            FROM produccion p
+            LEFT JOIN productos prod ON p.producto_id = prod.id
+            WHERE DATE(p.fecha) = $1
+            GROUP BY p.operario, p.producto_id, prod.nombre
+            ORDER BY p.operario, total_cantidad DESC`,
+            [fechaFinal]
+        );
+
+        // Agrupar por operario
+        const operariosMap = {};
+        result.rows.forEach(row => {
+            if (!operariosMap[row.operario]) {
+                operariosMap[row.operario] = {
+                    operario: row.operario,
+                    total_general: 0,
+                    productos: []
+                };
+            }
+            operariosMap[row.operario].productos.push({
+                producto_id: row.producto_id,
+                producto_nombre: row.producto_nombre || 'Producto sin nombre',
+                cantidad: parseInt(row.total_cantidad),
+                numero_registros: parseInt(row.numero_registros)
+            });
+            operariosMap[row.operario].total_general += parseInt(row.total_cantidad);
+        });
+
+        // Ordenar y formatear
+        const resultado = Object.values(operariosMap).map(op => ({
+            ...op,
+            productos: op.productos.sort((a, b) => b.cantidad - a.cantidad)
+        }));
+
+        res.json(resultado || []);
+    } catch (error) {
+        console.error('❌ Error en GET /produccion/detalle-por-operario:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
+// GET /produccion/detalle-por-operario/fecha/:fecha - Detalle por fecha específica
+// ============================================
+router.get('/detalle-por-operario/fecha/:fecha', async (req, res) => {
+    try {
+        const { fecha } = req.params;
+
+        const result = await pool.query(
+            `SELECT 
+                p.operario,
+                p.producto_id,
+                prod.nombre as producto_nombre,
+                COALESCE(SUM(p.cantidad), 0) as total_cantidad,
+                COUNT(p.id) as numero_registros
+            FROM produccion p
+            LEFT JOIN productos prod ON p.producto_id = prod.id
+            WHERE DATE(p.fecha) = $1
+            GROUP BY p.operario, p.producto_id, prod.nombre
+            ORDER BY p.operario, total_cantidad DESC`,
+            [fecha]
+        );
+
+        // Agrupar por operario
+        const operariosMap = {};
+        result.rows.forEach(row => {
+            if (!operariosMap[row.operario]) {
+                operariosMap[row.operario] = {
+                    operario: row.operario,
+                    total_general: 0,
+                    productos: []
+                };
+            }
+            operariosMap[row.operario].productos.push({
+                producto_id: row.producto_id,
+                producto_nombre: row.producto_nombre || 'Producto sin nombre',
+                cantidad: parseInt(row.total_cantidad),
+                numero_registros: parseInt(row.numero_registros)
+            });
+            operariosMap[row.operario].total_general += parseInt(row.total_cantidad);
+        });
+
+        const resultado = Object.values(operariosMap).map(op => ({
+            ...op,
+            productos: op.productos.sort((a, b) => b.cantidad - a.cantidad)
+        }));
+
+        res.json(resultado || []);
+    } catch (error) {
+        console.error('❌ Error en GET /produccion/detalle-por-operario/fecha/:fecha:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
 // POST /produccion/multiple - Registrar producción múltiple
 // ============================================
 router.post('/multiple', async (req, res) => {
@@ -56,7 +165,6 @@ router.post('/multiple', async (req, res) => {
             });
         }
 
-        // Validar que cada producto tenga cantidad
         for (const item of productos) {
             if (!item.producto_id || !item.cantidad || item.cantidad <= 0) {
                 return res.status(400).json({
@@ -72,7 +180,6 @@ router.post('/multiple', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Insertar cada producto como un registro separado
         for (const item of productos) {
             const result = await client.query(
                 `INSERT INTO produccion 
@@ -92,7 +199,6 @@ router.post('/multiple', async (req, res) => {
 
             registrosCreados.push(result.rows[0]);
 
-            // Actualizar stock en producto_inventario
             const existeInventario = await client.query(
                 'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
                 [item.producto_id, sucursalFinal]
@@ -136,7 +242,7 @@ router.post('/multiple', async (req, res) => {
 });
 
 // ============================================
-// POST /produccion - Crear registro único (mantener compatibilidad)
+// POST /produccion - Crear registro único
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -176,7 +282,6 @@ router.post('/', async (req, res) => {
             ]
         );
 
-        // Actualizar stock
         const existeInventario = await pool.query(
             'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
             [producto_id, sucursalFinal]
@@ -245,7 +350,6 @@ router.put('/:id', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Devolver stock anterior
         await client.query(
             `UPDATE producto_inventario 
              SET stock = stock - $1
@@ -253,7 +357,6 @@ router.put('/:id', async (req, res) => {
             [produccionAnterior.cantidad, produccionAnterior.producto_id, sucursalFinal]
         );
 
-        // Actualizar registro
         const result = await client.query(
             `UPDATE produccion 
              SET producto_id = $1, 
@@ -277,7 +380,6 @@ router.put('/:id', async (req, res) => {
             ]
         );
 
-        // Sumar nuevo stock
         await client.query(
             `UPDATE producto_inventario 
              SET stock = stock + $1
@@ -329,7 +431,6 @@ router.delete('/:id', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Devolver stock
         await client.query(
             `UPDATE producto_inventario 
              SET stock = stock - $1
@@ -337,7 +438,6 @@ router.delete('/:id', async (req, res) => {
             [produccion.cantidad, produccion.producto_id, sucursalFinal]
         );
 
-        // Eliminar registro
         await client.query('DELETE FROM produccion WHERE id = $1', [id]);
 
         await client.query('COMMIT');

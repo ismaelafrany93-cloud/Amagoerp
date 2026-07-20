@@ -6,12 +6,13 @@ function Produccion() {
   const [productos, setProductos] = useState([])
   const [producciones, setProducciones] = useState([])
   const [resumen, setResumen] = useState([])
+  const [detalleOperarios, setDetalleOperarios] = useState([])
   const [operarios, setOperarios] = useState([])
   const [cargando, setCargando] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [editando, setEditando] = useState(null)
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0])
 
-  // Estado para el formulario
   const [form, setForm] = useState({
     operario: '',
     fecha: new Date().toISOString().split('T')[0],
@@ -19,7 +20,6 @@ function Produccion() {
     productos: []
   })
 
-  // Estado para agregar un producto al formulario
   const [productoSeleccionado, setProductoSeleccionado] = useState('')
   const [cantidadSeleccionada, setCantidadSeleccionada] = useState(1)
   const [observacionProducto, setObservacionProducto] = useState('')
@@ -31,6 +31,7 @@ function Produccion() {
     cargarProductos()
     cargarProducciones()
     cargarResumen()
+    cargarDetalleOperarios()
     cargarOperarios()
   }, [])
 
@@ -64,6 +65,17 @@ function Produccion() {
     }
   }
 
+  const cargarDetalleOperarios = async () => {
+    try {
+      const response = await fetch(`${API_URL}/produccion/detalle-por-operario?fecha=${fechaSeleccionada}`)
+      const data = await response.json()
+      setDetalleOperarios(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error cargando detalle de operarios:', error)
+      setDetalleOperarios([])
+    }
+  }
+
   const cargarOperarios = async () => {
     try {
       const response = await fetch(`${API_URL}/operarios`)
@@ -74,9 +86,6 @@ function Produccion() {
     }
   }
 
-  // ============================================
-  // AGREGAR PRODUCTO AL FORMULARIO
-  // ============================================
   const agregarProducto = () => {
     if (!productoSeleccionado) {
       alert('⚠️ Selecciona un producto')
@@ -90,10 +99,8 @@ function Produccion() {
     const producto = productos.find(p => p.id === parseInt(productoSeleccionado))
     if (!producto) return
 
-    // Verificar si el producto ya está en la lista
     const existe = form.productos.find(p => p.producto_id === producto.id)
     if (existe) {
-      // Si ya existe, actualizar cantidad
       setForm({
         ...form,
         productos: form.productos.map(p =>
@@ -117,15 +124,11 @@ function Produccion() {
       })
     }
 
-    // Limpiar selección
     setProductoSeleccionado('')
     setCantidadSeleccionada(1)
     setObservacionProducto('')
   }
 
-  // ============================================
-  // ELIMINAR PRODUCTO DEL FORMULARIO
-  // ============================================
   const eliminarProductoForm = (producto_id) => {
     setForm({
       ...form,
@@ -133,9 +136,6 @@ function Produccion() {
     })
   }
 
-  // ============================================
-  // ENVIAR FORMULARIO
-  // ============================================
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -181,6 +181,7 @@ function Produccion() {
         })
         cargarProducciones()
         cargarResumen()
+        cargarDetalleOperarios()
         setTimeout(() => setMensaje(''), 3000)
       } else {
         alert('❌ Error: ' + (data.error || 'No se pudo guardar'))
@@ -221,6 +222,7 @@ function Produccion() {
         setMensaje('✅ Registro eliminado correctamente')
         cargarProducciones()
         cargarResumen()
+        cargarDetalleOperarios()
         setTimeout(() => setMensaje(''), 3000)
       } else {
         alert('❌ Error: ' + (data.message || data.error))
@@ -229,6 +231,12 @@ function Produccion() {
       console.error('Error:', error)
       alert('❌ Error al eliminar')
     }
+  }
+
+  const cambiarFecha = (e) => {
+    const nuevaFecha = e.target.value
+    setFechaSeleccionada(nuevaFecha)
+    cargarDetalleOperarios()
   }
 
   if (cargando) {
@@ -273,7 +281,6 @@ function Produccion() {
           </h3>
 
           <form onSubmit={handleSubmit}>
-            {/* Operario y Fecha */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
               <div>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Operario *</label>
@@ -300,7 +307,6 @@ function Produccion() {
               </div>
             </div>
 
-            {/* Observación general */}
             <div style={{ marginBottom: '15px' }}>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Observación General</label>
               <textarea
@@ -311,7 +317,6 @@ function Produccion() {
               />
             </div>
 
-            {/* Agregar productos */}
             <div style={{
               backgroundColor: '#f0f4f8',
               padding: '15px',
@@ -374,7 +379,6 @@ function Produccion() {
               </div>
             </div>
 
-            {/* Lista de productos agregados */}
             {form.productos.length > 0 && (
               <div style={{ marginBottom: '15px' }}>
                 <h4 style={{ margin: 0, color: '#003b6f' }}>📋 Productos a producir ({form.productos.length})</h4>
@@ -445,6 +449,122 @@ function Produccion() {
           </form>
         </div>
       )}
+
+      {/* ========================================== */}
+      {/* DETALLE POR OPERARIO - PANEL PRINCIPAL */}
+      {/* ========================================== */}
+      <div style={{
+        backgroundColor: '#f5f7fb',
+        padding: '20px',
+        borderRadius: '12px',
+        marginBottom: '30px',
+        border: '2px solid #003b6f'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', marginBottom: '15px' }}>
+          <h2 style={{ margin: 0, color: '#003b6f' }}>👷 Detalle por Operario</h2>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <label style={{ fontWeight: '500', color: '#003b6f' }}>📅 Fecha:</label>
+            <input
+              type="date"
+              value={fechaSeleccionada}
+              onChange={cambiarFecha}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                fontSize: '0.95rem'
+              }}
+            />
+            <button
+              onClick={() => {
+                const hoy = new Date().toISOString().split('T')[0]
+                setFechaSeleccionada(hoy)
+                cargarDetalleOperarios()
+              }}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#003b6f',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              📅 Hoy
+            </button>
+          </div>
+        </div>
+
+        {detalleOperarios.length === 0 ? (
+          <div style={{
+            textAlign: 'center',
+            padding: '30px',
+            color: '#999'
+          }}>
+            <p style={{ margin: 0 }}>No hay producción registrada para esta fecha</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
+            {detalleOperarios.map((op) => (
+              <div key={op.operario} style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '15px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                borderLeft: '4px solid #003b6f'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <h3 style={{ margin: 0, color: '#003b6f' }}>👤 {op.operario}</h3>
+                  <span style={{
+                    backgroundColor: '#003b6f',
+                    color: 'white',
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    fontSize: '0.85rem'
+                  }}>
+                    Total: {op.total_general} u
+                  </span>
+                </div>
+
+                <div style={{ marginTop: '10px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #eee' }}>
+                        <th style={{ padding: '4px 0', textAlign: 'left' }}>Producto</th>
+                        <th style={{ padding: '4px 0', textAlign: 'center' }}>Cantidad</th>
+                        <th style={{ padding: '4px 0', textAlign: 'center' }}>Registros</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {op.productos.map((p, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                          <td style={{ padding: '6px 0' }}>{p.producto_nombre}</td>
+                          <td style={{ padding: '6px 0', textAlign: 'center', fontWeight: 'bold', color: '#003b6f' }}>
+                            {p.cantidad}
+                          </td>
+                          <td style={{ padding: '6px 0', textAlign: 'center', color: '#666' }}>
+                            {p.numero_registros}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{
+                  marginTop: '10px',
+                  paddingTop: '10px',
+                  borderTop: '1px solid #eee',
+                  fontSize: '0.8rem',
+                  color: '#999'
+                }}>
+                  📊 {op.productos.length} productos diferentes
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ========================================== */}
       {/* RESUMEN DE PRODUCCIÓN */}

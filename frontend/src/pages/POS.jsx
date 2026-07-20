@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useReactToPrint } from 'react-to-print'
 import AdminLayout from '../layouts/AdminLayout'
 import Factura from '../components/Factura'
 import API_URL from '../config'
@@ -27,53 +26,12 @@ function POS() {
     es_mayorista: false
   })
 
-  // ============================================
-  // REFERENCIA PARA IMPRESIÓN
-  // ============================================
-  const facturaRef = useRef()
-
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSucursalPrincipal = usuario.sucursal_id === 3
   const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
 
-  // ============================================
-  // FUNCIONES DE IMPRESIÓN
-  // ============================================
-  const handlePrintA4 = useReactToPrint({
-    content: () => facturaRef.current,
-    documentTitle: `Factura_${Date.now()}`,
-    pageStyle: `
-      @page {
-        size: A4;
-        margin: 10mm;
-      }
-      @media print {
-        body { background: white; }
-        .no-print { display: none !important; }
-      }
-    `,
-    onAfterPrint: () => {
-      nuevaVenta()
-    }
-  })
-
-  const handlePrintPOS80 = useReactToPrint({
-    content: () => facturaRef.current,
-    documentTitle: `Ticket_${Date.now()}`,
-    pageStyle: `
-      @page {
-        size: 80mm 297mm;
-        margin: 3mm;
-      }
-      @media print {
-        body { background: white; font-size: 10px; }
-        .no-print { display: none !important; }
-      }
-    `,
-    onAfterPrint: () => {
-      nuevaVenta()
-    }
-  })
+  // Ref para la factura
+  const facturaRef = useRef()
 
   useEffect(() => {
     cargarProductos()
@@ -102,8 +60,82 @@ function POS() {
   }
 
   // ============================================
-  // FUNCIÓN PARA CALCULAR PRECIO
+  // FUNCIÓN PARA IMPRIMIR FACTURA
   // ============================================
+  const imprimirFactura = (formato = 'A4') => {
+    const contenido = facturaRef.current;
+    if (!contenido) {
+      alert('⚠️ No hay factura para imprimir');
+      return;
+    }
+
+    // Crear una ventana nueva para imprimir
+    const ventana = window.open('', '_blank', 'width=800,height=600');
+    if (!ventana) {
+      alert('⚠️ Por favor, permite las ventanas emergentes para imprimir');
+      return;
+    }
+
+    // Obtener el HTML de la factura
+    const html = contenido.outerHTML;
+
+    // Estilos según formato
+    const estilos = formato === 'A4' 
+      ? `
+          @page {
+            size: A4;
+            margin: 10mm;
+          }
+          body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px;
+            background: white;
+          }
+          @media print {
+            body { margin: 0; padding: 0; }
+          }
+        `
+      : `
+          @page {
+            size: 80mm 297mm;
+            margin: 3mm;
+          }
+          body { 
+            font-family: 'Courier New', monospace; 
+            font-size: 10px;
+            padding: 5px;
+            background: white;
+          }
+          table { font-size: 9px; }
+          @media print {
+            body { margin: 0; padding: 0; }
+          }
+        `;
+
+    // Escribir el contenido en la nueva ventana
+    ventana.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Factura ${ventaId || ''}</title>
+          <style>${estilos}</style>
+        </head>
+        <body>
+          ${html}
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 1000);
+            }
+          <\/script>
+        </body>
+      </html>
+    `);
+    ventana.document.close();
+  }
+
   const calcularPrecio = (producto, cantidad) => {
     if (esSucursalPrincipal) {
       if (cliente.es_mayorista && producto.precio_mayor) {
@@ -341,7 +373,7 @@ function POS() {
             </p>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
               <button 
-                onClick={handlePrintA4}
+                onClick={() => imprimirFactura('A4')}
                 style={{
                   padding: '12px 30px',
                   backgroundColor: '#003b6f',
@@ -355,7 +387,7 @@ function POS() {
                 🖨️ Factura A4
               </button>
               <button 
-                onClick={handlePrintPOS80}
+                onClick={() => imprimirFactura('POS80')}
                 style={{
                   padding: '12px 30px',
                   backgroundColor: '#4CAF50',
@@ -385,20 +417,16 @@ function POS() {
             </div>
           </div>
           {/* ========================================== */}
-          {/* COMPONENTE FACTURA PARA IMPRIMIR */}
+          {/* FACTURA OCULTA PARA IMPRIMIR */}
           {/* ========================================== */}
           <div style={{ 
             position: 'fixed', 
-            left: '0', 
-            top: '0',
+            left: '-9999px', 
+            top: 0,
             width: '210mm',
             backgroundColor: 'white',
             padding: '20px',
-            zIndex: 9999,
-            opacity: 0,
-            pointerEvents: 'none',
-            transform: 'scale(0.7)',
-            transformOrigin: 'top left'
+            zIndex: 9999
           }}>
             <Factura
               ref={facturaRef}
@@ -418,9 +446,6 @@ function POS() {
     )
   }
 
-  // ============================================
-  // RESTO DEL POS (el formulario de venta)
-  // ============================================
   return (
     <AdminLayout>
       <h1>🛒 Punto de Venta</h1>

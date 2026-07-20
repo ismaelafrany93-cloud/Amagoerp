@@ -7,7 +7,7 @@ const pool = require('../db');
 // ============================================
 router.get('/dashboard', async (req, res) => {
     try {
-        // 1. Ventas de hoy (suma total de ventas del día)
+        // 1. Ventas de hoy
         const ventasHoy = await pool.query(
             `SELECT COALESCE(SUM(total), 0) as total
              FROM ventas 
@@ -15,21 +15,21 @@ router.get('/dashboard', async (req, res) => {
              AND estado = 'completada'`
         );
 
-        // 2. Producción de hoy (suma total de unidades producidas)
+        // 2. Producción de hoy
         const produccionHoy = await pool.query(
             `SELECT COALESCE(SUM(cantidad), 0) as total
              FROM produccion 
              WHERE DATE(fecha) = CURRENT_DATE`
         );
 
-        // 3. Entregas pendientes (entregas que no han sido completadas)
+        // 3. Entregas pendientes
         const entregasPendientes = await pool.query(
             `SELECT COUNT(*) as total
              FROM entregas 
              WHERE estado = 'pendiente'`
         );
 
-        // 4. Ventas del mes (suma total de ventas del mes actual)
+        // 4. Ventas del mes
         const ventasMes = await pool.query(
             `SELECT COALESCE(SUM(total), 0) as total
              FROM ventas 
@@ -38,7 +38,7 @@ router.get('/dashboard', async (req, res) => {
              AND estado = 'completada'`
         );
 
-        // 5. Total de ventas (todas las ventas completadas)
+        // 5. Total de ventas
         const totalVentas = await pool.query(
             `SELECT COALESCE(SUM(total), 0) as total
              FROM ventas 
@@ -102,6 +102,35 @@ router.get('/top-productos', async (req, res) => {
 });
 
 // ============================================
+// GET /reportes/entregas-pendientes - Lista de entregas pendientes
+// ============================================
+router.get('/entregas-pendientes', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT 
+                e.id,
+                e.codigo,
+                e.direccion,
+                e.fecha_salida,
+                v.cliente_nombre,
+                v.cliente_telefono,
+                v.total,
+                s.nombre as sucursal_nombre
+             FROM entregas e
+             JOIN ventas v ON e.venta_id = v.id
+             LEFT JOIN sucursales s ON v.sucursal_id = s.id
+             WHERE e.estado = 'pendiente'
+             ORDER BY e.fecha_salida ASC`
+        );
+
+        res.json(result.rows || []);
+    } catch (error) {
+        console.error('❌ Error en /reportes/entregas-pendientes:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
 // GET /reportes/ventas-por-sucursal - Ventas por sucursal
 // ============================================
 router.get('/ventas-por-sucursal', async (req, res) => {
@@ -145,35 +174,6 @@ router.get('/ventas-por-dia', async (req, res) => {
         res.json(result.rows || []);
     } catch (error) {
         console.error('❌ Error en /reportes/ventas-por-dia:', error.message);
-        res.status(200).json([]);
-    }
-});
-
-// ============================================
-// GET /reportes/entregas-pendientes - Lista de entregas pendientes
-// ============================================
-router.get('/entregas-pendientes', async (req, res) => {
-    try {
-        const result = await pool.query(
-            `SELECT 
-                e.id,
-                e.codigo,
-                e.direccion,
-                e.fecha_salida,
-                v.cliente_nombre,
-                v.cliente_telefono,
-                v.total,
-                s.nombre as sucursal_nombre
-             FROM entregas e
-             JOIN ventas v ON e.venta_id = v.id
-             LEFT JOIN sucursales s ON v.sucursal_id = s.id
-             WHERE e.estado = 'pendiente'
-             ORDER BY e.fecha_salida ASC`
-        );
-
-        res.json(result.rows || []);
-    } catch (error) {
-        console.error('❌ Error en /reportes/entregas-pendientes:', error.message);
         res.status(200).json([]);
     }
 });

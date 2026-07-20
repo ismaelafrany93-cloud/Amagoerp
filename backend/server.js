@@ -8,9 +8,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ============================================
-// CORS (VERSIÓN SIMPLIFICADA)
+// CORS
 // ============================================
-app.use(cors());  // 👈 MÁS SIMPLE Y FUNCIONA EN RENDER
+app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -31,7 +31,7 @@ app.use('/inventario', require('./routes/inventario'));
 app.use('/clientes', require('./routes/clientes'));
 app.use('/produccion', require('./routes/produccion'));
 app.use('/entregas', require('./routes/entregas'));
-app.use('/reportes', require('./routes/reportes'));
+app.use('/reportes', require('./routes/reportes'));  // ← DEBE ESTAR
 app.use('/materiales', require('./routes/materiales'));
 app.use('/usuarios', require('./routes/usuarios'));
 app.use('/creditos', require('./routes/creditos'));

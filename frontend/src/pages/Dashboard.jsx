@@ -14,9 +14,7 @@ function Dashboard() {
     numero_ventas_hoy: 0
   })
   const [topProductos, setTopProductos] = useState([])
-  const [ventasHoyDetalle, setVentasHoyDetalle] = useState([])
   const [cargando, setCargando] = useState(true)
-  const [mostrarDetalle, setMostrarDetalle] = useState(false)
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
@@ -41,16 +39,8 @@ function Dashboard() {
       setTopProductos(data)
     } catch (error) {
       console.error('Error cargando top productos:', error)
-    }
-  }
-
-  const cargarVentasHoyDetalle = async () => {
-    try {
-      const response = await fetch(`${API_URL}/reportes/ventas-hoy-detalle`)
-      const data = await response.json()
-      setVentasHoyDetalle(data)
-    } catch (error) {
-      console.error('Error cargando detalle de ventas:', error)
+    } finally {
+      setCargando(false)
     }
   }
 
@@ -60,13 +50,11 @@ function Dashboard() {
   useEffect(() => {
     cargarDashboard()
     cargarTopProductos()
-    cargarVentasHoyDetalle()
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         cargarDashboard()
         cargarTopProductos()
-        cargarVentasHoyDetalle()
       }
     }
 
@@ -74,7 +62,6 @@ function Dashboard() {
       if (e.key === 'dashboard_updated') {
         cargarDashboard()
         cargarTopProductos()
-        cargarVentasHoyDetalle()
       }
     }
 
@@ -120,35 +107,6 @@ function Dashboard() {
           <p style={{ fontSize: '0.75rem', color: '#666', margin: 0 }}>
             {datos.numero_ventas_hoy || 0} ventas realizadas
           </p>
-          {datos.numero_ventas_hoy > 0 && (
-            <button
-              onClick={() => setMostrarDetalle(!mostrarDetalle)}
-              style={{
-                marginTop: '8px',
-                padding: '4px 12px',
-                backgroundColor: '#003b6f',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.75rem'
-              }}
-            >
-              {mostrarDetalle ? 'Ocultar ventas' : 'Ver ventas'}
-            </button>
-          )}
-          {mostrarDetalle && ventasHoyDetalle.length > 0 && (
-            <div style={{ marginTop: '10px', textAlign: 'left', fontSize: '0.8rem' }}>
-              {ventasHoyDetalle.map((v) => (
-                <div key={v.id} style={{ borderBottom: '1px solid #eee', padding: '4px 0' }}>
-                  <strong>{v.cliente_nombre || 'N/A'}</strong> - RD$ {Number(v.total).toFixed(2)}
-                  <span style={{ color: '#999', fontSize: '0.7rem', marginLeft: '8px' }}>
-                    {v.vendedor || 'N/A'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         <div style={{ backgroundColor: '#e8f5e9', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
@@ -230,13 +188,12 @@ function Dashboard() {
           <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
             <th style={{ padding: '12px', textAlign: 'left' }}>Producto</th>
             <th style={{ padding: '12px', textAlign: 'center' }}>Cantidad Vendida</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Ventas</th>
           </tr>
         </thead>
         <tbody>
           {topProductos.length === 0 ? (
             <tr>
-              <td colSpan="3" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+              <td colSpan="2" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
                 No hay datos de ventas aún
               </td>
             </tr>
@@ -247,7 +204,6 @@ function Dashboard() {
                 <td style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold', color: '#003b6f' }}>
                   {item.total_vendido}
                 </td>
-                <td style={{ padding: '12px', textAlign: 'center' }}>{item.numero_ventas || 0}</td>
               </tr>
             ))
           )}

@@ -13,7 +13,7 @@ function Clientes() {
     telefono: '',
     direccion: '',
     referencia: '',
-    es_mayorista: false  // 👈 NUEVO CAMPO
+    es_mayorista: false
   })
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
@@ -61,7 +61,7 @@ function Clientes() {
         direccion: form.direccion || '',
         referencia: form.referencia || '',
         sucursal_id: sucursalId,
-        es_mayorista: form.es_mayorista || false  // 👈 NUEVO
+        es_mayorista: form.es_mayorista || false
       }
 
       const response = await fetch(url, {
@@ -116,7 +116,7 @@ function Clientes() {
       telefono: cliente.telefono || '',
       direccion: cliente.direccion || '',
       referencia: cliente.referencia || '',
-      es_mayorista: cliente.es_mayorista || false  // 👈 NUEVO
+      es_mayorista: cliente.es_mayorista || false
     })
     setEditando(cliente.id)
     setMostrarForm(true)
@@ -288,8 +288,8 @@ function Clientes() {
               <th style={{ padding: '12px', textAlign: 'left' }}>Nombre</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Teléfono</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Dirección</th>
-              <th style={{ padding: '12px', textAlign: 'center' }}>Sucursal</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Tipo</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Sucursal</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
           </thead>
@@ -307,9 +307,6 @@ function Clientes() {
                   <td style={{ padding: '12px' }}>{c.nombre}</td>
                   <td style={{ padding: '12px' }}>{c.telefono || 'N/A'}</td>
                   <td style={{ padding: '12px' }}>{c.direccion || 'N/A'}</td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    {c.sucursal_nombre || 'Sin sucursal'}
-                  </td>
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     {c.es_mayorista ? (
                       <span style={{
@@ -332,6 +329,9 @@ function Clientes() {
                         Normal
                       </span>
                     )}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    {c.sucursal_nombre || 'Sin sucursal'}
                   </td>
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     <button

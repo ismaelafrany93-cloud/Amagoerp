@@ -8,7 +8,6 @@ const pool = require('../db');
 router.get('/', async (req, res) => {
     try {
         const { sucursal_id } = req.query;
-        const { rol } = req.query; // Para saber si es subgerente
         
         let query = `
             SELECT 
@@ -17,6 +16,8 @@ router.get('/', async (req, res) => {
                 c.telefono, 
                 c.direccion,
                 c.referencia,
+                c.es_mayorista,
+                c.saldo_pendiente,
                 c.sucursal_id,
                 s.nombre as sucursal_nombre,
                 c.created_at
@@ -27,8 +28,8 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
-        // Si NO es subgerente, filtrar por su sucursal
-        if (sucursal_id && rol !== 'subgerente' && rol !== 'dueno' && rol !== 'admin') {
+        // Si se envía sucursal_id, filtrar
+        if (sucursal_id) {
             query += ` AND c.sucursal_id = $${paramIndex}`;
             params.push(sucursal_id);
             paramIndex++;
@@ -50,9 +51,15 @@ router.get('/', async (req, res) => {
 // ============================================
 router.post('/', async (req, res) => {
     try {
-        const { nombre, telefono, direccion, referencia, sucursal_id } = req.body;
+        const { 
+            nombre, 
+            telefono, 
+            direccion, 
+            referencia,
+            sucursal_id,
+            es_mayorista
+        } = req.body;
 
-        // Validar datos
         if (!nombre) {
             return res.status(400).json({
                 success: false,
@@ -62,10 +69,17 @@ router.post('/', async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO clientes 
-             (nombre, telefono, direccion, referencia, sucursal_id)
-             VALUES ($1, $2, $3, $4, $5)
+             (nombre, telefono, direccion, referencia, sucursal_id, es_mayorista)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
-            [nombre, telefono || '', direccion || '', referencia || '', sucursal_id || null]
+            [
+                nombre, 
+                telefono || '', 
+                direccion || '', 
+                referencia || '',
+                sucursal_id || null,
+                es_mayorista || false
+            ]
         );
 
         res.json({
@@ -89,8 +103,16 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre, telefono, direccion, referencia, sucursal_id } = req.body;
+        const { 
+            nombre, 
+            telefono, 
+            direccion, 
+            referencia,
+            sucursal_id,
+            es_mayorista
+        } = req.body;
 
+        // Verificar que el cliente existe
         const existe = await pool.query(
             'SELECT id FROM clientes WHERE id = $1',
             [id]
@@ -109,10 +131,19 @@ router.put('/:id', async (req, res) => {
                  telefono = $2, 
                  direccion = $3, 
                  referencia = $4,
-                 sucursal_id = $5
-             WHERE id = $6
+                 sucursal_id = $5,
+                 es_mayorista = $6
+             WHERE id = $7
              RETURNING *`,
-            [nombre, telefono || '', direccion || '', referencia || '', sucursal_id || null, id]
+            [
+                nombre, 
+                telefono || '', 
+                direccion || '', 
+                referencia || '',
+                sucursal_id || null,
+                es_mayorista || false,
+                id
+            ]
         );
 
         res.json({
@@ -137,6 +168,7 @@ router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Verificar que el cliente existe
         const existe = await pool.query(
             'SELECT id FROM clientes WHERE id = $1',
             [id]

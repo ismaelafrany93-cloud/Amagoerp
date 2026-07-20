@@ -17,7 +17,6 @@ router.get('/', async (req, res) => {
                 p.observacion,
                 p.foto,
                 p.created_at,
-                p.updated_at,
                 p.supervisor_id,
                 prod.nombre as producto_nombre,
                 u.nombre as supervisor_nombre
@@ -85,7 +84,7 @@ router.post('/', async (req, res) => {
         }
 
         const fechaFinal = fecha || new Date().toISOString().split('T')[0];
-        const sucursalFinal = 3; // Sucursal principal por defecto
+        const sucursalFinal = 3;
 
         const result = await pool.query(
             `INSERT INTO produccion 
@@ -102,7 +101,7 @@ router.post('/', async (req, res) => {
             ]
         );
 
-        // Actualizar stock en producto_inventario (sumar producción)
+        // Actualizar stock en producto_inventario
         const existeInventario = await pool.query(
             'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
             [producto_id, sucursalFinal]
@@ -154,7 +153,6 @@ router.put('/:id', async (req, res) => {
             fecha
         } = req.body;
 
-        // Verificar que el registro existe
         const existe = await client.query(
             'SELECT * FROM produccion WHERE id = $1',
             [id]
@@ -168,11 +166,11 @@ router.put('/:id', async (req, res) => {
         }
 
         const produccionAnterior = existe.rows[0];
-        const sucursalFinal = 3; // Sucursal principal por defecto
+        const sucursalFinal = 3;
 
         await client.query('BEGIN');
 
-        // 1. Devolver stock anterior (restar)
+        // 1. Devolver stock anterior
         await client.query(
             `UPDATE producto_inventario 
              SET stock = stock - $1
@@ -180,7 +178,7 @@ router.put('/:id', async (req, res) => {
             [produccionAnterior.cantidad, produccionAnterior.producto_id, sucursalFinal]
         );
 
-        // 2. Actualizar el registro
+        // 2. Actualizar registro (SIN updated_at)
         const result = await client.query(
             `UPDATE produccion 
              SET producto_id = $1, 
@@ -188,8 +186,7 @@ router.put('/:id', async (req, res) => {
                  cantidad = $3, 
                  observacion = $4,
                  supervisor_id = $5,
-                 fecha = $6,
-                 updated_at = NOW()
+                 fecha = $6
              WHERE id = $7
              RETURNING *`,
             [
@@ -239,7 +236,6 @@ router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Verificar que el registro existe
         const existe = await client.query(
             'SELECT * FROM produccion WHERE id = $1',
             [id]
@@ -253,11 +249,11 @@ router.delete('/:id', async (req, res) => {
         }
 
         const produccion = existe.rows[0];
-        const sucursalFinal = 3; // Sucursal principal por defecto
+        const sucursalFinal = 3;
 
         await client.query('BEGIN');
 
-        // Devolver stock (restar la producción eliminada)
+        // Devolver stock
         await client.query(
             `UPDATE producto_inventario 
              SET stock = stock - $1
@@ -265,7 +261,7 @@ router.delete('/:id', async (req, res) => {
             [produccion.cantidad, produccion.producto_id, sucursalFinal]
         );
 
-        // Eliminar el registro
+        // Eliminar registro
         await client.query('DELETE FROM produccion WHERE id = $1', [id]);
 
         await client.query('COMMIT');

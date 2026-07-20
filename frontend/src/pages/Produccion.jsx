@@ -11,18 +11,22 @@ function Produccion() {
   const [mostrarGestionOperarios, setMostrarGestionOperarios] = useState(false)
   const [nuevoOperario, setNuevoOperario] = useState('')
   const [mensaje, setMensaje] = useState('')
+  const [editando, setEditando] = useState(null)
+  const [mostrarForm, setMostrarForm] = useState(false)
 
   const [form, setForm] = useState({
     producto_id: '',
     operario: '',
     cantidad: 1,
     observacion: '',
-    foto: null
+    foto: null,
+    fecha: new Date().toISOString().split('T')[0]
   })
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
   const puedeGestionarOperarios = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  const esSupervisor = ['supervisor', 'subgerente', 'dueno', 'dueño', 'admin'].includes(rol)
 
   useEffect(() => {
     cargarProductos()
@@ -35,7 +39,7 @@ function Produccion() {
     try {
       const response = await fetch(`${API_URL}/productos`)
       const data = await response.json()
-      setProductos(data)
+      setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando productos:', error)
     }
@@ -45,7 +49,7 @@ function Produccion() {
     try {
       const response = await fetch(`${API_URL}/produccion`)
       const data = await response.json()
-      setProducciones(data)
+      setProducciones(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando producciones:', error)
     }
@@ -55,7 +59,7 @@ function Produccion() {
     try {
       const response = await fetch(`${API_URL}/produccion/resumen`)
       const data = await response.json()
-      setResumen(data)
+      setResumen(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando resumen:', error)
     }
@@ -65,7 +69,7 @@ function Produccion() {
     try {
       const response = await fetch(`${API_URL}/operarios`)
       const data = await response.json()
-      setOperarios(data)
+      setOperarios(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando operarios:', error)
     }
@@ -80,6 +84,7 @@ function Produccion() {
     formData.append('operario', form.operario)
     formData.append('cantidad', form.cantidad)
     formData.append('observacion', form.observacion)
+    formData.append('fecha', form.fecha)
 
     const usuario = JSON.parse(localStorage.getItem('usuario'))
     formData.append('supervisor_id', usuario.id)
@@ -87,26 +92,74 @@ function Produccion() {
     if (form.foto) formData.append('foto', form.foto)
 
     try {
-      const response = await fetch(`${API_URL}/produccion`, {
-        method: 'POST',
+      const url = editando ? `${API_URL}/produccion/${editando}` : `${API_URL}/produccion`
+      const method = editando ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
         body: formData
       })
 
       const data = await response.json()
 
       if (data.success) {
-        alert('✅ Producción registrada correctamente')
-        setForm({ producto_id: '', operario: '', cantidad: 1, observacion: '', foto: null })
+        setMensaje(editando ? '✅ Producción actualizada correctamente' : '✅ Producción registrada correctamente')
+        setForm({ producto_id: '', operario: '', cantidad: 1, observacion: '', foto: null, fecha: new Date().toISOString().split('T')[0] })
+        setEditando(null)
+        setMostrarForm(false)
         cargarProducciones()
         cargarResumen()
+        setTimeout(() => setMensaje(''), 3000)
       } else {
-        alert('❌ Error: ' + (data.error || 'No se pudo registrar'))
+        alert('❌ Error: ' + (data.error || 'No se pudo guardar'))
       }
     } catch (error) {
       console.error(error)
-      alert('❌ Error registrando producción')
+      alert('❌ Error guardando producción')
     } finally {
       setCargando(false)
+    }
+  }
+
+  // ============================================
+  // FUNCIÓN PARA EDITAR
+  // ============================================
+  const handleEdit = (produccion) => {
+    setForm({
+      producto_id: produccion.producto_id || '',
+      operario: produccion.operario || '',
+      cantidad: produccion.cantidad || 1,
+      observacion: produccion.observacion || '',
+      foto: null,
+      fecha: produccion.fecha ? produccion.fecha.split('T')[0] : new Date().toISOString().split('T')[0]
+    })
+    setEditando(produccion.id)
+    setMostrarForm(true)
+  }
+
+  // ============================================
+  // FUNCIÓN PARA ELIMINAR
+  // ============================================
+  const handleDelete = async (id) => {
+    if (!window.confirm('⚠️ ¿Estás seguro de eliminar este registro de producción?\n\nEl stock se ajustará automáticamente.')) return
+
+    try {
+      const response = await fetch(`${API_URL}/produccion/${id}`, {
+        method: 'DELETE'
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        setMensaje('✅ Registro eliminado correctamente')
+        cargarProducciones()
+        cargarResumen()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        alert('❌ Error: ' + (data.message || data.error))
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('❌ Error al eliminar')
     }
   }
 
@@ -169,8 +222,8 @@ function Produccion() {
 
       {mensaje && (
         <div style={{
-          backgroundColor: '#e8f5e9',
-          color: '#1b5e20',
+          backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
+          color: mensaje.includes('✅') ? '#1b5e20' : '#dc2626',
           padding: '10px 15px',
           borderRadius: '8px',
           marginBottom: '20px'
@@ -179,6 +232,7 @@ function Produccion() {
         </div>
       )}
 
+      {/* Gestión de Operarios (Solo Dueño/Subgerente) */}
       {puedeGestionarOperarios && (
         <div style={{
           border: '2px solid #ff9800',
@@ -272,97 +326,141 @@ function Produccion() {
         </div>
       )}
 
-      <div style={{
-        border: '2px solid #003b6f',
-        borderRadius: '12px',
-        padding: '25px',
-        marginBottom: '30px',
-        backgroundColor: '#f8faff'
-      }}>
-        <h3 style={{ marginTop: 0, color: '#003b6f' }}>Registrar Producción</h3>
+      {/* Botón para nuevo registro (Solo supervisores) */}
+      {esSupervisor && (
+        <button
+          onClick={() => {
+            setMostrarForm(!mostrarForm)
+            setEditando(null)
+            setForm({ producto_id: '', operario: '', cantidad: 1, observacion: '', foto: null, fecha: new Date().toISOString().split('T')[0] })
+          }}
+          style={{
+            marginBottom: '20px',
+            padding: '10px 20px',
+            backgroundColor: '#003b6f',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '1rem'
+          }}
+        >
+          {mostrarForm ? '✕ Cancelar' : '➕ Nuevo Registro'}
+        </button>
+      )}
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Producto *</label>
-              <select
-                value={form.producto_id}
-                onChange={(e) => setForm({ ...form, producto_id: e.target.value })}
-                required
-                style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
-              >
-                <option value="">Seleccionar producto</option>
-                {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-              </select>
+      {/* Formulario de registro/edición */}
+      {mostrarForm && esSupervisor && (
+        <div style={{
+          border: '2px solid #003b6f',
+          borderRadius: '12px',
+          padding: '25px',
+          marginBottom: '30px',
+          backgroundColor: '#f8faff'
+        }}>
+          <h3 style={{ marginTop: 0, color: '#003b6f' }}>
+            {editando ? '✏️ Editar Producción' : '📝 Registrar Producción'}
+          </h3>
+
+          <form onSubmit={handleSubmit}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Producto *</label>
+                <select
+                  value={form.producto_id}
+                  onChange={(e) => setForm({ ...form, producto_id: e.target.value })}
+                  required
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
+                >
+                  <option value="">Seleccionar producto</option>
+                  {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Operario *</label>
+                <select
+                  value={form.operario}
+                  onChange={(e) => setForm({ ...form, operario: e.target.value })}
+                  required
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
+                >
+                  <option value="">Seleccionar operario</option>
+                  {operarios.map(op => (
+                    <option key={op.id} value={op.nombre}>{op.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cantidad *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={form.cantidad}
+                  onChange={(e) => setForm({ ...form, cantidad: parseInt(e.target.value) || 1 })}
+                  required
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Fecha</label>
+                <input
+                  type="date"
+                  value={form.fecha}
+                  onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Observación</label>
+                <textarea
+                  value={form.observacion}
+                  onChange={(e) => setForm({ ...form, observacion: e.target.value })}
+                  placeholder="Notas sobre esta producción..."
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', minHeight: '50px' }}
+                />
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Foto (opcional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setForm({ ...form, foto: e.target.files[0] })}
+                  style={{ width: '100%', padding: '6px 0' }}
+                />
+                {editando && (
+                  <p style={{ fontSize: '0.8rem', color: '#999', marginTop: '5px' }}>
+                    Si no seleccionas una nueva foto, se mantiene la actual
+                  </p>
+                )}
+              </div>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Operario *</label>
-              <select
-                value={form.operario}
-                onChange={(e) => setForm({ ...form, operario: e.target.value })}
-                required
-                style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
-              >
-                <option value="">Seleccionar operario</option>
-                {operarios.map(op => (
-                  <option key={op.id} value={op.nombre}>{op.nombre}</option>
-                ))}
-              </select>
-            </div>
+            <button
+              type="submit"
+              disabled={cargando}
+              style={{
+                marginTop: '15px',
+                padding: '12px 30px',
+                backgroundColor: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '1rem'
+              }}
+            >
+              {cargando ? 'Guardando...' : editando ? '✅ Actualizar' : '✅ Registrar Producción'}
+            </button>
+          </form>
+        </div>
+      )}
 
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cantidad *</label>
-              <input
-                type="number"
-                min="1"
-                value={form.cantidad}
-                onChange={(e) => setForm({ ...form, cantidad: parseInt(e.target.value) })}
-                required
-                style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Foto (opcional)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setForm({ ...form, foto: e.target.files[0] })}
-                style={{ width: '100%', padding: '6px 0' }}
-              />
-            </div>
-
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Observación</label>
-              <textarea
-                value={form.observacion}
-                onChange={(e) => setForm({ ...form, observacion: e.target.value })}
-                placeholder="Notas sobre esta producción..."
-                style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', minHeight: '50px' }}
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={cargando}
-            style={{
-              marginTop: '15px',
-              padding: '12px 30px',
-              backgroundColor: '#003b6f',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '1rem'
-            }}
-          >
-            {cargando ? 'Registrando...' : '✅ Registrar Producción'}
-          </button>
-        </form>
-      </div>
-
+      {/* Resumen de producción hoy */}
       <h2>📊 Resumen de producción hoy</h2>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
         <thead>
@@ -387,6 +485,7 @@ function Produccion() {
         </tbody>
       </table>
 
+      {/* Historial de producción con editar y eliminar */}
       <h2>📋 Historial de Producción</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
         {producciones.map((prod) => (
@@ -404,6 +503,45 @@ function Produccion() {
             <p><strong>Supervisor:</strong> {prod.supervisor_nombre}</p>
             <p><strong>Fecha:</strong> {new Date(prod.fecha).toLocaleDateString()}</p>
             {prod.observacion && <p><strong>Observación:</strong> {prod.observacion}</p>}
+            
+            {/* 👇 BOTONES DE ACCIÓN (SOLO SUPERVISORES) */}
+            {esSupervisor && (
+              <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => handleEdit(prod)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 12px',
+                    backgroundColor: '#2196F3',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✏️ Editar
+                </button>
+                <button
+                  onClick={() => handleDelete(prod.id)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 12px',
+                    backgroundColor: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🗑️ Eliminar
+                </button>
+              </div>
+            )}
+            {!esSupervisor && (
+              <p style={{ marginTop: '10px', color: '#999', fontSize: '0.75rem' }}>
+                Solo supervisores pueden editar/eliminar
+              </p>
+            )}
           </div>
         ))}
       </div>

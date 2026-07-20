@@ -13,19 +13,20 @@ router.get('/', async (req, res) => {
             SELECT 
                 p.id,
                 p.producto_id,
-                p.operario_id,
+                p.operario,
                 p.cantidad,
                 p.fecha,
                 p.observacion,
+                p.foto,
                 p.created_at,
                 p.updated_at,
-                p.sucursal_id,
+                p.supervisor_id,
                 prod.nombre as producto_nombre,
-                u.nombre as operario_nombre,
+                u.nombre as supervisor_nombre,
                 s.nombre as sucursal_nombre
             FROM produccion p
             LEFT JOIN productos prod ON p.producto_id = prod.id
-            LEFT JOIN usuarios u ON p.operario_id = u.id
+            LEFT JOIN usuarios u ON p.supervisor_id = u.id
             LEFT JOIN sucursales s ON p.sucursal_id = s.id
             WHERE 1=1
         `;
@@ -56,20 +57,47 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
+// GET /produccion/resumen - Resumen de producción por operario (hoy)
+// ============================================
+router.get('/resumen', async (req, res) => {
+    try {
+        const { fecha } = req.query;
+        const fechaFinal = fecha || new Date().toISOString().split('T')[0];
+
+        const result = await pool.query(
+            `SELECT 
+                p.operario,
+                COALESCE(SUM(p.cantidad), 0) as total_producido
+             FROM produccion p
+             WHERE DATE(p.fecha) = $1
+             GROUP BY p.operario
+             ORDER BY total_producido DESC`,
+            [fechaFinal]
+        );
+
+        res.json(result.rows || []);
+    } catch (error) {
+        console.error('❌ Error en GET /produccion/resumen:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
 // POST /produccion - Crear registro de producción
 // ============================================
 router.post('/', async (req, res) => {
     try {
         const { 
             producto_id, 
-            operario_id, 
+            operario, 
             cantidad, 
             observacion,
+            supervisor_id,
             sucursal_id,
             fecha
         } = req.body;
 
-        if (!producto_id || !operario_id || !cantidad) {
+        if (!producto_id || !operario || !cantidad) {
             return res.status(400).json({
                 success: false,
                 error: 'Producto, operario y cantidad son requeridos'
@@ -77,43 +105,43 @@ router.post('/', async (req, res) => {
         }
 
         const fechaFinal = fecha || new Date().toISOString().split('T')[0];
+        const sucursalFinal = sucursal_id || 3;
 
         const result = await pool.query(
             `INSERT INTO produccion 
-             (producto_id, operario_id, cantidad, observacion, sucursal_id, fecha)
-             VALUES ($1, $2, $3, $4, $5, $6)
+             (producto_id, operario, cantidad, observacion, supervisor_id, sucursal_id, fecha)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING *`,
             [
                 producto_id, 
-                operario_id, 
+                operario, 
                 cantidad, 
                 observacion || '', 
-                sucursal_id || null,
+                supervisor_id || null,
+                sucursalFinal,
                 fechaFinal
             ]
         );
 
         // Actualizar stock en producto_inventario (sumar producción)
-        if (sucursal_id) {
-            const existeInventario = await pool.query(
-                'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
-                [producto_id, sucursal_id]
-            );
+        const existeInventario = await pool.query(
+            'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
+            [producto_id, sucursalFinal]
+        );
 
-            if (existeInventario.rows.length > 0) {
-                await pool.query(
-                    `UPDATE producto_inventario 
-                     SET stock = stock + $1
-                     WHERE producto_id = $2 AND sucursal_id = $3`,
-                    [cantidad, producto_id, sucursal_id]
-                );
-            } else {
-                await pool.query(
-                    `INSERT INTO producto_inventario (producto_id, sucursal_id, stock)
-                     VALUES ($1, $2, $3)`,
-                    [producto_id, sucursal_id, cantidad]
-                );
-            }
+        if (existeInventario.rows.length > 0) {
+            await pool.query(
+                `UPDATE producto_inventario 
+                 SET stock = stock + $1
+                 WHERE producto_id = $2 AND sucursal_id = $3`,
+                [cantidad, producto_id, sucursalFinal]
+            );
+        } else {
+            await pool.query(
+                `INSERT INTO producto_inventario (producto_id, sucursal_id, stock)
+                 VALUES ($1, $2, $3)`,
+                [producto_id, sucursalFinal, cantidad]
+            );
         }
 
         res.json({
@@ -140,9 +168,10 @@ router.put('/:id', async (req, res) => {
         const { id } = req.params;
         const { 
             producto_id, 
-            operario_id, 
+            operario, 
             cantidad, 
             observacion,
+            supervisor_id,
             sucursal_id,
             fecha
         } = req.body;
@@ -178,20 +207,22 @@ router.put('/:id', async (req, res) => {
         const result = await client.query(
             `UPDATE produccion 
              SET producto_id = $1, 
-                 operario_id = $2, 
+                 operario = $2, 
                  cantidad = $3, 
                  observacion = $4,
-                 sucursal_id = $5,
-                 fecha = $6,
+                 supervisor_id = $5,
+                 sucursal_id = $6,
+                 fecha = $7,
                  updated_at = NOW()
-             WHERE id = $7
+             WHERE id = $8
              RETURNING *`,
             [
                 producto_id, 
-                operario_id, 
+                operario, 
                 cantidad, 
                 observacion || '', 
-                sucursal_id || null,
+                supervisor_id || null,
+                sucursal_id || 3,
                 fecha,
                 id
             ]
@@ -294,24 +325,6 @@ router.delete('/:id', async (req, res) => {
         });
     } finally {
         client.release();
-    }
-});
-
-// ============================================
-// GET /produccion/operarios - Obtener operarios
-// ============================================
-router.get('/operarios', async (req, res) => {
-    try {
-        const result = await pool.query(
-            `SELECT id, nombre, rol, sucursal_id 
-             FROM usuarios 
-             WHERE rol = 'operario' OR rol = 'supervisor'
-             ORDER BY nombre`
-        );
-        res.json(result.rows || []);
-    } catch (error) {
-        console.error('❌ Error en GET /produccion/operarios:', error.message);
-        res.status(200).json([]);
     }
 });
 

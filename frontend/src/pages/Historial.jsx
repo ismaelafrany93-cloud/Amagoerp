@@ -55,6 +55,13 @@ function Historial() {
   // ============================================
   const cancelarVenta = async (ventaId) => {
     const venta = ventas.find(v => v.id === ventaId);
+    
+    // Verificar que la venta NO esté entregada
+    if (venta && venta.estado_entrega === 'entregado') {
+      alert('⚠️ No se puede cancelar una venta que ya fue entregada');
+      return;
+    }
+
     if (venta && !esSubgerente && venta.sucursal_id !== sucursalId) {
       alert('⚠️ Solo puedes cancelar ventas de tu sucursal');
       return;
@@ -79,10 +86,7 @@ function Historial() {
       if (data.success) {
         setMensaje('✅ Venta cancelada correctamente. Stock devuelto al inventario.');
         cargarHistorial();
-        
-        // 🔄 NOTIFICAR AL DASHBOARD
         localStorage.setItem('dashboard_updated', Date.now().toString());
-        
         setTimeout(() => setMensaje(''), 3000);
       } else {
         alert('❌ Error: ' + (data.message || data.error));
@@ -180,10 +184,7 @@ function Historial() {
         setMostrarEdicion(false)
         setVentaSeleccionada(null)
         cargarHistorial()
-        
-        // 🔄 NOTIFICAR AL DASHBOARD
         localStorage.setItem('dashboard_updated', Date.now().toString())
-        
         setTimeout(() => setMensaje(''), 3000)
       } else {
         alert('❌ Error: ' + (data.error || 'No se pudo guardar'))
@@ -202,6 +203,63 @@ function Historial() {
     if (sucursalId === 2) return 'Sabana'
     if (sucursalId === 3) return 'Principal'
     return 'Mi Sucursal'
+  }
+
+  // ============================================
+  // FUNCIÓN PARA VERIFICAR SI LA VENTA ES EDITABLE
+  // ============================================
+  const esEditable = (venta) => {
+    // No se puede editar si está cancelada
+    if (venta.estado === 'cancelada') return false;
+    
+    // No se puede editar si ya fue entregada
+    if (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada') return false;
+    
+    // No se puede editar si la venta fue completada (sin entrega pendiente)
+    if (venta.estado === 'completada' && venta.tipo_entrega !== 'domicilio') {
+      // Si es completada y no es domicilio, se puede editar (excepto si ya pasó tiempo)
+      return true;
+    }
+    
+    // Si es pendiente, se puede editar
+    if (venta.estado === 'pendiente') return true;
+    
+    // Si es completada con domicilio pendiente, se puede editar
+    if (venta.estado === 'completada' && venta.estado_entrega === 'pendiente') return true;
+    
+    return true;
+  }
+
+  // ============================================
+  // FUNCIÓN PARA VERIFICAR SI LA VENTA ES CANCELABLE
+  // ============================================
+  const esCancelable = (venta) => {
+    // No se puede cancelar si está cancelada
+    if (venta.estado === 'cancelada') return false;
+    
+    // No se puede cancelar si ya fue entregada
+    if (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada') return false;
+    
+    return true;
+  }
+
+  // ============================================
+  // FUNCIÓN PARA OBTENER EL ESTADO DE ENTREGA
+  // ============================================
+  const getEstadoEntrega = (venta) => {
+    if (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada') {
+      return { texto: '✅ Entregado', color: '#4CAF50' };
+    }
+    if (venta.estado_entrega === 'pendiente') {
+      return { texto: '⏳ Pendiente', color: '#ff9800' };
+    }
+    if (venta.estado_entrega === 'fallido') {
+      return { texto: '❌ Fallido', color: '#f44336' };
+    }
+    if (venta.tipo_entrega === 'retiro') {
+      return { texto: '🏪 Retirado', color: '#2196F3' };
+    }
+    return { texto: 'N/A', color: '#757575' };
   }
 
   if (cargando) {
@@ -262,6 +320,7 @@ function Historial() {
               <th style={{ padding: '12px', textAlign: 'left' }}>👤 Vendedor</th>
               <th style={{ padding: '12px', textAlign: 'right' }}>Total</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Fecha</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Entrega</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Estado</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
@@ -269,18 +328,24 @@ function Historial() {
           <tbody>
             {ventas.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                <td colSpan="8" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                   No hay ventas registradas en {getSucursalNombre()}
                 </td>
               </tr>
             ) : (
               ventas.map((v) => {
                 const esMismaSucursal = v.sucursal_id === sucursalId;
-                const puedeCancelar = esSubgerente || esMismaSucursal;
-                const puedeEditar = v.estado !== 'cancelada';
+                const puedeCancelar = (esSubgerente || esMismaSucursal) && esCancelable(v);
+                const puedeEditar = esEditable(v);
+                const entregaInfo = getEstadoEntrega(v);
+                const yaEntregado = v.estado_entrega === 'entregado' || v.estado_entrega === 'entregada';
 
                 return (
-                  <tr key={v.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <tr key={v.id} style={{ 
+                    borderBottom: '1px solid #eee',
+                    backgroundColor: yaEntregado ? '#f5f5f5' : 'white',
+                    opacity: yaEntregado ? 0.8 : 1
+                  }}>
                     <td style={{ padding: '12px' }}>{v.id}</td>
                     <td style={{ padding: '12px' }}>{v.cliente_nombre || v.cliente || 'N/A'}</td>
                     <td style={{ padding: '12px' }}>{v.vendedor || v.usuario_id || 'N/A'}</td>
@@ -289,6 +354,17 @@ function Historial() {
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       {new Date(v.fecha || v.created_at).toLocaleDateString()}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      <span style={{
+                        backgroundColor: entregaInfo.color,
+                        color: 'white',
+                        padding: '2px 12px',
+                        borderRadius: '12px',
+                        fontSize: '0.75rem'
+                      }}>
+                        {entregaInfo.texto}
+                      </span>
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       {v.estado === 'cancelada' ? (
@@ -334,47 +410,55 @@ function Historial() {
                       )}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
-                      {puedeEditar && (
-                        <button
-                          onClick={() => verDetalle(v.id)}
-                          style={{
-                            backgroundColor: '#2196F3',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 12px',
-                            cursor: 'pointer',
-                            marginRight: '5px'
-                          }}
-                        >
-                          ✏️ Editar
-                        </button>
-                      )}
-                      
-                      {puedeEditar && puedeCancelar && (
-                        <button
-                          onClick={() => cancelarVenta(v.id)}
-                          style={{
-                            backgroundColor: '#f44336',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 12px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          ❌ Cancelar
-                        </button>
-                      )}
-                      {v.estado === 'cancelada' && (
-                        <span style={{ color: '#999', fontSize: '0.75rem' }}>
-                          {v.motivo_cancelacion || 'Cancelada'}
+                      {yaEntregado ? (
+                        <span style={{ color: '#4CAF50', fontWeight: 'bold' }}>
+                          ✅ Entregado
                         </span>
-                      )}
-                      {puedeEditar && !puedeCancelar && (
-                        <span style={{ color: '#999', fontSize: '0.75rem' }}>
-                          Solo vendedor de esta sucursal
-                        </span>
+                      ) : (
+                        <>
+                          {puedeEditar && (
+                            <button
+                              onClick={() => verDetalle(v.id)}
+                              style={{
+                                backgroundColor: '#2196F3',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '4px 12px',
+                                cursor: 'pointer',
+                                marginRight: '5px'
+                              }}
+                            >
+                              ✏️ Editar
+                            </button>
+                          )}
+                          
+                          {puedeCancelar && (
+                            <button
+                              onClick={() => cancelarVenta(v.id)}
+                              style={{
+                                backgroundColor: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '4px 12px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ❌ Cancelar
+                            </button>
+                          )}
+                          {v.estado === 'cancelada' && (
+                            <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                              {v.motivo_cancelacion || 'Cancelada'}
+                            </span>
+                          )}
+                          {!puedeEditar && !puedeCancelar && v.estado !== 'cancelada' && (
+                            <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                              ⏳ Procesando
+                            </span>
+                          )}
+                        </>
                       )}
                     </td>
                   </tr>
@@ -385,8 +469,11 @@ function Historial() {
         </table>
       </div>
 
-      {/* Modal de edición */}
-      {mostrarEdicion && ventaSeleccionada && ventaSeleccionada.estado !== 'cancelada' && (
+      {/* Modal de edición - solo si está activa y no entregada */}
+      {mostrarEdicion && ventaSeleccionada && 
+       ventaSeleccionada.estado !== 'cancelada' && 
+       ventaSeleccionada.estado_entrega !== 'entregado' && 
+       ventaSeleccionada.estado_entrega !== 'entregada' && (
         <div style={{
           position: 'fixed',
           top: 0,

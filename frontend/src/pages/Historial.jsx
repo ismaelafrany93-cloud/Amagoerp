@@ -9,6 +9,7 @@ function Historial() {
   const [cargando, setCargando] = useState(true)
   const [mostrarEdicion, setMostrarEdicion] = useState(false)
   const [mensaje, setMensaje] = useState('')
+  const [tiemposRestantes, setTiemposRestantes] = useState({})
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
@@ -25,9 +26,43 @@ function Historial() {
   const [tipoEntregaEdit, setTipoEntregaEdit] = useState('retiro')
   const [detallesEdit, setDetallesEdit] = useState('')
 
+  // ============================================
+  // TIEMPO LÍMITE: 1 HORA (3600000 milisegundos)
+  // ============================================
+  const TIEMPO_LIMITE_MS = 3600000 // 1 hora
+  const TIEMPO_LIMITE_MINUTOS = 60
+
   useEffect(() => {
     cargarHistorial()
   }, [])
+
+  // ============================================
+  // ACTUALIZAR TIEMPOS RESTANTES CADA SEGUNDO
+  // ============================================
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const nuevosTiempos = {}
+      const ahora = Date.now()
+
+      ventas.forEach(v => {
+        if (v.estado !== 'cancelada' && !esEntregado(v)) {
+          const fechaVenta = new Date(v.fecha || v.created_at).getTime()
+          const tiempoTranscurrido = ahora - fechaVenta
+          const tiempoRestante = TIEMPO_LIMITE_MS - tiempoTranscurrido
+
+          if (tiempoRestante > 0) {
+            nuevosTiempos[v.id] = tiempoRestante
+          } else {
+            nuevosTiempos[v.id] = 0
+          }
+        }
+      })
+
+      setTiemposRestantes(nuevosTiempos)
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [ventas])
 
   const cargarHistorial = async () => {
     try {
@@ -51,18 +86,65 @@ function Historial() {
   }
 
   // ============================================
+  // FUNCIÓN PARA FORMATAR TIEMPO RESTANTE
+  // ============================================
+  const formatearTiempoRestante = (ms) => {
+    if (ms <= 0) return '⏰ Tiempo agotado'
+    
+    const minutos = Math.floor(ms / 60000)
+    const segundos = Math.floor((ms % 60000) / 1000)
+    
+    if (minutos > 0) {
+      return `${minutos}m ${segundos}s`
+    }
+    return `${segundos}s`
+  }
+
+  // ============================================
+  // FUNCIÓN PARA VERIFICAR SI LA VENTA ESTÁ DENTRO DEL TIEMPO LÍMITE
+  // ============================================
+  const estaDentroDelTiempo = (venta) => {
+    // Subgerente/Dueño tienen tiempo ilimitado
+    if (esSubgerente) return true
+    
+    // Si ya está cancelada o entregada, no aplica
+    if (venta.estado === 'cancelada') return false
+    if (esEntregado(venta)) return false
+    
+    const fechaVenta = new Date(venta.fecha || venta.created_at).getTime()
+    const ahora = Date.now()
+    const tiempoTranscurrido = ahora - fechaVenta
+    
+    return tiempoTranscurrido <= TIEMPO_LIMITE_MS
+  }
+
+  // ============================================
+  // FUNCIÓN PARA OBTENER EL TIEMPO RESTANTE
+  // ============================================
+  const getTiempoRestante = (ventaId) => {
+    return tiemposRestantes[ventaId] || 0
+  }
+
+  // ============================================
   // FUNCIÓN PARA CANCELAR VENTA
   // ============================================
   const cancelarVenta = async (ventaId) => {
     const venta = ventas.find(v => v.id === ventaId);
     
-    // Verificar que la venta NO esté entregada
-    if (venta && esEntregado(venta)) {
+    if (!venta) return;
+
+    // Verificar tiempo límite (excepto subgerente)
+    if (!esSubgerente && !estaDentroDelTiempo(venta)) {
+      alert('⏰ El tiempo límite de 1 hora para cancelar esta venta ha expirado');
+      return;
+    }
+
+    if (esEntregado(venta)) {
       alert('⚠️ No se puede cancelar una venta que ya fue entregada');
       return;
     }
 
-    if (venta && !esSubgerente && venta.sucursal_id !== sucursalId) {
+    if (!esSubgerente && venta.sucursal_id !== sucursalId) {
       alert('⚠️ Solo puedes cancelar ventas de tu sucursal');
       return;
     }
@@ -98,6 +180,14 @@ function Historial() {
   }
 
   const verDetalle = async (id) => {
+    const venta = ventas.find(v => v.id === id);
+    
+    // Verificar tiempo límite (excepto subgerente)
+    if (!esSubgerente && venta && !estaDentroDelTiempo(venta)) {
+      alert('⏰ El tiempo límite de 1 hora para editar esta venta ha expirado');
+      return;
+    }
+
     try {
       const response = await fetch(`${API_URL}/historial/${id}`)
       const data = await response.json()
@@ -209,18 +299,11 @@ function Historial() {
   // FUNCIÓN PARA VERIFICAR SI LA VENTA YA FUE ENTREGADA
   // ============================================
   const esEntregado = (venta) => {
-    // Si el estado_entrega es 'entregado', 'entregada' o 'retirado'
     if (venta.estado_entrega === 'entregado' || 
         venta.estado_entrega === 'entregada' || 
         venta.estado_entrega === 'retirado') {
       return true;
     }
-    
-    // Si es crédito con retiro, también se considera entregado
-    if (venta.tipo_venta === 'credito' && venta.estado_entrega === 'retirado') {
-      return true;
-    }
-    
     return false;
   }
 
@@ -228,12 +311,9 @@ function Historial() {
   // FUNCIÓN PARA VERIFICAR SI LA VENTA ES EDITABLE
   // ============================================
   const esEditable = (venta) => {
-    // No se puede editar si está cancelada
     if (venta.estado === 'cancelada') return false;
-    
-    // No se puede editar si ya fue entregada/retirada
     if (esEntregado(venta)) return false;
-    
+    if (!estaDentroDelTiempo(venta)) return false;
     return true;
   }
 
@@ -241,12 +321,9 @@ function Historial() {
   // FUNCIÓN PARA VERIFICAR SI LA VENTA ES CANCELABLE
   // ============================================
   const esCancelable = (venta) => {
-    // No se puede cancelar si está cancelada
     if (venta.estado === 'cancelada') return false;
-    
-    // No se puede cancelar si ya fue entregada/retirada
     if (esEntregado(venta)) return false;
-    
+    if (!estaDentroDelTiempo(venta)) return false;
     return true;
   }
 
@@ -266,9 +343,6 @@ function Historial() {
     if (venta.estado_entrega === 'fallido') {
       return { texto: '❌ Fallido', color: '#f44336' };
     }
-    if (venta.tipo_entrega === 'retiro') {
-      return { texto: '🏪 Retiro', color: '#2196F3' };
-    }
     return { texto: 'N/A', color: '#757575' };
   }
 
@@ -286,19 +360,20 @@ function Historial() {
     <AdminLayout>
       <h1>📜 Historial de Ventas - {getSucursalNombre()}</h1>
 
-      {!esSubgerente && (
-        <div style={{
-          backgroundColor: '#e3f2fd',
-          padding: '10px 15px',
-          borderRadius: '8px',
-          marginBottom: '20px',
-          borderLeft: '4px solid #003b6f'
-        }}>
-          <p style={{ margin: 0, color: '#003b6f' }}>
-            🏢 Mostrando ventas de tu sucursal: <strong>{getSucursalNombre()}</strong>
-          </p>
-        </div>
-      )}
+      <div style={{
+        backgroundColor: '#e3f2fd',
+        padding: '10px 15px',
+        borderRadius: '8px',
+        marginBottom: '20px',
+        borderLeft: '4px solid #003b6f'
+      }}>
+        <p style={{ margin: 0, color: '#003b6f' }}>
+          ⏰ <strong>Tiempo límite para editar/cancelar:</strong> 1 hora desde la creación de la factura
+        </p>
+        <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
+          {esSubgerente ? '👑 Como subgerente/dueño, puedes editar sin límite de tiempo' : '🛒 Solo puedes editar/cancelar dentro de la primera hora'}
+        </p>
+      </div>
 
       {mensaje && (
         <div style={{
@@ -331,6 +406,7 @@ function Historial() {
               <th style={{ padding: '12px', textAlign: 'right' }}>Total</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Fecha</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Entrega</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>⏰ Tiempo</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Estado</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
@@ -338,7 +414,7 @@ function Historial() {
           <tbody>
             {ventas.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                <td colSpan="9" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                   No hay ventas registradas en {getSucursalNombre()}
                 </td>
               </tr>
@@ -349,12 +425,15 @@ function Historial() {
                 const puedeEditar = esEditable(v);
                 const entregaInfo = getEstadoEntrega(v);
                 const yaEntregado = esEntregado(v);
+                const tiempoRestante = getTiempoRestante(v.id);
+                const dentroDelTiempo = esSubgerente || (tiempoRestante > 0 && !yaEntregado && v.estado !== 'cancelada');
+                const tiempoTexto = esSubgerente ? '∞ Ilimitado' : formatearTiempoRestante(tiempoRestante);
 
                 return (
                   <tr key={v.id} style={{ 
                     borderBottom: '1px solid #eee',
-                    backgroundColor: yaEntregado ? '#f5f5f5' : 'white',
-                    opacity: yaEntregado ? 0.8 : 1
+                    backgroundColor: yaEntregado || (!dentroDelTiempo && v.estado !== 'cancelada') ? '#f5f5f5' : 'white',
+                    opacity: yaEntregado || (!dentroDelTiempo && v.estado !== 'cancelada') ? 0.7 : 1
                   }}>
                     <td style={{ padding: '12px' }}>{v.id}</td>
                     <td style={{ padding: '12px' }}>{v.cliente_nombre || v.cliente || 'N/A'}</td>
@@ -375,6 +454,21 @@ function Historial() {
                       }}>
                         {entregaInfo.texto}
                       </span>
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {v.estado === 'cancelada' ? (
+                        <span style={{ color: '#f44336', fontSize: '0.75rem' }}>❌ Cancelada</span>
+                      ) : yaEntregado ? (
+                        <span style={{ color: '#4CAF50', fontSize: '0.75rem' }}>✅ Entregado</span>
+                      ) : (
+                        <span style={{
+                          color: tiempoRestante > 0 ? '#003b6f' : '#f44336',
+                          fontWeight: tiempoRestante > 0 ? 'bold' : 'normal',
+                          fontSize: '0.8rem'
+                        }}>
+                          {tiempoTexto}
+                        </span>
+                      )}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       {v.estado === 'cancelada' ? (
@@ -420,9 +514,9 @@ function Historial() {
                       )}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
-                      {yaEntregado ? (
-                        <span style={{ color: '#4CAF50', fontWeight: 'bold' }}>
-                          ✅ {v.estado_entrega === 'retirado' ? 'Retirado' : 'Entregado'}
+                      {yaEntregado || v.estado === 'cancelada' ? (
+                        <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                          {v.estado === 'cancelada' ? 'Cancelada' : '✅ Completada'}
                         </span>
                       ) : (
                         <>
@@ -436,7 +530,8 @@ function Historial() {
                                 borderRadius: '4px',
                                 padding: '4px 12px',
                                 cursor: 'pointer',
-                                marginRight: '5px'
+                                marginRight: '5px',
+                                fontSize: '0.75rem'
                               }}
                             >
                               ✏️ Editar
@@ -452,7 +547,8 @@ function Historial() {
                                 border: 'none',
                                 borderRadius: '4px',
                                 padding: '4px 12px',
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                fontSize: '0.75rem'
                               }}
                             >
                               ❌ Cancelar
@@ -465,7 +561,7 @@ function Historial() {
                           )}
                           {!puedeEditar && !puedeCancelar && v.estado !== 'cancelada' && !yaEntregado && (
                             <span style={{ color: '#999', fontSize: '0.75rem' }}>
-                              ⏳ Procesando
+                              ⏰ Tiempo agotado
                             </span>
                           )}
                         </>
@@ -479,10 +575,11 @@ function Historial() {
         </table>
       </div>
 
-      {/* Modal de edición - solo si está activa y no entregada */}
+      {/* Modal de edición */}
       {mostrarEdicion && ventaSeleccionada && 
        ventaSeleccionada.estado !== 'cancelada' && 
-       !esEntregado(ventaSeleccionada) && (
+       !esEntregado(ventaSeleccionada) && 
+       (esSubgerente || estaDentroDelTiempo(ventaSeleccionada)) && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -508,6 +605,11 @@ function Historial() {
             <h2 style={{ color: '#003b6f' }}>✏️ Editar Factura #{ventaSeleccionada.id}</h2>
             <p style={{ color: '#666' }}>Cliente: {ventaSeleccionada.cliente_nombre}</p>
             <p style={{ color: '#666' }}>👤 Vendedor: {ventaSeleccionada.vendedor || 'N/A'}</p>
+            {!esSubgerente && (
+              <p style={{ color: '#ff9800', fontSize: '0.85rem' }}>
+                ⏰ Tiempo restante: {formatearTiempoRestante(getTiempoRestante(ventaSeleccionada.id))}
+              </p>
+            )}
 
             <hr style={{ margin: '15px 0' }} />
 

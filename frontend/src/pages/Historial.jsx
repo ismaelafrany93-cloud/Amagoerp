@@ -57,7 +57,7 @@ function Historial() {
     const venta = ventas.find(v => v.id === ventaId);
     
     // Verificar que la venta NO esté entregada
-    if (venta && venta.estado_entrega === 'entregado') {
+    if (venta && esEntregado(venta)) {
       alert('⚠️ No se puede cancelar una venta que ya fue entregada');
       return;
     }
@@ -206,26 +206,33 @@ function Historial() {
   }
 
   // ============================================
+  // FUNCIÓN PARA VERIFICAR SI LA VENTA YA FUE ENTREGADA
+  // ============================================
+  const esEntregado = (venta) => {
+    // Si el estado_entrega es 'entregado', 'entregada' o 'retirado'
+    if (venta.estado_entrega === 'entregado' || 
+        venta.estado_entrega === 'entregada' || 
+        venta.estado_entrega === 'retirado') {
+      return true;
+    }
+    
+    // Si es crédito con retiro, también se considera entregado
+    if (venta.tipo_venta === 'credito' && venta.estado_entrega === 'retirado') {
+      return true;
+    }
+    
+    return false;
+  }
+
+  // ============================================
   // FUNCIÓN PARA VERIFICAR SI LA VENTA ES EDITABLE
   // ============================================
   const esEditable = (venta) => {
     // No se puede editar si está cancelada
     if (venta.estado === 'cancelada') return false;
     
-    // No se puede editar si ya fue entregada
-    if (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada') return false;
-    
-    // No se puede editar si la venta fue completada (sin entrega pendiente)
-    if (venta.estado === 'completada' && venta.tipo_entrega !== 'domicilio') {
-      // Si es completada y no es domicilio, se puede editar (excepto si ya pasó tiempo)
-      return true;
-    }
-    
-    // Si es pendiente, se puede editar
-    if (venta.estado === 'pendiente') return true;
-    
-    // Si es completada con domicilio pendiente, se puede editar
-    if (venta.estado === 'completada' && venta.estado_entrega === 'pendiente') return true;
+    // No se puede editar si ya fue entregada/retirada
+    if (esEntregado(venta)) return false;
     
     return true;
   }
@@ -237,8 +244,8 @@ function Historial() {
     // No se puede cancelar si está cancelada
     if (venta.estado === 'cancelada') return false;
     
-    // No se puede cancelar si ya fue entregada
-    if (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada') return false;
+    // No se puede cancelar si ya fue entregada/retirada
+    if (esEntregado(venta)) return false;
     
     return true;
   }
@@ -250,6 +257,9 @@ function Historial() {
     if (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada') {
       return { texto: '✅ Entregado', color: '#4CAF50' };
     }
+    if (venta.estado_entrega === 'retirado') {
+      return { texto: '🏪 Retirado', color: '#2196F3' };
+    }
     if (venta.estado_entrega === 'pendiente') {
       return { texto: '⏳ Pendiente', color: '#ff9800' };
     }
@@ -257,7 +267,7 @@ function Historial() {
       return { texto: '❌ Fallido', color: '#f44336' };
     }
     if (venta.tipo_entrega === 'retiro') {
-      return { texto: '🏪 Retirado', color: '#2196F3' };
+      return { texto: '🏪 Retiro', color: '#2196F3' };
     }
     return { texto: 'N/A', color: '#757575' };
   }
@@ -338,7 +348,7 @@ function Historial() {
                 const puedeCancelar = (esSubgerente || esMismaSucursal) && esCancelable(v);
                 const puedeEditar = esEditable(v);
                 const entregaInfo = getEstadoEntrega(v);
-                const yaEntregado = v.estado_entrega === 'entregado' || v.estado_entrega === 'entregada';
+                const yaEntregado = esEntregado(v);
 
                 return (
                   <tr key={v.id} style={{ 
@@ -412,7 +422,7 @@ function Historial() {
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       {yaEntregado ? (
                         <span style={{ color: '#4CAF50', fontWeight: 'bold' }}>
-                          ✅ Entregado
+                          ✅ {v.estado_entrega === 'retirado' ? 'Retirado' : 'Entregado'}
                         </span>
                       ) : (
                         <>
@@ -453,7 +463,7 @@ function Historial() {
                               {v.motivo_cancelacion || 'Cancelada'}
                             </span>
                           )}
-                          {!puedeEditar && !puedeCancelar && v.estado !== 'cancelada' && (
+                          {!puedeEditar && !puedeCancelar && v.estado !== 'cancelada' && !yaEntregado && (
                             <span style={{ color: '#999', fontSize: '0.75rem' }}>
                               ⏳ Procesando
                             </span>
@@ -472,8 +482,7 @@ function Historial() {
       {/* Modal de edición - solo si está activa y no entregada */}
       {mostrarEdicion && ventaSeleccionada && 
        ventaSeleccionada.estado !== 'cancelada' && 
-       ventaSeleccionada.estado_entrega !== 'entregado' && 
-       ventaSeleccionada.estado_entrega !== 'entregada' && (
+       !esEntregado(ventaSeleccionada) && (
         <div style={{
           position: 'fixed',
           top: 0,

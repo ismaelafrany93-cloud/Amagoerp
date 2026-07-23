@@ -17,7 +17,7 @@ function Produccion() {
   const [areaSeleccionada, setAreaSeleccionada] = useState('')
   const [mostrarEstadisticas, setMostrarEstadisticas] = useState(false)
   
-  // Estados para gestión de operarios
+  // 👇 ESTADOS PARA GESTIÓN DE OPERARIOS
   const [mostrarGestionOperarios, setMostrarGestionOperarios] = useState(false)
   const [nuevoOperario, setNuevoOperario] = useState('')
   const [operarioEditando, setOperarioEditando] = useState(null)
@@ -38,7 +38,7 @@ function Produccion() {
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSupervisor = ['supervisor', 'subgerente', 'dueno', 'dueño', 'admin'].includes(usuario.rol)
   const puedeGestionarOperarios = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
-  
+
   // 👇 DETECTAR EL ÁREA DEL SUPERVISOR
   const areaDelSupervisor = usuario.area_id || null
   const esSupervisorDeArea = esSupervisor && areaDelSupervisor !== null
@@ -69,12 +69,13 @@ function Produccion() {
     cargarOperarios()
   }, [])
 
+  // Recargar cuando cambia el área seleccionada
   useEffect(() => {
-    // Recargar cuando cambia el área seleccionada
     cargarProducciones()
     cargarResumen()
     cargarDetalleOperarios()
     cargarOperarios()
+    cargarEstadisticas()
   }, [areaSeleccionada])
 
   const cargarProductos = async () => {
@@ -117,7 +118,6 @@ function Produccion() {
       let url = `${API_URL}/produccion`
       const params = new URLSearchParams()
       
-      // Si el supervisor tiene área, filtrar por ella
       if (areaSeleccionada) {
         params.append('area_id', areaSeleccionada)
       } else if (esSupervisorDeArea) {
@@ -464,6 +464,18 @@ function Produccion() {
     <AdminLayout>
       <h1>🏭 Producción</h1>
 
+      {mensaje && (
+        <div style={{
+          backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
+          color: mensaje.includes('✅') ? '#1b5e20' : '#dc2626',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
+          {mensaje}
+        </div>
+      )}
+
       {/* 👇 BANNER DEL ÁREA DEL SUPERVISOR */}
       {esSupervisorDeArea && (
         <div style={{
@@ -498,87 +510,7 @@ function Produccion() {
         </div>
       )}
 
-      {mensaje && (
-        <div style={{
-          backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
-          color: mensaje.includes('✅') ? '#1b5e20' : '#dc2626',
-          padding: '10px 15px',
-          borderRadius: '8px',
-          marginBottom: '20px'
-        }}>
-          {mensaje}
-        </div>
-      )}
-
-      {/* ========================================== */}
-      {/* TARJETAS DE ÁREAS - SOLO PARA ADMIN/DUEÑO */}
-      {/* ========================================== */}
-      {!esSupervisorDeArea && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '15px',
-          marginBottom: '25px'
-        }}>
-          {AREAS_PREDEFINIDAS.map(area => {
-            const stats = estadisticas.find(e => e.area_id === area.id)
-            return (
-              <div
-                key={area.id}
-                onClick={() => {
-                  setAreaSeleccionada(area.id === parseInt(areaSeleccionada) ? '' : String(area.id))
-                }}
-                style={{
-                  backgroundColor: areaSeleccionada === String(area.id) ? area.color : 'white',
-                  border: `3px solid ${area.color}`,
-                  borderRadius: '12px',
-                  padding: '15px',
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                  transition: 'all 0.3s ease',
-                  transform: areaSeleccionada === String(area.id) ? 'scale(1.05)' : 'scale(1)'
-                }}
-              >
-                <div style={{ fontSize: '2.5rem' }}>{area.icono}</div>
-                <h3 style={{ 
-                  margin: '5px 0', 
-                  color: areaSeleccionada === String(area.id) ? 'white' : area.color,
-                  fontSize: '1rem'
-                }}>
-                  {area.nombre}
-                </h3>
-                {stats && (
-                  <div style={{
-                    fontSize: '0.8rem',
-                    color: areaSeleccionada === String(area.id) ? 'white' : '#666'
-                  }}>
-                    📦 {stats.total_unidades || 0} unidades
-                    <br />
-                    👷 {stats.total_operarios || 0} operarios
-                  </div>
-                )}
-                {areaSeleccionada === String(area.id) && (
-                  <div style={{
-                    marginTop: '8px',
-                    backgroundColor: 'rgba(255,255,255,0.3)',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    color: 'white'
-                  }}>
-                    ✅ Seleccionada
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* ========================================== */}
-      {/* FILTRO POR ÁREA */}
-      {/* ========================================== */}
+      {/* 👇 FILTRO POR ÁREA */}
       <div style={{
         backgroundColor: '#f0f4f8',
         padding: '15px',
@@ -601,7 +533,7 @@ function Produccion() {
             }}
           >
             <option value="">📋 Todas las áreas</option>
-            {areasVisibles.map(a => (
+            {(esSupervisorDeArea ? areas.filter(a => a.id === areaDelSupervisor) : areas).map(a => (
               <option key={a.id} value={a.id}>
                 {a.icono} {a.nombre}
               </option>
@@ -643,7 +575,7 @@ function Produccion() {
       </div>
 
       {/* ========================================== */}
-      {/* GESTIÓN DE OPERARIOS */}
+      {/* GESTIÓN DE OPERARIOS - PANEL FLOTANTE */}
       {/* ========================================== */}
       {puedeGestionarOperarios && (
         <div style={{
@@ -788,7 +720,7 @@ function Produccion() {
       )}
 
       {/* ========================================== */}
-      {/* FORMULARIO DE PRODUCCIÓN */}
+      {/* FORMULARIO DE PRODUCCIÓN MÚLTIPLE */}
       {/* ========================================== */}
       {esSupervisor && (
         <div style={{
@@ -1014,7 +946,7 @@ function Produccion() {
       )}
 
       {/* ========================================== */}
-      {/* DETALLE POR OPERARIO */}
+      {/* DETALLE POR OPERARIO - PANEL PRINCIPAL */}
       {/* ========================================== */}
       <div style={{
         backgroundColor: '#f5f7fb',

@@ -55,11 +55,15 @@ router.post('/', async (req, res) => {
 
         console.log('📝 Creando operario:', { nombre, area_id });
 
+        // 👇 Generar correo por defecto basado en el nombre
+        const nombreLimpio = nombre.trim().toLowerCase().replace(/ /g, '.');
+        const correoPorDefecto = `${nombreLimpio}@operario.com`;
+
         const result = await pool.query(
-            `INSERT INTO usuarios (nombre, rol, area_id, sucursal_id) 
-             VALUES ($1, 'operario', $2, 3) 
-             RETURNING id, nombre, rol, area_id`,
-            [nombre.trim(), area_id || null]
+            `INSERT INTO usuarios (nombre, rol, area_id, sucursal_id, correo) 
+             VALUES ($1, 'operario', $2, 3, $3) 
+             RETURNING id, nombre, rol, area_id, correo`,
+            [nombre.trim(), area_id || null, correoPorDefecto]
         );
 
         console.log('✅ Operario creado:', result.rows[0]);

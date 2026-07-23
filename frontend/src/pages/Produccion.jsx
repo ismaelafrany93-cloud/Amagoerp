@@ -8,21 +8,27 @@ function Produccion() {
   const [resumen, setResumen] = useState([])
   const [detalleOperarios, setDetalleOperarios] = useState([])
   const [operarios, setOperarios] = useState([])
+  const [areas, setAreas] = useState([])
+  const [estadisticas, setEstadisticas] = useState([])
   const [cargando, setCargando] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [editando, setEditando] = useState(null)
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0])
+  const [areaSeleccionada, setAreaSeleccionada] = useState('')
+  const [mostrarEstadisticas, setMostrarEstadisticas] = useState(false)
   
-  // 👇 ESTADOS PARA GESTIÓN DE OPERARIOS
+  // Estados para gestión de operarios
   const [mostrarGestionOperarios, setMostrarGestionOperarios] = useState(false)
   const [nuevoOperario, setNuevoOperario] = useState('')
   const [operarioEditando, setOperarioEditando] = useState(null)
+  const [nuevoOperarioArea, setNuevoOperarioArea] = useState('')
 
   const [form, setForm] = useState({
     operario: '',
     fecha: new Date().toISOString().split('T')[0],
     observacion_general: '',
-    productos: []
+    productos: [],
+    area_id: ''
   })
 
   const [productoSeleccionado, setProductoSeleccionado] = useState('')
@@ -32,14 +38,44 @@ function Produccion() {
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSupervisor = ['supervisor', 'subgerente', 'dueno', 'dueño', 'admin'].includes(usuario.rol)
   const puedeGestionarOperarios = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+  
+  // 👇 DETECTAR EL ÁREA DEL SUPERVISOR
+  const areaDelSupervisor = usuario.area_id || null
+  const esSupervisorDeArea = esSupervisor && areaDelSupervisor !== null
+
+  // Áreas predefinidas
+  const AREAS_PREDEFINIDAS = [
+    { id: 1, nombre: 'Tapicería', icono: '🪑', color: '#FF6B6B' },
+    { id: 2, nombre: 'Modulares', icono: '📦', color: '#4ECDC4' },
+    { id: 3, nombre: 'Pintura', icono: '🎨', color: '#FFE66D' },
+    { id: 4, nombre: 'Cristales', icono: '💎', color: '#A8E6CF' },
+    { id: 5, nombre: 'Materiales', icono: '🧵', color: '#DDA0DD' }
+  ]
 
   useEffect(() => {
     cargarProductos()
+    cargarAreas()
+    cargarEstadisticas()
+    
+    // Si el supervisor tiene un área asignada, filtrar automáticamente
+    if (esSupervisorDeArea) {
+      setAreaSeleccionada(String(areaDelSupervisor))
+      setForm(prev => ({ ...prev, area_id: String(areaDelSupervisor) }))
+    }
+    
     cargarProducciones()
     cargarResumen()
     cargarDetalleOperarios()
     cargarOperarios()
   }, [])
+
+  useEffect(() => {
+    // Recargar cuando cambia el área seleccionada
+    cargarProducciones()
+    cargarResumen()
+    cargarDetalleOperarios()
+    cargarOperarios()
+  }, [areaSeleccionada])
 
   const cargarProductos = async () => {
     try {
@@ -51,29 +87,82 @@ function Produccion() {
     }
   }
 
+  const cargarAreas = async () => {
+    try {
+      const response = await fetch(`${API_URL}/produccion/areas`)
+      const data = await response.json()
+      setAreas(Array.isArray(data) && data.length > 0 ? data : AREAS_PREDEFINIDAS)
+    } catch (error) {
+      console.error('Error cargando áreas:', error)
+      setAreas(AREAS_PREDEFINIDAS)
+    }
+  }
+
+  const cargarEstadisticas = async () => {
+    try {
+      const url = areaDelSupervisor 
+        ? `${API_URL}/produccion/estadisticas?area_id=${areaDelSupervisor}`
+        : `${API_URL}/produccion/estadisticas`
+      const response = await fetch(url)
+      const data = await response.json()
+      setEstadisticas(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error cargando estadísticas:', error)
+      setEstadisticas([])
+    }
+  }
+
   const cargarProducciones = async () => {
     try {
-      const response = await fetch(`${API_URL}/produccion`)
+      let url = `${API_URL}/produccion`
+      const params = new URLSearchParams()
+      
+      // Si el supervisor tiene área, filtrar por ella
+      if (areaSeleccionada) {
+        params.append('area_id', areaSeleccionada)
+      } else if (esSupervisorDeArea) {
+        params.append('area_id', areaDelSupervisor)
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`
+      }
+      
+      const response = await fetch(url)
       const data = await response.json()
       setProducciones(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando producciones:', error)
+      setProducciones([])
     }
   }
 
   const cargarResumen = async () => {
     try {
-      const response = await fetch(`${API_URL}/produccion/resumen`)
+      let url = `${API_URL}/produccion/resumen?fecha=${fechaSeleccionada}`
+      if (areaSeleccionada) {
+        url += `&area_id=${areaSeleccionada}`
+      } else if (esSupervisorDeArea) {
+        url += `&area_id=${areaDelSupervisor}`
+      }
+      const response = await fetch(url)
       const data = await response.json()
       setResumen(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando resumen:', error)
+      setResumen([])
     }
   }
 
   const cargarDetalleOperarios = async () => {
     try {
-      const response = await fetch(`${API_URL}/produccion/detalle-por-operario?fecha=${fechaSeleccionada}`)
+      let url = `${API_URL}/produccion/detalle-por-operario?fecha=${fechaSeleccionada}`
+      if (areaSeleccionada) {
+        url += `&area_id=${areaSeleccionada}`
+      } else if (esSupervisorDeArea) {
+        url += `&area_id=${areaDelSupervisor}`
+      }
+      const response = await fetch(url)
       const data = await response.json()
       setDetalleOperarios(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -84,7 +173,13 @@ function Produccion() {
 
   const cargarOperarios = async () => {
     try {
-      const response = await fetch(`${API_URL}/operarios`)
+      let url = `${API_URL}/produccion/operarios`
+      if (areaSeleccionada) {
+        url += `?area_id=${areaSeleccionada}`
+      } else if (esSupervisorDeArea) {
+        url += `?area_id=${areaDelSupervisor}`
+      }
+      const response = await fetch(url)
       const data = await response.json()
       setOperarios(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -107,7 +202,10 @@ function Produccion() {
       const response = await fetch(`${API_URL}/operarios`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: nuevoOperario.trim() })
+        body: JSON.stringify({ 
+          nombre: nuevoOperario.trim(),
+          area_id: nuevoOperarioArea || areaDelSupervisor || null
+        })
       })
 
       const data = await response.json()
@@ -115,6 +213,7 @@ function Produccion() {
       if (data.success) {
         setMensaje('✅ Operario agregado correctamente')
         setNuevoOperario('')
+        setNuevoOperarioArea('')
         cargarOperarios()
         setTimeout(() => setMensaje(''), 3000)
       } else {
@@ -207,6 +306,14 @@ function Produccion() {
       return
     }
 
+    // Si el supervisor tiene área, usarla automáticamente
+    const areaId = form.area_id || areaDelSupervisor
+    
+    if (!areaId) {
+      alert('⚠️ Selecciona un área de producción')
+      return
+    }
+
     if (form.productos.length === 0) {
       alert('⚠️ Agrega al menos un producto')
       return
@@ -228,23 +335,26 @@ function Produccion() {
           })),
           fecha: form.fecha,
           observacion_general: form.observacion_general,
-          sucursal_id: usuario.sucursal_id || 3
+          sucursal_id: usuario.sucursal_id || 3,
+          area_id: parseInt(areaId)
         })
       })
 
       const data = await response.json()
 
       if (data.success) {
-        setMensaje(`✅ ${data.registros?.length || 0} registros de producción creados - Total: ${data.total_productos || 0} unidades`)
+        setMensaje(`✅ ${data.registros?.length || 0} registros de producción creados en ${data.area || 'el área'} - Total: ${data.total_productos || 0} unidades`)
         setForm({
           operario: '',
           fecha: new Date().toISOString().split('T')[0],
           observacion_general: '',
-          productos: []
+          productos: [],
+          area_id: areaId // Mantener el área
         })
         cargarProducciones()
         cargarResumen()
         cargarDetalleOperarios()
+        cargarEstadisticas()
         setTimeout(() => setMensaje(''), 3000)
       } else {
         alert('❌ Error: ' + (data.error || 'No se pudo guardar'))
@@ -268,7 +378,8 @@ function Produccion() {
         producto_nombre: produccion.producto_nombre,
         cantidad: produccion.cantidad,
         observacion: produccion.observacion || ''
-      }]
+      }],
+      area_id: produccion.area_id || areaDelSupervisor || ''
     })
   }
 
@@ -286,6 +397,7 @@ function Produccion() {
         cargarProducciones()
         cargarResumen()
         cargarDetalleOperarios()
+        cargarEstadisticas()
         setTimeout(() => setMensaje(''), 3000)
       } else {
         alert('❌ Error: ' + (data.message || data.error))
@@ -299,8 +411,44 @@ function Produccion() {
   const cambiarFecha = (e) => {
     const nuevaFecha = e.target.value
     setFechaSeleccionada(nuevaFecha)
-    cargarDetalleOperarios()
+    setTimeout(() => {
+      cargarDetalleOperarios()
+      cargarResumen()
+    }, 100)
   }
+
+  const cambiarArea = (e) => {
+    const area = e.target.value
+    setAreaSeleccionada(area)
+    setForm({ ...form, area_id: area })
+    setTimeout(() => {
+      cargarProducciones()
+      cargarResumen()
+      cargarDetalleOperarios()
+      cargarOperarios()
+      cargarEstadisticas()
+    }, 100)
+  }
+
+  const getAreaNombre = (areaId) => {
+    const area = areas.find(a => a.id === parseInt(areaId))
+    return area ? area.nombre : 'Sin área'
+  }
+
+  const getAreaIcono = (areaId) => {
+    const area = areas.find(a => a.id === parseInt(areaId))
+    return area ? area.icono : '🏭'
+  }
+
+  const getAreaColor = (areaId) => {
+    const area = areas.find(a => a.id === parseInt(areaId))
+    return area ? area.color : '#757575'
+  }
+
+  // Áreas que puede ver el usuario
+  const areasVisibles = esSupervisorDeArea 
+    ? areas.filter(a => a.id === areaDelSupervisor)
+    : areas
 
   if (cargando) {
     return (
@@ -316,6 +464,40 @@ function Produccion() {
     <AdminLayout>
       <h1>🏭 Producción</h1>
 
+      {/* 👇 BANNER DEL ÁREA DEL SUPERVISOR */}
+      {esSupervisorDeArea && (
+        <div style={{
+          backgroundColor: getAreaColor(areaDelSupervisor) + '20',
+          border: `2px solid ${getAreaColor(areaDelSupervisor)}`,
+          borderRadius: '12px',
+          padding: '15px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '15px'
+        }}>
+          <span style={{ fontSize: '2rem' }}>{getAreaIcono(areaDelSupervisor)}</span>
+          <div>
+            <h3 style={{ margin: 0, color: getAreaColor(areaDelSupervisor) }}>
+              {getAreaNombre(areaDelSupervisor)}
+            </h3>
+            <p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '0.9rem' }}>
+              👋 Bienvenido, Supervisor de {getAreaNombre(areaDelSupervisor)}
+            </p>
+          </div>
+          <span style={{
+            marginLeft: 'auto',
+            backgroundColor: getAreaColor(areaDelSupervisor),
+            color: 'white',
+            padding: '4px 16px',
+            borderRadius: '20px',
+            fontSize: '0.8rem'
+          }}>
+            ✅ Tu área
+          </span>
+        </div>
+      )}
+
       {mensaje && (
         <div style={{
           backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
@@ -329,7 +511,139 @@ function Produccion() {
       )}
 
       {/* ========================================== */}
-      {/* GESTIÓN DE OPERARIOS - PANEL FLOTANTE */}
+      {/* TARJETAS DE ÁREAS - SOLO PARA ADMIN/DUEÑO */}
+      {/* ========================================== */}
+      {!esSupervisorDeArea && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '15px',
+          marginBottom: '25px'
+        }}>
+          {AREAS_PREDEFINIDAS.map(area => {
+            const stats = estadisticas.find(e => e.area_id === area.id)
+            return (
+              <div
+                key={area.id}
+                onClick={() => {
+                  setAreaSeleccionada(area.id === parseInt(areaSeleccionada) ? '' : String(area.id))
+                }}
+                style={{
+                  backgroundColor: areaSeleccionada === String(area.id) ? area.color : 'white',
+                  border: `3px solid ${area.color}`,
+                  borderRadius: '12px',
+                  padding: '15px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  transition: 'all 0.3s ease',
+                  transform: areaSeleccionada === String(area.id) ? 'scale(1.05)' : 'scale(1)'
+                }}
+              >
+                <div style={{ fontSize: '2.5rem' }}>{area.icono}</div>
+                <h3 style={{ 
+                  margin: '5px 0', 
+                  color: areaSeleccionada === String(area.id) ? 'white' : area.color,
+                  fontSize: '1rem'
+                }}>
+                  {area.nombre}
+                </h3>
+                {stats && (
+                  <div style={{
+                    fontSize: '0.8rem',
+                    color: areaSeleccionada === String(area.id) ? 'white' : '#666'
+                  }}>
+                    📦 {stats.total_unidades || 0} unidades
+                    <br />
+                    👷 {stats.total_operarios || 0} operarios
+                  </div>
+                )}
+                {areaSeleccionada === String(area.id) && (
+                  <div style={{
+                    marginTop: '8px',
+                    backgroundColor: 'rgba(255,255,255,0.3)',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    color: 'white'
+                  }}>
+                    ✅ Seleccionada
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* FILTRO POR ÁREA */}
+      {/* ========================================== */}
+      <div style={{
+        backgroundColor: '#f0f4f8',
+        padding: '15px',
+        borderRadius: '8px',
+        marginBottom: '20px',
+        border: '1px solid #ddd'
+      }}>
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ fontWeight: 'bold', color: '#003b6f' }}>🏷️ Filtrar por Área:</label>
+          <select
+            value={areaSeleccionada}
+            onChange={cambiarArea}
+            disabled={esSupervisorDeArea}
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              minWidth: '200px',
+              opacity: esSupervisorDeArea ? 0.7 : 1
+            }}
+          >
+            <option value="">📋 Todas las áreas</option>
+            {areasVisibles.map(a => (
+              <option key={a.id} value={a.id}>
+                {a.icono} {a.nombre}
+              </option>
+            ))}
+          </select>
+          {esSupervisorDeArea && (
+            <span style={{
+              backgroundColor: getAreaColor(areaDelSupervisor),
+              color: 'white',
+              padding: '4px 12px',
+              borderRadius: '12px',
+              fontSize: '0.85rem'
+            }}>
+              {getAreaIcono(areaDelSupervisor)} {getAreaNombre(areaDelSupervisor)}
+            </span>
+          )}
+          {areaSeleccionada && !esSupervisorDeArea && (
+            <button
+              onClick={() => {
+                setAreaSeleccionada('')
+                setForm({ ...form, area_id: '' })
+              }}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              ✕ Limpiar filtro
+            </button>
+          )}
+          <span style={{ color: '#666', fontSize: '0.85rem' }}>
+            {areaSeleccionada ? `Mostrando: ${getAreaIcono(areaSeleccionada)} ${getAreaNombre(areaSeleccionada)}` : 'Mostrando todas las áreas'}
+          </span>
+        </div>
+      </div>
+
+      {/* ========================================== */}
+      {/* GESTIÓN DE OPERARIOS */}
       {/* ========================================== */}
       {puedeGestionarOperarios && (
         <div style={{
@@ -358,7 +672,7 @@ function Produccion() {
 
           {mostrarGestionOperarios && (
             <div style={{ marginTop: '15px' }}>
-              <form onSubmit={handleAgregarOperario} style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+              <form onSubmit={handleAgregarOperario} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
                 <input
                   type="text"
                   value={nuevoOperario}
@@ -368,9 +682,38 @@ function Produccion() {
                     flex: 1,
                     padding: '8px 12px',
                     border: '1px solid #ddd',
-                    borderRadius: '6px'
+                    borderRadius: '6px',
+                    minWidth: '150px'
                   }}
                 />
+                {!esSupervisorDeArea && (
+                  <select
+                    value={nuevoOperarioArea}
+                    onChange={(e) => setNuevoOperarioArea(e.target.value)}
+                    style={{
+                      padding: '8px 12px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      minWidth: '150px'
+                    }}
+                  >
+                    <option value="">Área del operario</option>
+                    {AREAS_PREDEFINIDAS.map(a => (
+                      <option key={a.id} value={a.id}>{a.icono} {a.nombre}</option>
+                    ))}
+                  </select>
+                )}
+                {esSupervisorDeArea && (
+                  <span style={{
+                    padding: '8px 12px',
+                    backgroundColor: getAreaColor(areaDelSupervisor) + '20',
+                    borderRadius: '6px',
+                    color: getAreaColor(areaDelSupervisor),
+                    fontWeight: 'bold'
+                  }}>
+                    {getAreaIcono(areaDelSupervisor)} {getAreaNombre(areaDelSupervisor)}
+                  </span>
+                )}
                 <button
                   type="submit"
                   style={{
@@ -387,20 +730,36 @@ function Produccion() {
               </form>
 
               {operarios.length === 0 ? (
-                <p style={{ color: '#999', textAlign: 'center', padding: '10px' }}>No hay operarios registrados</p>
+                <p style={{ color: '#999', textAlign: 'center', padding: '10px' }}>No hay operarios registrados en esta área</p>
               ) : (
                 <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                     <thead>
                       <tr style={{ backgroundColor: '#f0f4f8' }}>
                         <th style={{ padding: '6px', textAlign: 'left' }}>Operario</th>
+                        <th style={{ padding: '6px', textAlign: 'left' }}>Área</th>
                         <th style={{ padding: '6px', textAlign: 'center' }}>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {operarios.map((op) => (
                         <tr key={op.id} style={{ borderBottom: '1px solid #eee' }}>
-                          <td style={{ padding: '6px' }}>{op.nombre}</td>
+                          <td style={{ padding: '6px' }}>👤 {op.nombre}</td>
+                          <td style={{ padding: '6px' }}>
+                            {op.area_id ? (
+                              <span style={{
+                                backgroundColor: op.area_color || '#eee',
+                                color: op.area_color ? 'white' : '#333',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '0.75rem'
+                              }}>
+                                {op.area_icono || '🏭'} {op.area_nombre || 'Sin área'}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#999', fontSize: '0.8rem' }}>Sin asignar</span>
+                            )}
+                          </td>
                           <td style={{ padding: '6px', textAlign: 'center' }}>
                             <button
                               onClick={() => handleEliminarOperario(op.id, op.nombre)}
@@ -429,7 +788,7 @@ function Produccion() {
       )}
 
       {/* ========================================== */}
-      {/* FORMULARIO DE PRODUCCIÓN MÚLTIPLE */}
+      {/* FORMULARIO DE PRODUCCIÓN */}
       {/* ========================================== */}
       {esSupervisor && (
         <div style={{
@@ -441,12 +800,21 @@ function Produccion() {
         }}>
           <h3 style={{ marginTop: 0, color: '#003b6f' }}>
             {editando ? '✏️ Editar Producción' : '📝 Registrar Producción Múltiple'}
+            {esSupervisorDeArea && (
+              <span style={{
+                marginLeft: '10px',
+                fontSize: '0.85rem',
+                color: getAreaColor(areaDelSupervisor)
+              }}>
+                - {getAreaIcono(areaDelSupervisor)} {getAreaNombre(areaDelSupervisor)}
+              </span>
+            )}
           </h3>
 
           <form onSubmit={handleSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
               <div>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Operario *</label>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>👷 Operario *</label>
                 <select
                   value={form.operario}
                   onChange={(e) => setForm({ ...form, operario: e.target.value })}
@@ -460,7 +828,39 @@ function Produccion() {
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Fecha</label>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>🏷️ Área *</label>
+                <select
+                  value={form.area_id || areaDelSupervisor || ''}
+                  onChange={(e) => setForm({ ...form, area_id: e.target.value })}
+                  required
+                  disabled={esSupervisorDeArea}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '8px',
+                    backgroundColor: esSupervisorDeArea ? '#f5f5f5' : 'white'
+                  }}
+                >
+                  <option value="">Seleccionar área</option>
+                  {AREAS_PREDEFINIDAS.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.icono} {a.nombre}
+                    </option>
+                  ))}
+                </select>
+                {esSupervisorDeArea && (
+                  <div style={{
+                    marginTop: '4px',
+                    fontSize: '0.75rem',
+                    color: getAreaColor(areaDelSupervisor)
+                  }}>
+                    Área asignada automáticamente
+                  </div>
+                )}
+              </div>
+              <div>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>📅 Fecha</label>
                 <input
                   type="date"
                   value={form.fecha}
@@ -471,7 +871,7 @@ function Produccion() {
             </div>
 
             <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Observación General</label>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>📝 Observación General</label>
               <textarea
                 value={form.observacion_general}
                 onChange={(e) => setForm({ ...form, observacion_general: e.target.value })}
@@ -614,7 +1014,7 @@ function Produccion() {
       )}
 
       {/* ========================================== */}
-      {/* DETALLE POR OPERARIO - PANEL PRINCIPAL */}
+      {/* DETALLE POR OPERARIO */}
       {/* ========================================== */}
       <div style={{
         backgroundColor: '#f5f7fb',
@@ -642,7 +1042,10 @@ function Produccion() {
               onClick={() => {
                 const hoy = new Date().toISOString().split('T')[0]
                 setFechaSeleccionada(hoy)
-                cargarDetalleOperarios()
+                setTimeout(() => {
+                  cargarDetalleOperarios()
+                  cargarResumen()
+                }, 100)
               }}
               style={{
                 padding: '8px 16px',
@@ -674,12 +1077,20 @@ function Produccion() {
                 borderRadius: '12px',
                 padding: '15px',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                borderLeft: '4px solid #003b6f'
+                borderLeft: `4px solid ${op.area_color || '#003b6f'}`
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <h3 style={{ margin: 0, color: '#003b6f' }}>👤 {op.operario}</h3>
+                  <div>
+                    <h3 style={{ margin: 0, color: '#003b6f' }}>👤 {op.operario}</h3>
+                    <span style={{
+                      fontSize: '0.8rem',
+                      color: op.area_color || '#666'
+                    }}>
+                      {op.area_icono || '🏭'} {op.area || 'Sin área'}
+                    </span>
+                  </div>
                   <span style={{
-                    backgroundColor: '#003b6f',
+                    backgroundColor: op.area_color || '#003b6f',
                     color: 'white',
                     padding: '4px 12px',
                     borderRadius: '12px',
@@ -733,30 +1144,37 @@ function Produccion() {
       {/* RESUMEN DE PRODUCCIÓN */}
       {/* ========================================== */}
       <h2>📊 Resumen de producción hoy</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f0f4f8' }}>
-            <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #ddd' }}>Operario</th>
-            <th style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd' }}>Total Producido</th>
-          </tr>
-        </thead>
-        <tbody>
-          {resumen.length === 0 ? (
-            <tr>
-              <td colSpan="2" style={{ padding: '15px', textAlign: 'center', color: '#999' }}>Sin producción hoy</td>
+      {resumen.length === 0 ? (
+        <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>Sin producción hoy</p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f0f4f8' }}>
+              <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #ddd' }}>Área</th>
+              <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #ddd' }}>Operario</th>
+              <th style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd' }}>Total Producido</th>
+              <th style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd' }}>Registros</th>
             </tr>
-          ) : (
-            resumen.map((item, idx) => (
+          </thead>
+          <tbody>
+            {resumen.map((item, idx) => (
               <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                <td style={{ padding: '10px', border: '1px solid #ddd' }}>
+                  <span style={{ marginRight: '6px' }}>{item.area_icono || '🏭'}</span>
+                  {item.area_nombre || 'Sin área'}
+                </td>
                 <td style={{ padding: '10px', border: '1px solid #ddd' }}>{item.operario}</td>
-                <td style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd' }}>
+                <td style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd', fontWeight: 'bold' }}>
                   {item.total_producido} unidades
                 </td>
+                <td style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd' }}>
+                  {item.numero_registros}
+                </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      )}
 
       {/* ========================================== */}
       {/* HISTORIAL */}
@@ -767,8 +1185,25 @@ function Produccion() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
           {producciones.map((prod) => (
-            <div key={prod.id} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
-              <h3 style={{ margin: '0 0 5px 0' }}>{prod.producto_nombre || 'Producto sin nombre'}</h3>
+            <div key={prod.id} style={{
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              padding: '15px',
+              backgroundColor: 'white',
+              borderLeft: `4px solid ${prod.area_color || '#003b6f'}`
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: '0 0 5px 0' }}>{prod.producto_nombre || 'Producto sin nombre'}</h3>
+                <span style={{
+                  fontSize: '0.75rem',
+                  backgroundColor: prod.area_color || '#eee',
+                  color: prod.area_color ? 'white' : '#333',
+                  padding: '2px 8px',
+                  borderRadius: '4px'
+                }}>
+                  {prod.area_icono || '🏭'} {prod.area_nombre || 'Sin área'}
+                </span>
+              </div>
               <p><strong>Operario:</strong> {prod.operario || 'N/A'}</p>
               <p><strong>Cantidad:</strong> {prod.cantidad}</p>
               <p><strong>Supervisor:</strong> {prod.supervisor_nombre || 'N/A'}</p>

@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// POST /operarios - Crear un nuevo operario
+// POST /operarios - Crear un nuevo operario (SIMPLE)
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -55,15 +55,12 @@ router.post('/', async (req, res) => {
 
         console.log('📝 Creando operario:', { nombre, area_id });
 
-        // 👇 Generar correo por defecto basado en el nombre
-        const nombreLimpio = nombre.trim().toLowerCase().replace(/ /g, '.');
-        const correoPorDefecto = `${nombreLimpio}@operario.com`;
-
+        // 👇 SOLO nombre, rol, area_id y sucursal_id
         const result = await pool.query(
-            `INSERT INTO usuarios (nombre, rol, area_id, sucursal_id, correo) 
-             VALUES ($1, 'operario', $2, 3, $3) 
-             RETURNING id, nombre, rol, area_id, correo`,
-            [nombre.trim(), area_id || null, correoPorDefecto]
+            `INSERT INTO usuarios (nombre, rol, area_id, sucursal_id) 
+             VALUES ($1, 'operario', $2, 3) 
+             RETURNING id, nombre, rol, area_id`,
+            [nombre.trim(), area_id || null]
         );
 
         console.log('✅ Operario creado:', result.rows[0]);

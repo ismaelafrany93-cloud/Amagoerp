@@ -614,7 +614,7 @@ router.get('/resumen', async (req, res) => {
 });
 
 // ============================================
-// GET /produccion/operarios - Obtener operarios
+// GET /produccion/operarios - Obtener SOLO OPERARIOS (CORREGIDO)
 // ============================================
 router.get('/operarios', async (req, res) => {
     try {
@@ -632,7 +632,7 @@ router.get('/operarios', async (req, res) => {
                 a.color as area_color
             FROM usuarios u
             LEFT JOIN areas a ON u.area_id = a.id
-            WHERE u.rol = 'operario' OR u.rol = 'supervisor'
+            WHERE u.rol = 'operario'
         `;
         let params = [];
         
@@ -652,10 +652,8 @@ router.get('/operarios', async (req, res) => {
 });
 
 // ============================================
-// NUEVAS RUTAS PARA ÁREAS
-// ============================================
-
 // GET /produccion/estadisticas - Estadísticas por área
+// ============================================
 router.get('/estadisticas', async (req, res) => {
     try {
         const { area_id } = req.query;

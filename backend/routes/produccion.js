@@ -23,7 +23,6 @@ router.get('/', async (req, res) => {
                 p.area_id,
                 p.sucursal_id,
                 prod.nombre as producto_nombre,
-                prod.codigo as producto_codigo,
                 u.nombre as supervisor_nombre,
                 a.nombre as area_nombre,
                 a.icono as area_icono,
@@ -60,7 +59,31 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// GET /produccion/detalle-por-operario - Detalle por operario (CON PRODUCTOS)
+// GET /produccion/areas - Obtener todas las áreas
+// ============================================
+router.get('/areas', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT 
+                a.*,
+                COUNT(DISTINCT u.id) as total_supervisores,
+                COUNT(DISTINCT p.id) as total_producciones,
+                COALESCE(SUM(p.cantidad), 0) as total_unidades
+             FROM areas a
+             LEFT JOIN usuarios u ON u.area_id = a.id AND u.rol = 'supervisor'
+             LEFT JOIN produccion p ON p.area_id = a.id
+             GROUP BY a.id
+             ORDER BY a.nombre`
+        );
+        res.json(result.rows || []);
+    } catch (error) {
+        console.error('❌ Error en GET /produccion/areas:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
+// GET /produccion/detalle-por-operario - Con filtro por área
 // ============================================
 router.get('/detalle-por-operario', async (req, res) => {
     try {
@@ -72,14 +95,12 @@ router.get('/detalle-por-operario', async (req, res) => {
                 p.operario,
                 p.producto_id,
                 prod.nombre as producto_nombre,
-                prod.codigo as producto_codigo,
                 COALESCE(SUM(p.cantidad), 0) as total_cantidad,
                 COUNT(p.id) as numero_registros,
                 a.nombre as area_nombre,
                 a.id as area_id,
                 a.icono as area_icono,
-                a.color as area_color,
-                STRING_AGG(DISTINCT prod.nombre, ', ') as productos_lista
+                a.color as area_color
             FROM produccion p
             LEFT JOIN productos prod ON p.producto_id = prod.id
             LEFT JOIN areas a ON p.area_id = a.id
@@ -94,7 +115,7 @@ router.get('/detalle-por-operario', async (req, res) => {
             paramIndex++;
         }
 
-        query += ` GROUP BY p.operario, p.producto_id, prod.nombre, prod.codigo, a.nombre, a.id, a.icono, a.color
+        query += ` GROUP BY p.operario, p.producto_id, prod.nombre, a.nombre, a.id, a.icono, a.color
                    ORDER BY p.operario, total_cantidad DESC`;
 
         const result = await pool.query(query, params);
@@ -116,14 +137,12 @@ router.get('/detalle-por-operario', async (req, res) => {
             operariosMap[row.operario].productos.push({
                 producto_id: row.producto_id,
                 producto_nombre: row.producto_nombre || 'Producto sin nombre',
-                producto_codigo: row.producto_codigo || 'N/A',
                 cantidad: parseInt(row.total_cantidad),
                 numero_registros: parseInt(row.numero_registros)
             });
             operariosMap[row.operario].total_general += parseInt(row.total_cantidad);
         });
 
-        // Ordenar y formatear
         const resultado = Object.values(operariosMap).map(op => ({
             ...op,
             productos: op.productos.sort((a, b) => b.cantidad - a.cantidad)
@@ -149,7 +168,6 @@ router.get('/detalle-por-operario/fecha/:fecha', async (req, res) => {
                 p.operario,
                 p.producto_id,
                 prod.nombre as producto_nombre,
-                prod.codigo as producto_codigo,
                 COALESCE(SUM(p.cantidad), 0) as total_cantidad,
                 COUNT(p.id) as numero_registros,
                 a.nombre as area_nombre,
@@ -170,7 +188,7 @@ router.get('/detalle-por-operario/fecha/:fecha', async (req, res) => {
             paramIndex++;
         }
 
-        query += ` GROUP BY p.operario, p.producto_id, prod.nombre, prod.codigo, a.nombre, a.id, a.icono, a.color
+        query += ` GROUP BY p.operario, p.producto_id, prod.nombre, a.nombre, a.id, a.icono, a.color
                    ORDER BY p.operario, total_cantidad DESC`;
 
         const result = await pool.query(query, params);
@@ -192,7 +210,6 @@ router.get('/detalle-por-operario/fecha/:fecha', async (req, res) => {
             operariosMap[row.operario].productos.push({
                 producto_id: row.producto_id,
                 producto_nombre: row.producto_nombre || 'Producto sin nombre',
-                producto_codigo: row.producto_codigo || 'N/A',
                 cantidad: parseInt(row.total_cantidad),
                 numero_registros: parseInt(row.numero_registros)
             });
@@ -637,28 +654,6 @@ router.get('/operarios', async (req, res) => {
 // ============================================
 // NUEVAS RUTAS PARA ÁREAS
 // ============================================
-
-// GET /produccion/areas - Obtener todas las áreas
-router.get('/areas', async (req, res) => {
-    try {
-        const result = await pool.query(
-            `SELECT 
-                a.*,
-                COUNT(DISTINCT u.id) as total_supervisores,
-                COUNT(DISTINCT p.id) as total_producciones,
-                COALESCE(SUM(p.cantidad), 0) as total_unidades
-             FROM areas a
-             LEFT JOIN usuarios u ON u.area_id = a.id AND u.rol = 'supervisor'
-             LEFT JOIN produccion p ON p.area_id = a.id
-             GROUP BY a.id
-             ORDER BY a.nombre`
-        );
-        res.json(result.rows || []);
-    } catch (error) {
-        console.error('❌ Error en GET /produccion/areas:', error.message);
-        res.status(200).json([]);
-    }
-});
 
 // GET /produccion/estadisticas - Estadísticas por área
 router.get('/estadisticas', async (req, res) => {

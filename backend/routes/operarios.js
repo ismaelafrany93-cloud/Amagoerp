@@ -2,113 +2,110 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
-// Obtener todos los operarios activos
+// ============================================
+// GET /operarios - Obtener todos los operarios
+// ============================================
 router.get('/', async (req, res) => {
     try {
         const result = await pool.query(
-            'SELECT * FROM operarios WHERE activo = true ORDER BY nombre'
+            `SELECT 
+                u.id, 
+                u.nombre, 
+                u.rol, 
+                u.area_id,
+                a.nombre as area_nombre,
+                a.icono as area_icono,
+                a.color as area_color
+             FROM usuarios u
+             LEFT JOIN areas a ON u.area_id = a.id
+             WHERE u.rol = 'operario'
+             ORDER BY u.nombre`
         );
-        res.json(result.rows);
+        res.json(result.rows || []);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en GET /operarios:', error.message);
+        res.status(200).json([]);
     }
 });
 
-// Obtener todos los operarios (incluyendo inactivos)
-router.get('/todos', async (req, res) => {
-    try {
-        const result = await pool.query(
-            'SELECT * FROM operarios ORDER BY nombre'
-        );
-        res.json(result.rows);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Crear un nuevo operario
+// ============================================
+// POST /operarios - Crear un nuevo operario
+// ============================================
 router.post('/', async (req, res) => {
     try {
-        const { nombre } = req.body;
+        const { nombre, area_id } = req.body;
 
-        if (!nombre || nombre.trim() === '') {
+        if (!nombre || !nombre.trim()) {
             return res.status(400).json({
                 success: false,
-                message: 'El nombre del operario es obligatorio'
+                error: 'El nombre del operario es requerido'
             });
         }
 
-        // Verificar si ya existe
-        const existe = await pool.query(
-            'SELECT * FROM operarios WHERE nombre ILIKE $1',
-            [nombre.trim()]
-        );
-
-        if (existe.rows.length > 0) {
-            // Si existe pero está inactivo, reactivarlo
-            if (!existe.rows[0].activo) {
-                await pool.query(
-                    'UPDATE operarios SET activo = true WHERE id = $1',
-                    [existe.rows[0].id]
-                );
-                return res.json({
-                    success: true,
-                    operario: existe.rows[0],
-                    message: 'Operario reactivado'
-                });
-            }
-            return res.status(400).json({
-                success: false,
-                message: 'El operario ya existe'
-            });
-        }
+        console.log('📝 Creando operario:', { nombre, area_id });
 
         const result = await pool.query(
-            'INSERT INTO operarios (nombre) VALUES ($1) RETURNING *',
-            [nombre.trim()]
+            `INSERT INTO usuarios (nombre, rol, area_id, sucursal_id) 
+             VALUES ($1, 'operario', $2, 3) 
+             RETURNING id, nombre, rol, area_id`,
+            [nombre.trim(), area_id || null]
         );
+
+        console.log('✅ Operario creado:', result.rows[0]);
 
         res.json({
             success: true,
-            operario: result.rows[0]
+            message: '✅ Operario agregado correctamente',
+            usuario: result.rows[0]
         });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en POST /operarios:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 
-// Eliminar operario (desactivar)
+// ============================================
+// DELETE /operarios/:id - Eliminar un operario
+// ============================================
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
+        console.log('🗑️ Eliminando operario ID:', id);
+
+        // Verificar que el usuario existe y es operario
         const existe = await pool.query(
-            'SELECT * FROM operarios WHERE id = $1',
+            'SELECT id, nombre, rol FROM usuarios WHERE id = $1 AND rol = \'operario\'',
             [id]
         );
 
         if (existe.rows.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Operario no encontrado'
+                error: 'Operario no encontrado'
             });
         }
 
-        await pool.query(
-            'UPDATE operarios SET activo = false WHERE id = $1',
-            [id]
-        );
+        console.log('👤 Operario a eliminar:', existe.rows[0]);
+
+        // Eliminar el operario
+        await pool.query('DELETE FROM usuarios WHERE id = $1', [id]);
+
+        console.log('✅ Operario eliminado');
 
         res.json({
             success: true,
-            message: 'Operario eliminado correctamente'
+            message: '✅ Operario eliminado correctamente'
         });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en DELETE /operarios/:id:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 

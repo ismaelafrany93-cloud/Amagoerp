@@ -16,7 +16,7 @@ function Produccion() {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0])
   const [areaSeleccionada, setAreaSeleccionada] = useState('')
   const [mostrarEstadisticas, setMostrarEstadisticas] = useState(false)
-  
+
   // 👇 ESTADOS PARA GESTIÓN DE OPERARIOS
   const [mostrarGestionOperarios, setMostrarGestionOperarios] = useState(false)
   const [nuevoOperario, setNuevoOperario] = useState('')
@@ -56,13 +56,13 @@ function Produccion() {
     cargarProductos()
     cargarAreas()
     cargarEstadisticas()
-    
+
     // Si el supervisor tiene un área asignada, filtrar automáticamente
     if (esSupervisorDeArea) {
       setAreaSeleccionada(String(areaDelSupervisor))
       setForm(prev => ({ ...prev, area_id: String(areaDelSupervisor) }))
     }
-    
+
     cargarProducciones()
     cargarResumen()
     cargarDetalleOperarios()
@@ -101,7 +101,7 @@ function Produccion() {
 
   const cargarEstadisticas = async () => {
     try {
-      const url = areaDelSupervisor 
+      const url = areaDelSupervisor
         ? `${API_URL}/produccion/estadisticas?area_id=${areaDelSupervisor}`
         : `${API_URL}/produccion/estadisticas`
       const response = await fetch(url)
@@ -117,17 +117,17 @@ function Produccion() {
     try {
       let url = `${API_URL}/produccion`
       const params = new URLSearchParams()
-      
+
       if (areaSeleccionada) {
         params.append('area_id', areaSeleccionada)
       } else if (esSupervisorDeArea) {
         params.append('area_id', areaDelSupervisor)
       }
-      
+
       if (params.toString()) {
         url += `?${params.toString()}`
       }
-      
+
       const response = await fetch(url)
       const data = await response.json()
       setProducciones(Array.isArray(data) ? data : [])
@@ -173,7 +173,7 @@ function Produccion() {
 
   const cargarOperarios = async () => {
     try {
-      let url = `${API_URL}/produccion/operarios`
+      let url = `${API_URL}/operarios`
       if (areaSeleccionada) {
         url += `?area_id=${areaSeleccionada}`
       } else if (esSupervisorDeArea) {
@@ -189,7 +189,7 @@ function Produccion() {
   }
 
   // ============================================
-  // GESTIÓN DE OPERARIOS
+  // GESTIÓN DE OPERARIOS - CORREGIDO
   // ============================================
   const handleAgregarOperario = async (e) => {
     e.preventDefault()
@@ -199,29 +199,41 @@ function Produccion() {
     }
 
     try {
+      // Asegurar que el área se envía correctamente
+      const areaId = nuevoOperarioArea || areaDelSupervisor || null
+
+      console.log('📝 Enviando operario:', {
+        nombre: nuevoOperario.trim(),
+        area_id: areaId
+      })
+
       const response = await fetch(`${API_URL}/operarios`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           nombre: nuevoOperario.trim(),
-          area_id: nuevoOperarioArea || areaDelSupervisor || null
+          area_id: areaId
         })
       })
 
       const data = await response.json()
+      console.log('📥 Respuesta:', data)
 
       if (data.success) {
         setMensaje('✅ Operario agregado correctamente')
         setNuevoOperario('')
         setNuevoOperarioArea('')
-        cargarOperarios()
+
+        // Recargar la lista de operarios
+        await cargarOperarios()
+
         setTimeout(() => setMensaje(''), 3000)
       } else {
-        alert('❌ Error: ' + (data.message || 'No se pudo agregar'))
+        alert('❌ Error: ' + (data.error || data.message || 'No se pudo agregar'))
       }
     } catch (error) {
-      console.error(error)
-      alert('❌ Error agregando operario')
+      console.error('❌ Error:', error)
+      alert('❌ Error agregando operario: ' + error.message)
     }
   }
 
@@ -229,22 +241,26 @@ function Produccion() {
     if (!window.confirm(`¿Estás seguro de eliminar a "${nombre}"?`)) return
 
     try {
+      console.log('🗑️ Eliminando operario:', { id, nombre })
+
       const response = await fetch(`${API_URL}/operarios/${id}`, {
         method: 'DELETE'
       })
 
       const data = await response.json()
+      console.log('📥 Respuesta DELETE:', data)
 
       if (data.success) {
         setMensaje('✅ Operario eliminado correctamente')
-        cargarOperarios()
+        // Recargar la lista
+        await cargarOperarios()
         setTimeout(() => setMensaje(''), 3000)
       } else {
-        alert('❌ Error eliminando operario')
+        alert('❌ Error eliminando operario: ' + (data.error || data.message))
       }
     } catch (error) {
-      console.error(error)
-      alert('❌ Error eliminando operario')
+      console.error('❌ Error:', error)
+      alert('❌ Error eliminando operario: ' + error.message)
     }
   }
 
@@ -308,7 +324,7 @@ function Produccion() {
 
     // Si el supervisor tiene área, usarla automáticamente
     const areaId = form.area_id || areaDelSupervisor
-    
+
     if (!areaId) {
       alert('⚠️ Selecciona un área de producción')
       return
@@ -446,7 +462,7 @@ function Produccion() {
   }
 
   // Áreas que puede ver el usuario
-  const areasVisibles = esSupervisorDeArea 
+  const areasVisibles = esSupervisorDeArea
     ? areas.filter(a => a.id === areaDelSupervisor)
     : areas
 
@@ -575,7 +591,7 @@ function Produccion() {
       </div>
 
       {/* ========================================== */}
-      {/* GESTIÓN DE OPERARIOS - PANEL FLOTANTE */}
+      {/* GESTIÓN DE OPERARIOS - PANEL FLOTANTE CORREGIDO */}
       {/* ========================================== */}
       {puedeGestionarOperarios && (
         <div style={{
@@ -618,7 +634,7 @@ function Produccion() {
                     minWidth: '150px'
                   }}
                 />
-                {!esSupervisorDeArea && (
+                {!esSupervisorDeArea ? (
                   <select
                     value={nuevoOperarioArea}
                     onChange={(e) => setNuevoOperarioArea(e.target.value)}
@@ -629,19 +645,22 @@ function Produccion() {
                       minWidth: '150px'
                     }}
                   >
-                    <option value="">Área del operario</option>
+                    <option value="">📋 Sin área</option>
                     {AREAS_PREDEFINIDAS.map(a => (
-                      <option key={a.id} value={a.id}>{a.icono} {a.nombre}</option>
+                      <option key={a.id} value={a.id}>
+                        {a.icono} {a.nombre}
+                      </option>
                     ))}
                   </select>
-                )}
-                {esSupervisorDeArea && (
+                ) : (
                   <span style={{
                     padding: '8px 12px',
                     backgroundColor: getAreaColor(areaDelSupervisor) + '20',
                     borderRadius: '6px',
                     color: getAreaColor(areaDelSupervisor),
-                    fontWeight: 'bold'
+                    fontWeight: 'bold',
+                    minWidth: '150px',
+                    textAlign: 'center'
                   }}>
                     {getAreaIcono(areaDelSupervisor)} {getAreaNombre(areaDelSupervisor)}
                   </span>
@@ -662,7 +681,7 @@ function Produccion() {
               </form>
 
               {operarios.length === 0 ? (
-                <p style={{ color: '#999', textAlign: 'center', padding: '10px' }}>No hay operarios registrados en esta área</p>
+                <p style={{ color: '#999', textAlign: 'center', padding: '10px' }}>No hay operarios registrados</p>
               ) : (
                 <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
@@ -700,12 +719,12 @@ function Produccion() {
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '4px',
-                                padding: '2px 10px',
+                                padding: '4px 10px',
                                 cursor: 'pointer',
                                 fontSize: '0.8rem'
                               }}
                             >
-                              🗑️
+                              🗑️ Eliminar
                             </button>
                           </td>
                         </tr>

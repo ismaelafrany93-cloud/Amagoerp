@@ -7,8 +7,10 @@ const pool = require('../db');
 // ============================================
 router.get('/', async (req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT 
+        const { area_id } = req.query;
+        
+        let query = `
+            SELECT 
                 u.id, 
                 u.nombre, 
                 u.rol, 
@@ -19,8 +21,17 @@ router.get('/', async (req, res) => {
              FROM usuarios u
              LEFT JOIN areas a ON u.area_id = a.id
              WHERE u.rol = 'operario'
-             ORDER BY u.nombre`
-        );
+        `;
+        let params = [];
+        
+        if (area_id) {
+            query += ` AND u.area_id = $1`;
+            params.push(area_id);
+        }
+        
+        query += ` ORDER BY u.nombre`;
+
+        const result = await pool.query(query, params);
         res.json(result.rows || []);
     } catch (error) {
         console.error('❌ Error en GET /operarios:', error.message);
@@ -78,8 +89,8 @@ router.delete('/:id', async (req, res) => {
 
         // Verificar que el usuario existe y es operario
         const existe = await pool.query(
-            'SELECT id, nombre, rol FROM usuarios WHERE id = $1 AND rol = \'operario\'',
-            [id]
+            'SELECT id, nombre, rol FROM usuarios WHERE id = $1 AND rol = $2',
+            [id, 'operario']
         );
 
         if (existe.rows.length === 0) {

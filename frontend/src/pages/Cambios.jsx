@@ -18,7 +18,11 @@ function Cambios() {
   const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
 
   const [form, setForm] = useState({
-    tipo: 'cambio', // cambio, devolucion
+    tipo: 'cambio',
+    venta_id: '',
+    factura_original: '',
+    cliente_nombre: '',
+    cliente_telefono: '',
     producto_devuelto_id: '',
     producto_devuelto_nombre: '',
     cantidad_devuelta: 1,
@@ -87,10 +91,9 @@ function Cambios() {
         setMostrarFormulario(true)
         setMensaje(`✅ Factura ${data.venta.factura} encontrada`)
         
-        // Prellenar cliente
         setForm(prev => ({
           ...prev,
-          cliente_nombre: data.venta.cliente_nombre,
+          cliente_nombre: data.venta.cliente_nombre || '',
           cliente_telefono: data.venta.cliente_telefono || '',
           venta_id: data.venta.id,
           factura_original: data.venta.factura
@@ -197,6 +200,10 @@ function Cambios() {
         cargarCambios()
         setForm({
           tipo: 'cambio',
+          venta_id: '',
+          factura_original: '',
+          cliente_nombre: '',
+          cliente_telefono: '',
           producto_devuelto_id: '',
           producto_devuelto_nombre: '',
           cantidad_devuelta: 1,
@@ -247,6 +254,18 @@ function Cambios() {
     return estados[estado] || estado
   }
 
+  // Si no es admin, mostrar mensaje
+  if (!esAdmin) {
+    return (
+      <AdminLayout>
+        <div style={{ textAlign: 'center', padding: '60px' }}>
+          <h2>⛔ Acceso Denegado</h2>
+          <p>No tienes permisos para ver esta página.</p>
+        </div>
+      </AdminLayout>
+    )
+  }
+
   return (
     <AdminLayout>
       <h1>🔄 Cambios y Devoluciones</h1>
@@ -263,9 +282,7 @@ function Cambios() {
         </div>
       )}
 
-      {/* ========================================== */}
       {/* BUSCAR FACTURA */}
-      {/* ========================================== */}
       <div style={{
         backgroundColor: 'white',
         borderRadius: '12px',
@@ -307,7 +324,6 @@ function Cambios() {
           </button>
         </div>
 
-        {/* Datos de la venta encontrada */}
         {ventaEncontrada && (
           <div style={{
             marginTop: '15px',
@@ -367,9 +383,7 @@ function Cambios() {
         )}
       </div>
 
-      {/* ========================================== */}
       {/* FORMULARIO DE CAMBIO */}
-      {/* ========================================== */}
       {mostrarFormulario && ventaEncontrada && (
         <div style={{
           backgroundColor: 'white',
@@ -534,7 +548,6 @@ function Cambios() {
                   </div>
                 </div>
 
-                {/* Diferencia */}
                 {form.producto_nuevo_id && form.producto_devuelto_id && (
                   <div style={{
                     marginTop: '15px',
@@ -555,7 +568,6 @@ function Cambios() {
               </>
             )}
 
-            {/* Envío opcional */}
             <div style={{ marginTop: '20px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <input
@@ -566,11 +578,6 @@ function Cambios() {
                 />
                 <span style={{ fontWeight: 'bold' }}>🚚 El cliente pagó envío</span>
               </label>
-              {form.envio_opcional && (
-                <div style={{ marginTop: '5px', color: '#666', fontSize: '0.9rem' }}>
-                  El costo de envío se cobrará al cliente (opcional)
-                </div>
-              )}
             </div>
 
             <div style={{ display: 'flex', gap: '15px', marginTop: '25px' }}>
@@ -615,9 +622,7 @@ function Cambios() {
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* FILTRO Y LISTA DE CAMBIOS */}
-      {/* ========================================== */}
+      {/* LISTA DE CAMBIOS */}
       <div style={{
         backgroundColor: 'white',
         borderRadius: '12px',

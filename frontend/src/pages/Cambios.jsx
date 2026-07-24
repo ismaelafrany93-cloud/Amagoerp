@@ -15,7 +15,10 @@ function Cambios() {
   const [cambiosFiltrados, setCambiosFiltrados] = useState([])
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-  const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+  const rol = usuario?.rol || ''
+  
+  // 👇 PERMITIR ACCESO A VENDEDORES TAMBIÉN
+  const tieneAcceso = ['dueno', 'dueño', 'subgerente', 'admin', 'vendedor', 'vendedora'].includes(rol)
 
   const [form, setForm] = useState({
     tipo: 'cambio',
@@ -36,9 +39,11 @@ function Cambios() {
   })
 
   useEffect(() => {
-    cargarCambios()
-    cargarProductos()
-  }, [])
+    if (tieneAcceso) {
+      cargarCambios()
+      cargarProductos()
+    }
+  }, [tieneAcceso])
 
   useEffect(() => {
     filtrarCambios()
@@ -254,8 +259,8 @@ function Cambios() {
     return estados[estado] || estado
   }
 
-  // Si no es admin, mostrar mensaje
-  if (!esAdmin) {
+  // 👇 VERIFICAR ACCESO - AHORA TAMBIÉN PARA VENDEDORES
+  if (!tieneAcceso) {
     return (
       <AdminLayout>
         <div style={{ textAlign: 'center', padding: '60px' }}>

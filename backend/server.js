@@ -31,7 +31,7 @@ app.use('/inventario', require('./routes/inventario'));
 app.use('/clientes', require('./routes/clientes'));
 app.use('/produccion', require('./routes/produccion'));
 app.use('/entregas', require('./routes/entregas'));
-app.use('/reportes', require('./routes/reportes'));  // ← DEBE ESTAR
+app.use('/reportes', require('./routes/reportes'));
 app.use('/materiales', require('./routes/materiales'));
 app.use('/usuarios', require('./routes/usuarios'));
 app.use('/creditos', require('./routes/creditos'));
@@ -40,6 +40,7 @@ app.use('/recetas', require('./routes/recetas'));
 app.use('/sucursales', require('./routes/sucursales'));
 app.use('/historial', require('./routes/historial'));
 app.use('/transferencias', require('./routes/transferencias'));
+app.use('/cambios', require('./routes/cambios')); // 👈 NUEVA RUTA DE CAMBIOS
 
 // ============================================
 // TEST ROUTE

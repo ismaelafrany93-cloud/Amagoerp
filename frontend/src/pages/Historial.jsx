@@ -104,10 +104,7 @@ function Historial() {
   // FUNCIÓN PARA VERIFICAR SI LA VENTA ESTÁ DENTRO DEL TIEMPO LÍMITE
   // ============================================
   const estaDentroDelTiempo = (venta) => {
-    // Subgerente/Dueño tienen tiempo ilimitado
     if (esSubgerente) return true
-    
-    // Si ya está cancelada o entregada, no aplica
     if (venta.estado === 'cancelada') return false
     if (esEntregado(venta)) return false
     
@@ -126,6 +123,154 @@ function Historial() {
   }
 
   // ============================================
+  // FUNCIÓN PARA REIMPRIMIR FACTURA
+  // ============================================
+  const handleReimprimir = async (ventaId) => {
+    try {
+      const loading = document.createElement('div');
+      loading.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        color: white;
+        font-size: 1.5rem;
+      `;
+      loading.innerHTML = '🖨️ Generando factura...';
+      document.body.appendChild(loading);
+
+      const response = await fetch(`${API_URL}/ventas/${ventaId}/reimprimir`);
+      const data = await response.json();
+
+      if (!data.success) {
+        alert('❌ Error al obtener los datos de la factura');
+        document.body.removeChild(loading);
+        return;
+      }
+
+      const venta = data.venta;
+      const detalles = data.detalles;
+      const sucursal = data.sucursal || { nombre: 'Sucursal Principal', direccion: '', telefono: '' };
+
+      let ticketHTML = `
+        <div style="font-family: monospace; width: 300px; margin: 0 auto; padding: 20px; background: white;">
+          <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px;">
+            <h2 style="margin: 0; font-size: 18px;">🏭 AMAGO ERP</h2>
+            <p style="margin: 2px 0; font-size: 12px;">${sucursal.nombre || 'Sucursal Principal'}</p>
+            ${sucursal.direccion ? `<p style="margin: 2px 0; font-size: 11px;">${sucursal.direccion}</p>` : ''}
+            ${sucursal.telefono ? `<p style="margin: 2px 0; font-size: 11px;">Tel: ${sucursal.telefono}</p>` : ''}
+            <p style="margin: 5px 0; font-size: 14px; font-weight: bold;">FACTURA</p>
+            <p style="margin: 2px 0; font-size: 12px;">#${venta.factura || venta.id}</p>
+          </div>
+
+          <div style="padding: 10px 0; border-bottom: 1px dashed #000;">
+            <p style="margin: 2px 0; font-size: 12px;"><strong>Cliente:</strong> ${venta.cliente_nombre || 'N/A'}</p>
+            ${venta.cliente_telefono ? `<p style="margin: 2px 0; font-size: 12px;"><strong>Teléfono:</strong> ${venta.cliente_telefono}</p>` : ''}
+            ${venta.cliente_direccion ? `<p style="margin: 2px 0; font-size: 12px;"><strong>Dirección:</strong> ${venta.cliente_direccion}</p>` : ''}
+            <p style="margin: 2px 0; font-size: 12px;"><strong>Vendedor:</strong> ${venta.vendedor_nombre || 'N/A'}</p>
+            <p style="margin: 2px 0; font-size: 12px;"><strong>Fecha:</strong> ${new Date(venta.fecha).toLocaleString()}</p>
+            <p style="margin: 2px 0; font-size: 12px;"><strong>Tipo:</strong> ${venta.tipo_venta || 'Contado'}</p>
+            <p style="margin: 2px 0; font-size: 12px;"><strong>Pago:</strong> ${venta.tipo_pago || 'Efectivo'}</p>
+            ${venta.estado_entrega ? `<p style="margin: 2px 0; font-size: 12px;"><strong>Entrega:</strong> ${venta.estado_entrega}</p>` : ''}
+          </div>
+
+          <div style="padding: 10px 0; border-bottom: 1px dashed #000;">
+            <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+              <thead>
+                <tr style="border-bottom: 1px solid #000;">
+                  <th style="text-align: left; padding: 4px 0;">Producto</th>
+                  <th style="text-align: center; padding: 4px 0;">Cant</th>
+                  <th style="text-align: right; padding: 4px 0;">Precio</th>
+                  <th style="text-align: right; padding: 4px 0;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+      `;
+
+      detalles.forEach(d => {
+        ticketHTML += `
+          <tr>
+            <td style="padding: 4px 0; text-align: left;">${d.producto_nombre || 'Producto'}</td>
+            <td style="padding: 4px 0; text-align: center;">${d.cantidad}</td>
+            <td style="padding: 4px 0; text-align: right;">RD$ ${Number(d.precio).toFixed(2)}</td>
+            <td style="padding: 4px 0; text-align: right;">RD$ ${(Number(d.precio) * d.cantidad).toFixed(2)}</td>
+          </tr>
+        `;
+      });
+
+      ticketHTML += `
+              </tbody>
+              <tfoot>
+                <tr style="border-top: 2px solid #000;">
+                  <td colspan="3" style="text-align: right; padding: 8px 0; font-weight: bold;">TOTAL:</td>
+                  <td style="text-align: right; padding: 8px 0; font-weight: bold; font-size: 16px;">RD$ ${Number(venta.total).toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div style="padding: 10px 0; text-align: center; border-bottom: 1px dashed #000;">
+            <p style="margin: 2px 0; font-size: 12px;">${venta.estado === 'cancelada' ? '❌ FACTURA CANCELADA' : '✅ FACTURA VÁLIDA'}</p>
+            ${venta.motivo_cancelacion ? `<p style="margin: 2px 0; font-size: 11px; color: #f44336;">Motivo: ${venta.motivo_cancelacion}</p>` : ''}
+            ${venta.observacion ? `<p style="margin: 2px 0; font-size: 11px;">${venta.observacion}</p>` : ''}
+          </div>
+
+          <div style="padding: 10px 0; text-align: center; font-size: 11px; color: #666;">
+            <p style="margin: 2px 0;">¡Gracias por su compra!</p>
+            <p style="margin: 2px 0;">Este documento es una reimpresión</p>
+            <p style="margin: 2px 0;">${new Date().toLocaleString()}</p>
+          </div>
+        </div>
+      `;
+
+      const ventana = window.open('', '_blank', 'width=400,height=600');
+      ventana.document.write(`
+        <html>
+          <head>
+            <title>Reimpresión Factura #${venta.factura || venta.id}</title>
+            <style>
+              body { margin: 0; padding: 20px; background: #f5f5f5; }
+              @media print {
+                body { background: white; padding: 0; }
+                .no-print { display: none; }
+                button { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            ${ticketHTML}
+            <div style="text-align: center; margin-top: 20px;" class="no-print">
+              <button onclick="window.print()" style="padding: 10px 30px; background: #003b6f; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;">
+                🖨️ Imprimir
+              </button>
+              <button onclick="window.close()" style="padding: 10px 30px; background: #f44336; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-left: 10px;">
+                ✕ Cerrar
+              </button>
+            </div>
+          </body>
+        </html>
+      `);
+      ventana.document.close();
+
+      document.body.removeChild(loading);
+      setMensaje('✅ Factura reimpresa correctamente');
+      setTimeout(() => setMensaje(''), 3000);
+
+    } catch (error) {
+      console.error('Error reimprimiendo factura:', error);
+      alert('❌ Error al reimprimir la factura');
+      const loading = document.querySelector('div[style*="position: fixed;"]');
+      if (loading) document.body.removeChild(loading);
+    }
+  };
+
+  // ============================================
   // FUNCIÓN PARA CANCELAR VENTA
   // ============================================
   const cancelarVenta = async (ventaId) => {
@@ -133,7 +278,6 @@ function Historial() {
     
     if (!venta) return;
 
-    // Verificar tiempo límite (excepto subgerente)
     if (!esSubgerente && !estaDentroDelTiempo(venta)) {
       alert('⏰ El tiempo límite de 1 hora para cancelar esta venta ha expirado');
       return;
@@ -182,7 +326,6 @@ function Historial() {
   const verDetalle = async (id) => {
     const venta = ventas.find(v => v.id === id);
     
-    // Verificar tiempo límite (excepto subgerente)
     if (!esSubgerente && venta && !estaDentroDelTiempo(venta)) {
       alert('⏰ El tiempo límite de 1 hora para editar esta venta ha expirado');
       return;
@@ -295,9 +438,6 @@ function Historial() {
     return 'Mi Sucursal'
   }
 
-  // ============================================
-  // FUNCIÓN PARA VERIFICAR SI LA VENTA YA FUE ENTREGADA
-  // ============================================
   const esEntregado = (venta) => {
     if (venta.estado_entrega === 'entregado' || 
         venta.estado_entrega === 'entregada' || 
@@ -307,9 +447,6 @@ function Historial() {
     return false;
   }
 
-  // ============================================
-  // FUNCIÓN PARA VERIFICAR SI LA VENTA ES EDITABLE
-  // ============================================
   const esEditable = (venta) => {
     if (venta.estado === 'cancelada') return false;
     if (esEntregado(venta)) return false;
@@ -317,9 +454,6 @@ function Historial() {
     return true;
   }
 
-  // ============================================
-  // FUNCIÓN PARA VERIFICAR SI LA VENTA ES CANCELABLE
-  // ============================================
   const esCancelable = (venta) => {
     if (venta.estado === 'cancelada') return false;
     if (esEntregado(venta)) return false;
@@ -327,9 +461,6 @@ function Historial() {
     return true;
   }
 
-  // ============================================
-  // FUNCIÓN PARA OBTENER EL ESTADO DE ENTREGA
-  // ============================================
   const getEstadoEntrega = (venta) => {
     if (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada') {
       return { texto: '✅ Entregado', color: '#4CAF50' };
@@ -548,12 +679,31 @@ function Historial() {
                                 borderRadius: '4px',
                                 padding: '4px 12px',
                                 cursor: 'pointer',
+                                marginRight: '5px',
                                 fontSize: '0.75rem'
                               }}
                             >
                               ❌ Cancelar
                             </button>
                           )}
+
+                          {/* 👇 BOTÓN REIMPRIMIR */}
+                          <button
+                            onClick={() => handleReimprimir(v.id)}
+                            style={{
+                              backgroundColor: '#9C27B0',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 10px',
+                              cursor: 'pointer',
+                              fontSize: '0.75rem'
+                            }}
+                            title="Reimprimir factura"
+                          >
+                            🖨️ Reimprimir
+                          </button>
+
                           {v.estado === 'cancelada' && (
                             <span style={{ color: '#999', fontSize: '0.75rem' }}>
                               {v.motivo_cancelacion || 'Cancelada'}

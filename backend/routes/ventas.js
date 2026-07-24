@@ -333,6 +333,67 @@ router.get('/codigo/:codigo', async (req, res) => {
 });
 
 // ============================================
+// GET /ventas/:id/reimprimir - Obtener datos para reimprimir
+// ============================================
+router.get('/:id/reimprimir', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Buscar la venta
+        const ventaResult = await pool.query(
+            `SELECT 
+                v.*,
+                u.nombre as vendedor_nombre,
+                u.id as vendedor_id
+            FROM ventas v
+            LEFT JOIN usuarios u ON v.usuario_id = u.id
+            WHERE v.id = $1`,
+            [id]
+        );
+
+        if (ventaResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Venta no encontrada'
+            });
+        }
+
+        const venta = ventaResult.rows[0];
+
+        // Buscar los detalles de la venta
+        const detallesResult = await pool.query(
+            `SELECT 
+                d.*,
+                p.nombre as producto_nombre,
+                p.precio as producto_precio
+            FROM detalle_ventas d
+            LEFT JOIN productos p ON d.producto_id = p.id
+            WHERE d.venta_id = $1`,
+            [id]
+        );
+
+        // Buscar la sucursal
+        const sucursalResult = await pool.query(
+            `SELECT nombre, direccion, telefono FROM sucursales WHERE id = $1`,
+            [venta.sucursal_id || 3]
+        );
+
+        res.json({
+            success: true,
+            venta: venta,
+            detalles: detallesResult.rows || [],
+            sucursal: sucursalResult.rows[0] || { nombre: 'Sucursal Principal', direccion: '', telefono: '' }
+        });
+    } catch (error) {
+        console.error('❌ Error en GET /ventas/:id/reimprimir:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================
 // GET /ventas/usuario/:id - Obtener ventas de un usuario
 // ============================================
 router.get('/usuario/:id', async (req, res) => {

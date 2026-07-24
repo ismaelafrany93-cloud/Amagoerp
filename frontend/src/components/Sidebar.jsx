@@ -134,7 +134,7 @@ function Sidebar() {
             {/* 👇 HISTORIAL - Subgerente ve TODO */}
             <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📜 {!colapsado && <span>Historial</span>}</Link>
             
-            {/* 👇 CAMBIOS - Nuevo */}
+            {/* 👇 CAMBIOS - Subgerente */}
             <Link to="/cambios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/cambios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔄 {!colapsado && <span>Cambios</span>}</Link>
             
             <Link to="/usuarios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/usuarios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👥 {!colapsado && <span>Usuarios</span>}</Link>
@@ -145,7 +145,7 @@ function Sidebar() {
         )}
 
         {/* ========================================== */}
-        {/* MENÚ PARA VENDEDOR */}
+        {/* MENÚ PARA VENDEDOR - CON CAMBIOS AGREGADO */}
         {/* ========================================== */}
         {esVendedor && (
           <>
@@ -166,6 +166,9 @@ function Sidebar() {
 
             {/* 👇 HISTORIAL - Vendedores ven sus propias ventas */}
             <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📜 {!colapsado && <span>Historial</span>}</Link>
+
+            {/* 👇 CAMBIOS - AHORA TAMBIÉN PARA VENDEDORES */}
+            <Link to="/cambios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/cambios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔄 {!colapsado && <span>Cambios</span>}</Link>
 
             {esVendedorPrincipal && (
               <Link to="/transferencias" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Transferencias</span>}</Link>

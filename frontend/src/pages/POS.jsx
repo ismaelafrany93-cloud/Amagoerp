@@ -26,6 +26,10 @@ function POS() {
     es_mayorista: false
   })
 
+  // 👇 NUEVO: Estado para mostrar el historial de ventas
+  const [ventasRecientes, setVentasRecientes] = useState([])
+  const [mostrarHistorial, setMostrarHistorial] = useState(false)
+
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSucursalPrincipal = usuario.sucursal_id === 3
   const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
@@ -35,6 +39,7 @@ function POS() {
 
   useEffect(() => {
     cargarProductos()
+    cargarVentasRecientes()
   }, [])
 
   const cargarProductos = async () => {
@@ -59,6 +64,165 @@ function POS() {
     }
   }
 
+  // 👇 NUEVO: Cargar ventas recientes
+  const cargarVentasRecientes = async () => {
+    try {
+      const response = await fetch(`${API_URL}/ventas?limite=10`)
+      const data = await response.json()
+      setVentasRecientes(Array.isArray(data) ? data.slice(0, 10) : [])
+    } catch (error) {
+      console.error('Error cargando ventas recientes:', error)
+      setVentasRecientes([])
+    }
+  }
+
+  // ============================================
+  // FUNCIÓN PARA REIMPRIMIR FACTURA
+  // ============================================
+  const handleReimprimir = async (ventaId) => {
+    try {
+      const loading = document.createElement('div');
+      loading.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        color: white;
+        font-size: 1.5rem;
+      `;
+      loading.innerHTML = '🖨️ Generando factura...';
+      document.body.appendChild(loading);
+
+      const response = await fetch(`${API_URL}/ventas/${ventaId}/reimprimir`);
+      const data = await response.json();
+
+      if (!data.success) {
+        alert('❌ Error al obtener los datos de la factura');
+        document.body.removeChild(loading);
+        return;
+      }
+
+      const venta = data.venta;
+      const detalles = data.detalles;
+      const sucursal = data.sucursal || { nombre: 'Sucursal Principal', direccion: '', telefono: '' };
+
+      let ticketHTML = `
+        <div style="font-family: monospace; width: 300px; margin: 0 auto; padding: 20px; background: white;">
+          <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px;">
+            <h2 style="margin: 0; font-size: 18px;">🏭 AMAGO ERP</h2>
+            <p style="margin: 2px 0; font-size: 12px;">${sucursal.nombre || 'Sucursal Principal'}</p>
+            ${sucursal.direccion ? `<p style="margin: 2px 0; font-size: 11px;">${sucursal.direccion}</p>` : ''}
+            ${sucursal.telefono ? `<p style="margin: 2px 0; font-size: 11px;">Tel: ${sucursal.telefono}</p>` : ''}
+            <p style="margin: 5px 0; font-size: 14px; font-weight: bold;">FACTURA</p>
+            <p style="margin: 2px 0; font-size: 12px;">#${venta.factura || venta.id}</p>
+          </div>
+
+          <div style="padding: 10px 0; border-bottom: 1px dashed #000;">
+            <p style="margin: 2px 0; font-size: 12px;"><strong>Cliente:</strong> ${venta.cliente_nombre || 'N/A'}</p>
+            ${venta.cliente_telefono ? `<p style="margin: 2px 0; font-size: 12px;"><strong>Teléfono:</strong> ${venta.cliente_telefono}</p>` : ''}
+            ${venta.cliente_direccion ? `<p style="margin: 2px 0; font-size: 12px;"><strong>Dirección:</strong> ${venta.cliente_direccion}</p>` : ''}
+            <p style="margin: 2px 0; font-size: 12px;"><strong>Vendedor:</strong> ${venta.vendedor_nombre || 'N/A'}</p>
+            <p style="margin: 2px 0; font-size: 12px;"><strong>Fecha:</strong> ${new Date(venta.fecha).toLocaleString()}</p>
+            <p style="margin: 2px 0; font-size: 12px;"><strong>Tipo:</strong> ${venta.tipo_venta || 'Contado'}</p>
+            <p style="margin: 2px 0; font-size: 12px;"><strong>Pago:</strong> ${venta.tipo_pago || 'Efectivo'}</p>
+            ${venta.estado_entrega ? `<p style="margin: 2px 0; font-size: 12px;"><strong>Entrega:</strong> ${venta.estado_entrega}</p>` : ''}
+          </div>
+
+          <div style="padding: 10px 0; border-bottom: 1px dashed #000;">
+            <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+              <thead>
+                <tr style="border-bottom: 1px solid #000;">
+                  <th style="text-align: left; padding: 4px 0;">Producto</th>
+                  <th style="text-align: center; padding: 4px 0;">Cant</th>
+                  <th style="text-align: right; padding: 4px 0;">Precio</th>
+                  <th style="text-align: right; padding: 4px 0;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+      `;
+
+      detalles.forEach(d => {
+        ticketHTML += `
+          <tr>
+            <td style="padding: 4px 0; text-align: left;">${d.producto_nombre || 'Producto'}</td>
+            <td style="padding: 4px 0; text-align: center;">${d.cantidad}</td>
+            <td style="padding: 4px 0; text-align: right;">RD$ ${Number(d.precio).toFixed(2)}</td>
+            <td style="padding: 4px 0; text-align: right;">RD$ ${(Number(d.precio) * d.cantidad).toFixed(2)}</td>
+          </tr>
+        `;
+      });
+
+      ticketHTML += `
+              </tbody>
+              <tfoot>
+                <tr style="border-top: 2px solid #000;">
+                  <td colspan="3" style="text-align: right; padding: 8px 0; font-weight: bold;">TOTAL:</td>
+                  <td style="text-align: right; padding: 8px 0; font-weight: bold; font-size: 16px;">RD$ ${Number(venta.total).toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div style="padding: 10px 0; text-align: center; border-bottom: 1px dashed #000;">
+            <p style="margin: 2px 0; font-size: 12px;">${venta.estado === 'cancelada' ? '❌ FACTURA CANCELADA' : '✅ FACTURA VÁLIDA'}</p>
+            ${venta.motivo_cancelacion ? `<p style="margin: 2px 0; font-size: 11px; color: #f44336;">Motivo: ${venta.motivo_cancelacion}</p>` : ''}
+            ${venta.observacion ? `<p style="margin: 2px 0; font-size: 11px;">${venta.observacion}</p>` : ''}
+          </div>
+
+          <div style="padding: 10px 0; text-align: center; font-size: 11px; color: #666;">
+            <p style="margin: 2px 0;">¡Gracias por su compra!</p>
+            <p style="margin: 2px 0;">Este documento es una reimpresión</p>
+            <p style="margin: 2px 0;">${new Date().toLocaleString()}</p>
+          </div>
+        </div>
+      `;
+
+      const ventana = window.open('', '_blank', 'width=400,height=600');
+      ventana.document.write(`
+        <html>
+          <head>
+            <title>Reimpresión Factura #${venta.factura || venta.id}</title>
+            <style>
+              body { margin: 0; padding: 20px; background: #f5f5f5; }
+              @media print {
+                body { background: white; padding: 0; }
+                .no-print { display: none; }
+                button { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            ${ticketHTML}
+            <div style="text-align: center; margin-top: 20px;" class="no-print">
+              <button onclick="window.print()" style="padding: 10px 30px; background: #003b6f; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;">
+                🖨️ Imprimir
+              </button>
+              <button onclick="window.close()" style="padding: 10px 30px; background: #f44336; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-left: 10px;">
+                ✕ Cerrar
+              </button>
+            </div>
+          </body>
+        </html>
+      `);
+      ventana.document.close();
+
+      document.body.removeChild(loading);
+      alert('✅ Factura reimpresa correctamente');
+
+    } catch (error) {
+      console.error('Error reimprimiendo factura:', error);
+      alert('❌ Error al reimprimir la factura');
+      const loading = document.querySelector('div[style*="position: fixed;"]');
+      if (loading) document.body.removeChild(loading);
+    }
+  };
+
   // ============================================
   // FUNCIÓN PARA IMPRIMIR FACTURA
   // ============================================
@@ -69,17 +233,14 @@ function POS() {
       return;
     }
 
-    // Crear una ventana nueva para imprimir
     const ventana = window.open('', '_blank', 'width=800,height=600');
     if (!ventana) {
       alert('⚠️ Por favor, permite las ventanas emergentes para imprimir');
       return;
     }
 
-    // Obtener el HTML de la factura
     const html = contenido.outerHTML;
 
-    // Estilos según formato
     const estilos = formato === 'A4' 
       ? `
           @page {
@@ -112,7 +273,6 @@ function POS() {
           }
         `;
 
-    // Escribir el contenido en la nueva ventana
     ventana.document.write(`
       <!DOCTYPE html>
       <html>
@@ -302,6 +462,9 @@ function POS() {
           mensaje += `\n👑 Cliente Mayorista - Precio especial aplicado`
         }
         alert(mensaje)
+        
+        // Recargar ventas recientes
+        cargarVentasRecientes()
       } else {
         alert('❌ Error: ' + (data.error || data.message || 'No se pudo guardar'))
       }
@@ -325,6 +488,7 @@ function POS() {
     setDescuento('')
     setCodigoAutorizacion('')
     setMostrarAutorizacion(false)
+    cargarVentasRecientes()
   }
 
   const getTipoFactura = () => {
@@ -416,9 +580,7 @@ function POS() {
               </button>
             </div>
           </div>
-          {/* ========================================== */}
           {/* FACTURA OCULTA PARA IMPRIMIR */}
-          {/* ========================================== */}
           <div style={{ 
             position: 'fixed', 
             left: '-9999px', 
@@ -449,6 +611,86 @@ function POS() {
   return (
     <AdminLayout>
       <h1>🛒 Punto de Venta</h1>
+
+      {/* 👇 BOTÓN PARA MOSTRAR/OCULTAR HISTORIAL DE VENTAS RECIENTES */}
+      <div style={{ marginBottom: '15px' }}>
+        <button
+          onClick={() => setMostrarHistorial(!mostrarHistorial)}
+          style={{
+            padding: '8px 20px',
+            backgroundColor: mostrarHistorial ? '#f44336' : '#003b6f',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '0.9rem'
+          }}
+        >
+          {mostrarHistorial ? '✕ Ocultar Ventas Recientes' : '📋 Ver Ventas Recientes'}
+        </button>
+      </div>
+
+      {/* 👇 HISTORIAL DE VENTAS RECIENTES PARA REIMPRIMIR */}
+      {mostrarHistorial && (
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: '15px',
+          marginBottom: '20px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          border: '2px solid #003b6f'
+        }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#003b6f' }}>📋 Ventas Recientes</h4>
+          {ventasRecientes.length === 0 ? (
+            <p style={{ color: '#999', textAlign: 'center', padding: '10px' }}>No hay ventas recientes</p>
+          ) : (
+            <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f0f4f8' }}>
+                    <th style={{ padding: '6px', textAlign: 'left' }}>#</th>
+                    <th style={{ padding: '6px', textAlign: 'left' }}>Cliente</th>
+                    <th style={{ padding: '6px', textAlign: 'right' }}>Total</th>
+                    <th style={{ padding: '6px', textAlign: 'center' }}>Fecha</th>
+                    <th style={{ padding: '6px', textAlign: 'center' }}>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ventasRecientes.map((v) => (
+                    <tr key={v.id} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '6px' }}>{v.id}</td>
+                      <td style={{ padding: '6px' }}>{v.cliente_nombre || 'N/A'}</td>
+                      <td style={{ padding: '6px', textAlign: 'right' }}>
+                        RD$ {Number(v.total).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '6px', textAlign: 'center' }}>
+                        {new Date(v.fecha).toLocaleDateString()}
+                      </td>
+                      <td style={{ padding: '6px', textAlign: 'center' }}>
+                        <button
+                          onClick={() => handleReimprimir(v.id)}
+                          style={{
+                            backgroundColor: '#9C27B0',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem'
+                          }}
+                          title="Reimprimir factura"
+                        >
+                          🖨️ Reimprimir
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {esSucursalNoPrincipal && (
         <div style={{

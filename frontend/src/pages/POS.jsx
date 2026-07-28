@@ -5,6 +5,8 @@ import API_URL from '../config'
 
 function POS() {
   const [productos, setProductos] = useState([])
+  const [categorias, setCategorias] = useState([])
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('')
   const [carrito, setCarrito] = useState([])
   const [busqueda, setBusqueda] = useState('')
   const [cargando, setCargando] = useState(false)
@@ -39,6 +41,7 @@ function POS() {
 
   useEffect(() => {
     cargarProductos()
+    cargarCategorias()
     cargarVentasRecientes()
   }, [])
 
@@ -61,6 +64,18 @@ function POS() {
       console.error('Error cargando productos:', error);
       alert('❌ Error cargando productos. Verifica tu conexión.');
       setProductos([]);
+    }
+  }
+
+  // 👇 NUEVO: Cargar categorías desde la base de datos
+  const cargarCategorias = async () => {
+    try {
+      const response = await fetch(`${API_URL}/categorias`)
+      const data = await response.json()
+      setCategorias(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error cargando categorías:', error)
+      setCategorias([])
     }
   }
 
@@ -499,6 +514,31 @@ function POS() {
 
   const esSucursalNoPrincipal = esSucursal && !esSucursalPrincipal
 
+  // 👇 NUEVO: Productos filtrados por categoría
+  const productosFiltrados = useMemo(() => {
+    let filtrados = productos
+    
+    // Filtrar por categoría
+    if (categoriaSeleccionada) {
+      filtrados = filtrados.filter(p => p.categoria_id === parseInt(categoriaSeleccionada))
+    }
+    
+    // Filtrar por búsqueda
+    if (busqueda.trim()) {
+      filtrados = filtrados.filter(p => 
+        p.nombre && p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+      )
+    }
+    
+    return filtrados
+  }, [productos, categoriaSeleccionada, busqueda])
+
+  // 👇 NUEVO: Obtener nombre de categoría
+  const getNombreCategoria = (id) => {
+    const cat = categorias.find(c => c.id === parseInt(id))
+    return cat ? cat.nombre : 'Todas'
+  }
+
   if (ventaCompletada) {
     return (
       <AdminLayout>
@@ -929,13 +969,64 @@ function POS() {
         </div>
       )}
 
-      <input
-        type="text"
-        placeholder="🔍 Buscar producto..."
-        value={busqueda}
-        onChange={(e) => setBusqueda(e.target.value)}
-        style={{ width: '100%', padding: '10px', marginBottom: '20px', borderRadius: '8px', border: '1px solid #ddd' }}
-      />
+      {/* ========================================== */}
+      {/* FILTRO POR CATEGORÍA */}
+      {/* ========================================== */}
+      <div style={{
+        display: 'flex',
+        gap: '10px',
+        marginBottom: '20px',
+        flexWrap: 'wrap',
+        alignItems: 'center'
+      }}>
+        <label style={{ fontWeight: 'bold', color: '#003b6f' }}>📂 Categoría:</label>
+        <select
+          value={categoriaSeleccionada}
+          onChange={(e) => setCategoriaSeleccionada(e.target.value)}
+          style={{
+            padding: '8px 16px',
+            border: '1px solid #003b6f',
+            borderRadius: '8px',
+            backgroundColor: 'white',
+            minWidth: '180px',
+            fontSize: '0.95rem'
+          }}
+        >
+          <option value="">📋 Todas las categorías</option>
+          {categorias.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.icono || '📁'} {cat.nombre}
+            </option>
+          ))}
+        </select>
+
+        {/* Buscador */}
+        <input
+          type="text"
+          placeholder="🔍 Buscar producto..."
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          style={{
+            flex: 1,
+            padding: '8px 16px',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            minWidth: '200px',
+            fontSize: '0.95rem'
+          }}
+        />
+
+        {/* Contador de productos */}
+        <span style={{ 
+          fontSize: '0.85rem', 
+          color: '#666',
+          backgroundColor: '#f0f4f8',
+          padding: '4px 12px',
+          borderRadius: '12px'
+        }}>
+          {productosFiltrados.length} productos
+        </span>
+      </div>
 
       {/* ========================================== */}
       {/* CONTENEDOR PRINCIPAL CON CARRITO FIJO */}
@@ -953,18 +1044,49 @@ function POS() {
           overflowY: 'auto',
           paddingRight: '10px'
         }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px' }}>
-            {Array.isArray(productos) && productos
-              .filter(p => p.nombre && p.nombre.toLowerCase().includes(busqueda.toLowerCase()))
-              .map((producto) => (
+          {productosFiltrados.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '60px 20px',
+              backgroundColor: '#f9f9f9',
+              borderRadius: '12px',
+              color: '#999'
+            }}>
+              <p style={{ fontSize: '1.2rem' }}>🔍 No hay productos</p>
+              <p style={{ fontSize: '0.9rem' }}>
+                {busqueda ? 'Intenta con otra búsqueda' : 'Selecciona una categoría o busca un producto'}
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px' }}>
+              {productosFiltrados.map((producto) => (
                 <div key={producto.id} style={{
                   border: '1px solid #ddd',
                   padding: '15px',
                   borderRadius: '10px',
                   backgroundColor: '#f9f9f9',
-                  opacity: (producto.stock || 0) <= 0 ? 0.5 : 1
+                  opacity: (producto.stock || 0) <= 0 ? 0.5 : 1,
+                  transition: 'all 0.2s ease',
+                  cursor: 'pointer',
+                  ':hover': {
+                    transform: 'scale(1.02)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                  }
                 }}>
-                  <h4 style={{ margin: '0 0 8px 0' }}>{producto.nombre || 'Sin nombre'}</h4>
+                  {producto.categoria_nombre && (
+                    <span style={{
+                      fontSize: '0.7rem',
+                      backgroundColor: '#e3f2fd',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      color: '#003b6f',
+                      display: 'inline-block',
+                      marginBottom: '5px'
+                    }}>
+                      {producto.categoria_nombre}
+                    </span>
+                  )}
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem' }}>{producto.nombre || 'Sin nombre'}</h4>
                   <p style={{ margin: '5px 0', fontSize: '1.1rem', fontWeight: 'bold', color: '#003b6f' }}>
                     RD$ {Number(producto.precio || 0).toFixed(2)}
                   </p>
@@ -992,14 +1114,16 @@ function POS() {
                       padding: '8px 16px',
                       cursor: (producto.stock || 0) <= 0 ? 'not-allowed' : 'pointer',
                       width: '100%',
-                      marginTop: '8px'
+                      marginTop: '8px',
+                      transition: 'background-color 0.2s'
                     }}
                   >
                     {(producto.stock || 0) <= 0 ? 'Agotado' : 'Agregar'}
                   </button>
                 </div>
               ))}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* CARRITO - FIJO (STICKY) */}

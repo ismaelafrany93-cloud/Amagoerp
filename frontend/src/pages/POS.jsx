@@ -64,7 +64,6 @@ function POS() {
     }
   }
 
-  // 👇 NUEVO: Cargar ventas recientes
   const cargarVentasRecientes = async () => {
     try {
       const response = await fetch(`${API_URL}/ventas?limite=10`)
@@ -938,8 +937,22 @@ function POS() {
         style={{ width: '100%', padding: '10px', marginBottom: '20px', borderRadius: '8px', border: '1px solid #ddd' }}
       />
 
-      <div style={{ display: 'flex', gap: '20px' }}>
-        <div style={{ flex: 2 }}>
+      {/* ========================================== */}
+      {/* CONTENEDOR PRINCIPAL CON CARRITO FIJO */}
+      {/* ========================================== */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '20px', 
+        alignItems: 'flex-start',
+        position: 'relative'
+      }}>
+        {/* LISTA DE PRODUCTOS - SCROLLABLE */}
+        <div style={{ 
+          flex: 2,
+          maxHeight: '70vh',
+          overflowY: 'auto',
+          paddingRight: '10px'
+        }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px' }}>
             {Array.isArray(productos) && productos
               .filter(p => p.nombre && p.nombre.toLowerCase().includes(busqueda.toLowerCase()))
@@ -989,44 +1002,120 @@ function POS() {
           </div>
         </div>
 
-        <div style={{ flex: 1, borderLeft: '2px solid #eee', paddingLeft: '20px' }}>
-          <h3>🛒 Carrito {carrito.length > 0 && `(${carrito.length})`}</h3>
+        {/* CARRITO - FIJO (STICKY) */}
+        <div style={{ 
+          flex: 1, 
+          position: 'sticky', 
+          top: '20px',
+          alignSelf: 'flex-start',
+          maxHeight: '75vh',
+          borderLeft: '2px solid #eee',
+          paddingLeft: '20px',
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          minWidth: '280px',
+          maxWidth: '350px',
+          overflowY: 'auto'
+        }}>
+          <h3 style={{ marginTop: 0, color: '#003b6f', borderBottom: '2px solid #003b6f', paddingBottom: '10px' }}>
+            🛒 Carrito {carrito.length > 0 && `(${carrito.length})`}
+          </h3>
+          
           {carrito.length === 0 ? (
-            <p style={{ color: '#999' }}>Carrito vacío</p>
+            <p style={{ color: '#999', textAlign: 'center', padding: '30px 0' }}>Carrito vacío</p>
           ) : (
             <>
-              {carrito.map((item) => (
-                <div key={item.id} style={{
-                  border: '1px solid #eee',
-                  padding: '10px',
-                  borderRadius: '8px',
-                  marginBottom: '10px'
-                }}>
-                  <div style={{ fontWeight: 'bold' }}>{item.nombre || 'Sin nombre'}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <button onClick={() => actualizarCantidad(item.id, item.cantidad - 1)} style={{ cursor: 'pointer', padding: '2px 8px' }}>−</button>
-                      <span style={{ margin: '0 8px' }}>{item.cantidad}</span>
-                      <button onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} style={{ cursor: 'pointer', padding: '2px 8px' }}>+</button>
+              <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                {carrito.map((item) => (
+                  <div key={item.id} style={{
+                    border: '1px solid #eee',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    marginBottom: '10px',
+                    backgroundColor: '#fafafa'
+                  }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{item.nombre || 'Sin nombre'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '5px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <button 
+                          onClick={() => actualizarCantidad(item.id, item.cantidad - 1)} 
+                          style={{ 
+                            cursor: 'pointer', 
+                            padding: '2px 10px',
+                            backgroundColor: '#e0e0e0',
+                            border: 'none',
+                            borderRadius: '4px',
+                            fontSize: '1rem'
+                          }}
+                        >
+                          −
+                        </button>
+                        <span style={{ fontWeight: 'bold', minWidth: '25px', textAlign: 'center' }}>{item.cantidad}</span>
+                        <button 
+                          onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} 
+                          style={{ 
+                            cursor: 'pointer', 
+                            padding: '2px 10px',
+                            backgroundColor: '#e0e0e0',
+                            border: 'none',
+                            borderRadius: '4px',
+                            fontSize: '1rem'
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#003b6f' }}>
+                        RD$ {(Number(item.precio_unitario || item.precio) * item.cantidad).toFixed(2)}
+                      </span>
+                      <button 
+                        onClick={() => eliminar(item.id)} 
+                        style={{ 
+                          backgroundColor: '#f44336', 
+                          color: 'white', 
+                          border: 'none', 
+                          borderRadius: '4px', 
+                          padding: '2px 8px', 
+                          cursor: 'pointer',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        ✕
+                      </button>
                     </div>
-                    <span>
-                      {esSucursalPrincipal && (cliente.es_mayorista || (item.cantidad >= item.cantidad_mayor)) ? '💰 Mayor' : '🛒 Detal'}
-                      {' '}
-                      RD$ {(Number(item.precio_unitario || item.precio) * item.cantidad).toFixed(2)}
-                    </span>
-                    <button onClick={() => eliminar(item.id)} style={{ backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer' }}>✕</button>
                   </div>
-                </div>
-              ))}
-              <div style={{ borderTop: '2px solid #003b6f', paddingTop: '10px', marginTop: '10px' }}>
-                <h3 style={{ color: '#003b6f' }}>Total: RD$ {total.toFixed(2)}</h3>
+                ))}
               </div>
+              
+              <div style={{ 
+                borderTop: '2px solid #003b6f', 
+                paddingTop: '12px', 
+                marginTop: '10px'
+              }}>
+                <h3 style={{ color: '#003b6f', fontSize: '1.2rem', margin: '0 0 5px 0' }}>
+                  Total: RD$ {total.toFixed(2)}
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: '#666', margin: '0' }}>
+                  {carrito.length} producto{carrito.length > 1 ? 's' : ''} en carrito
+                </p>
+              </div>
+
               <div style={{ marginTop: '15px', display: 'flex', gap: '10px', flexDirection: 'column' }}>
                 <button
                   onClick={limpiarCarrito}
-                  style={{ backgroundColor: '#ff9800', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', cursor: 'pointer' }}
+                  style={{ 
+                    backgroundColor: '#ff9800', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: '6px', 
+                    padding: '10px', 
+                    cursor: 'pointer',
+                    fontSize: '0.9rem'
+                  }}
                 >
-                  Limpiar Carrito
+                  🗑️ Limpiar Carrito
                 </button>
                 <button
                   onClick={cobrar}

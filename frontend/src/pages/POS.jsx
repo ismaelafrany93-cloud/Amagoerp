@@ -28,7 +28,6 @@ function POS() {
     es_mayorista: false
   })
 
-  // 👇 NUEVO: Estado para mostrar el historial de ventas
   const [ventasRecientes, setVentasRecientes] = useState([])
   const [mostrarHistorial, setMostrarHistorial] = useState(false)
 
@@ -36,14 +35,99 @@ function POS() {
   const esSucursalPrincipal = usuario.sucursal_id === 3
   const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
 
-  // Ref para la factura
   const facturaRef = useRef()
+
+  // Colores predefinidos para categorías
+  const coloresCategorias = [
+    '#FF6B6B', '#4ECDC4', '#FFE66D', '#A8E6CF', '#FF9FF3',
+    '#54A0FF', '#5F27CD', '#FF9F43', '#00D2D3', '#1DD1A1',
+    '#F368E0', '#FF6B6B', '#2ED573', '#7BED9F', '#70A1FF'
+  ]
 
   useEffect(() => {
     cargarProductos()
-    cargarCategorias()
     cargarVentasRecientes()
   }, [])
+
+  // 👇 NUEVO: Extraer categorías automáticamente de los productos
+  useEffect(() => {
+    if (productos.length > 0) {
+      const categoriasUnicas = {}
+      productos.forEach(p => {
+        if (p.categoria && p.categoria.trim()) {
+          const nombreCat = p.categoria.trim()
+          if (!categoriasUnicas[nombreCat]) {
+            // Buscar un producto con esta categoría para obtener ícono
+            const productoConIcono = productos.find(prod => prod.categoria === nombreCat)
+            categoriasUnicas[nombreCat] = {
+              nombre: nombreCat,
+              icono: productoConIcono?.categoria_icono || getIconoPorCategoria(nombreCat),
+              color: productoConIcono?.categoria_color || getColorPorCategoria(nombreCat),
+              count: 0
+            }
+          }
+          categoriasUnicas[nombreCat].count++
+        }
+      })
+      
+      const listaCategorias = Object.values(categoriasUnicas)
+      setCategorias(listaCategorias)
+    }
+  }, [productos])
+
+  // 👇 NUEVO: Asignar íconos por defecto según el nombre de la categoría
+  const getIconoPorCategoria = (nombre) => {
+    const iconos = {
+      'credenza': '🪑',
+      'gabinete': '📦',
+      'credentas': '🪑',
+      'vineras': '🍷',
+      'espejos': '🪞',
+      'cocinas': '🍳',
+      'closets': '👗',
+      'muebles': '🛋️',
+      'sillones': '🛋️',
+      'sofás': '🛋️',
+      'mesas': '🪑',
+      'armarios': '🚪',
+      'sillas': '🪑',
+      'bancos': '🪑'
+    }
+    const nombreLower = nombre.toLowerCase()
+    for (const [key, icono] of Object.entries(iconos)) {
+      if (nombreLower.includes(key)) {
+        return icono
+      }
+    }
+    return '📁'
+  }
+
+  // 👇 NUEVO: Asignar colores por defecto según el nombre de la categoría
+  const getColorPorCategoria = (nombre) => {
+    const colores = {
+      'credenza': '#FF6B6B',
+      'gabinete': '#4ECDC4',
+      'credentas': '#FF6B6B',
+      'vineras': '#A8E6CF',
+      'espejos': '#54A0FF',
+      'cocinas': '#FF9F43',
+      'closets': '#5F27CD',
+      'muebles': '#FFE66D',
+      'sillones': '#FF9FF3',
+      'sofás': '#FF9FF3',
+      'mesas': '#1DD1A1',
+      'armarios': '#00D2D3',
+      'sillas': '#F368E0',
+      'bancos': '#2ED573'
+    }
+    const nombreLower = nombre.toLowerCase()
+    for (const [key, color] of Object.entries(colores)) {
+      if (nombreLower.includes(key)) {
+        return color
+      }
+    }
+    return '#757575'
+  }
 
   const cargarProductos = async () => {
     try {
@@ -64,18 +148,6 @@ function POS() {
       console.error('Error cargando productos:', error);
       alert('❌ Error cargando productos. Verifica tu conexión.');
       setProductos([]);
-    }
-  }
-
-  // 👇 NUEVO: Cargar categorías desde la base de datos
-  const cargarCategorias = async () => {
-    try {
-      const response = await fetch(`${API_URL}/categorias`)
-      const data = await response.json()
-      setCategorias(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('Error cargando categorías:', error)
-      setCategorias([])
     }
   }
 
@@ -477,7 +549,6 @@ function POS() {
         }
         alert(mensaje)
         
-        // Recargar ventas recientes
         cargarVentasRecientes()
       } else {
         alert('❌ Error: ' + (data.error || data.message || 'No se pudo guardar'))
@@ -518,12 +589,10 @@ function POS() {
   const productosFiltrados = useMemo(() => {
     let filtrados = productos
     
-    // Filtrar por categoría
     if (categoriaSeleccionada) {
-      filtrados = filtrados.filter(p => p.categoria_id === parseInt(categoriaSeleccionada))
+      filtrados = filtrados.filter(p => p.categoria === categoriaSeleccionada)
     }
     
-    // Filtrar por búsqueda
     if (busqueda.trim()) {
       filtrados = filtrados.filter(p => 
         p.nombre && p.nombre.toLowerCase().includes(busqueda.toLowerCase())
@@ -532,12 +601,6 @@ function POS() {
     
     return filtrados
   }, [productos, categoriaSeleccionada, busqueda])
-
-  // 👇 NUEVO: Obtener nombre de categoría
-  const getNombreCategoria = (id) => {
-    const cat = categorias.find(c => c.id === parseInt(id))
-    return cat ? cat.nombre : 'Todas'
-  }
 
   if (ventaCompletada) {
     return (
@@ -619,7 +682,6 @@ function POS() {
               </button>
             </div>
           </div>
-          {/* FACTURA OCULTA PARA IMPRIMIR */}
           <div style={{ 
             position: 'fixed', 
             left: '-9999px', 
@@ -669,7 +731,6 @@ function POS() {
         </button>
       </div>
 
-      {/* 👇 HISTORIAL DE VENTAS RECIENTES PARA REIMPRIMIR */}
       {mostrarHistorial && (
         <div style={{
           backgroundColor: 'white',
@@ -970,62 +1031,140 @@ function POS() {
       )}
 
       {/* ========================================== */}
-      {/* FILTRO POR CATEGORÍA */}
+      {/* FILTRO POR CATEGORÍA - TARJETAS MODERNAS */}
       {/* ========================================== */}
-      <div style={{
-        display: 'flex',
-        gap: '10px',
-        marginBottom: '20px',
-        flexWrap: 'wrap',
-        alignItems: 'center'
-      }}>
-        <label style={{ fontWeight: 'bold', color: '#003b6f' }}>📂 Categoría:</label>
-        <select
-          value={categoriaSeleccionada}
-          onChange={(e) => setCategoriaSeleccionada(e.target.value)}
-          style={{
-            padding: '8px 16px',
-            border: '1px solid #003b6f',
-            borderRadius: '8px',
-            backgroundColor: 'white',
-            minWidth: '180px',
-            fontSize: '0.95rem'
-          }}
-        >
-          <option value="">📋 Todas las categorías</option>
-          {categorias.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.icono || '📁'} {cat.nombre}
-            </option>
-          ))}
-        </select>
-
-        {/* Buscador */}
-        <input
-          type="text"
-          placeholder="🔍 Buscar producto..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          style={{
-            flex: 1,
-            padding: '8px 16px',
-            border: '1px solid #ddd',
-            borderRadius: '8px',
-            minWidth: '200px',
-            fontSize: '0.95rem'
-          }}
-        />
-
-        {/* Contador de productos */}
-        <span style={{ 
-          fontSize: '0.85rem', 
-          color: '#666',
-          backgroundColor: '#f0f4f8',
-          padding: '4px 12px',
-          borderRadius: '12px'
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ 
+          display: 'flex', 
+          gap: '12px', 
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          marginBottom: '12px'
         }}>
-          {productosFiltrados.length} productos
-        </span>
+          {/* Botón "Todas" */}
+          <button
+            onClick={() => setCategoriaSeleccionada('')}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '12px',
+              border: categoriaSeleccionada === '' ? '3px solid #003b6f' : '2px solid #ddd',
+              backgroundColor: categoriaSeleccionada === '' ? '#003b6f' : 'white',
+              color: categoriaSeleccionada === '' ? 'white' : '#333',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '0.9rem',
+              transition: 'all 0.3s ease',
+              boxShadow: categoriaSeleccionada === '' ? '0 4px 12px rgba(0,59,111,0.3)' : '0 2px 4px rgba(0,0,0,0.05)'
+            }}
+          >
+            📋 Todas
+            <span style={{
+              marginLeft: '8px',
+              backgroundColor: categoriaSeleccionada === '' ? 'rgba(255,255,255,0.2)' : '#f0f4f8',
+              padding: '2px 8px',
+              borderRadius: '10px',
+              fontSize: '0.75rem',
+              color: categoriaSeleccionada === '' ? 'white' : '#666'
+            }}>
+              {productos.length}
+            </span>
+          </button>
+
+          {/* Categorías en tarjetas */}
+          {categorias.map((cat) => {
+            const isSelected = categoriaSeleccionada === cat.nombre
+            return (
+              <button
+                key={cat.nombre}
+                onClick={() => setCategoriaSeleccionada(isSelected ? '' : cat.nombre)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '12px',
+                  border: isSelected ? `3px solid ${cat.color}` : '2px solid #ddd',
+                  backgroundColor: isSelected ? cat.color : 'white',
+                  color: isSelected ? 'white' : '#333',
+                  cursor: 'pointer',
+                  fontWeight: isSelected ? 'bold' : 'normal',
+                  fontSize: '0.9rem',
+                  transition: 'all 0.3s ease',
+                  boxShadow: isSelected ? `0 4px 12px ${cat.color}40` : '0 2px 4px rgba(0,0,0,0.05)',
+                  transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span style={{ fontSize: '1.2rem' }}>{cat.icono || '📁'}</span>
+                {cat.nombre}
+                <span style={{
+                  marginLeft: '6px',
+                  backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : '#f0f4f8',
+                  padding: '2px 8px',
+                  borderRadius: '10px',
+                  fontSize: '0.7rem',
+                  color: isSelected ? 'white' : '#666'
+                }}>
+                  {cat.count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Buscador y contador */}
+        <div style={{ 
+          display: 'flex', 
+          gap: '15px', 
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }}>
+          <input
+            type="text"
+            placeholder="🔍 Buscar producto..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            style={{
+              flex: 1,
+              padding: '10px 16px',
+              border: '2px solid #e0e0e0',
+              borderRadius: '10px',
+              minWidth: '200px',
+              fontSize: '0.95rem',
+              transition: 'border-color 0.3s ease',
+              outline: 'none'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#003b6f'}
+            onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+          />
+          {categoriaSeleccionada && (
+            <button
+              onClick={() => setCategoriaSeleccionada('')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              ✕ Limpiar filtro
+            </button>
+          )}
+          <span style={{ 
+            fontSize: '0.85rem', 
+            color: '#666',
+            backgroundColor: '#f0f4f8',
+            padding: '6px 14px',
+            borderRadius: '12px'
+          }}>
+            {productosFiltrados.length} productos
+          </span>
+        </div>
       </div>
 
       {/* ========================================== */}
@@ -1052,9 +1191,12 @@ function POS() {
               borderRadius: '12px',
               color: '#999'
             }}>
-              <p style={{ fontSize: '1.2rem' }}>🔍 No hay productos</p>
-              <p style={{ fontSize: '0.9rem' }}>
-                {busqueda ? 'Intenta con otra búsqueda' : 'Selecciona una categoría o busca un producto'}
+              <p style={{ fontSize: '1.5rem' }}>🔍</p>
+              <p style={{ fontSize: '1.1rem' }}>
+                {busqueda ? 'No se encontraron productos con esa búsqueda' : 'No hay productos en esta categoría'}
+              </p>
+              <p style={{ fontSize: '0.9rem', color: '#bbb' }}>
+                {busqueda ? 'Intenta con otra palabra' : 'Selecciona otra categoría o prueba con la búsqueda'}
               </p>
             </div>
           ) : (
@@ -1073,7 +1215,7 @@ function POS() {
                     boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
                   }
                 }}>
-                  {producto.categoria_nombre && (
+                  {producto.categoria && (
                     <span style={{
                       fontSize: '0.7rem',
                       backgroundColor: '#e3f2fd',
@@ -1083,7 +1225,7 @@ function POS() {
                       display: 'inline-block',
                       marginBottom: '5px'
                     }}>
-                      {producto.categoria_nombre}
+                      {producto.categoria}
                     </span>
                   )}
                   <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem' }}>{producto.nombre || 'Sin nombre'}</h4>

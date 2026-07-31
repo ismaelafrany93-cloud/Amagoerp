@@ -9,7 +9,9 @@ const Factura = forwardRef(({
   tipoEntrega, 
   codigoEntrega,
   vendedor,
-  formato = 'A4'
+  formato = 'A4',
+  sucursalNombre = 'Sucursal Principal',
+  sucursalId = 3
 }, ref) => {
   const fecha = new Date().toLocaleDateString('es-DO', {
     year: 'numeric',
@@ -18,6 +20,13 @@ const Factura = forwardRef(({
     hour: '2-digit',
     minute: '2-digit'
   })
+
+  // 👇 DETECTAR SI ES SABANA PARA CAMBIAR EL NOMBRE
+  const esSabana = sucursalId === 2 || 
+                   sucursalNombre?.toLowerCase().includes('sabana');
+  
+  const nombreEmpresa = esSabana ? 'Lizhomedecore' : 'AMAGO MUEBLES';
+  const nombreCorto = esSabana ? 'LIZHOMEDECORE' : 'AMAGO';
 
   const tipoPagoTexto = tipoVenta === 'credito' ? 'Crédito' : 'Contado'
   const tipoEntregaTexto = tipoEntrega === 'domicilio' ? 'Entrega a domicilio' : 'Retiro en tienda'
@@ -62,6 +71,11 @@ const Factura = forwardRef(({
       fontWeight: 'bold',
       color: '#003b6f',
       letterSpacing: isPOS ? '2px' : '4px'
+    },
+    sucursalNombre: {
+      margin: '2px 0',
+      fontSize: isPOS ? '8px' : '12px',
+      color: '#555'
     }
   }
 
@@ -69,12 +83,13 @@ const Factura = forwardRef(({
     <div ref={ref} style={styles.container}>
       {/* Encabezado */}
       <div style={styles.header}>
-        <h1 style={styles.title}>AMAGO MUEBLES</h1>
+        <h1 style={styles.title}>🏭 {nombreEmpresa}</h1>
         {!isPOS && <p style={{ margin: '5px 0', fontSize: '14px' }}>Muebles · Cocinas · Closets</p>}
+        <p style={styles.sucursalNombre}>{sucursalNombre}</p>
         <p style={{ margin: isPOS ? '2px 0' : '2px 0', fontSize: isPOS ? '8px' : '12px', color: '#555' }}>
           Tel: 809-555-0000 | Santo Domingo, R.D.
         </p>
-        {!isPOS && <p style={{ margin: '2px 0', fontSize: '12px', color: '#555' }}>www.amagomuebles.com</p>}
+        {!isPOS && <p style={{ margin: '2px 0', fontSize: '12px', color: '#555' }}>www.{nombreCorto.toLowerCase()}.com</p>}
       </div>
 
       {/* Código de entrega */}
@@ -230,13 +245,16 @@ const Factura = forwardRef(({
         <p style={{ margin: isPOS ? '1px 0' : '2px 0' }}>
           {isPOS ? '¡GRACIAS!' : '¡Gracias por su compra!'}
         </p>
+        <p style={{ margin: isPOS ? '1px 0' : '2px 0', fontSize: isPOS ? '7px' : '10px' }}>
+          {nombreCorto} - {sucursalNombre}
+        </p>
         {tipoVenta === 'credito' && !isPOS && (
           <p style={{ margin: '2px 0', color: '#c62828', fontWeight: 'bold' }}>
             ⚠️ Recuerde pagar su factura a tiempo
           </p>
         )}
         {!isPOS && (
-          <p style={{ margin: '2px 0', fontSize: '10px' }}>AMAGO MUEBLES - Todos los derechos reservados</p>
+          <p style={{ margin: '2px 0', fontSize: '10px' }}>Todos los derechos reservados</p>
         )}
       </div>
     </div>

@@ -682,6 +682,33 @@ function POS() {
               </button>
             </div>
           </div>
+
+          {/* FACTURA OCULTA PARA IMPRIMIR */}
+<div style={{ 
+    position: 'fixed', 
+    left: '-9999px', 
+    top: 0,
+    width: '210mm',
+    backgroundColor: 'white',
+    padding: '20px',
+    zIndex: 9999
+}}>
+    <Factura
+        ref={facturaRef}
+        venta={{ id: ventaId }}
+        cliente={cliente}
+        carrito={carrito}
+        total={total}
+        tipoVenta={tipoPago === 'credito' ? 'credito' : 'contado'}
+        tipoEntrega={tipoEntrega}
+        codigoEntrega={codigoEntrega}
+        vendedor={usuario.nombre}
+        formato="A4"
+        sucursalNombre={usuario.sucursal || 'Sucursal Principal'}
+        sucursalId={usuario.sucursal_id || 3}
+    />
+</div>
+
           <div style={{ 
             position: 'fixed', 
             left: '-9999px', 

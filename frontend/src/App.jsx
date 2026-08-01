@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import POS from './pages/POS'
 import Inventario from './pages/Inventario'
-import InventarioBani from './pages/InventarioBani'  // ← NUEVO
 import Entregas from './pages/Entregas'
 import Login from './pages/Login'
 import Clientes from './pages/Clientes'
@@ -19,10 +18,8 @@ import Recetas from './pages/Recetas'
 import Historial from './pages/Historial'
 import Sucursales from './pages/Sucursales'
 import Transferencias from './pages/Transferencias'
-import InventarioSabana from './pages/InventarioSabana'
 import NoEntregados from './pages/NoEntregados'
 import Cambios from './pages/Cambios'
-
 
 function App() {
   return (
@@ -33,8 +30,12 @@ function App() {
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/ventas" element={<ProtectedRoute><POS /></ProtectedRoute>} />
         <Route path="/productos" element={<ProtectedRoute><Productos /></ProtectedRoute>} />
-        <Route path="/inventario" element={<ProtectedRoute><Inventario /></ProtectedRoute>} />
-        <Route path="/inventario-bani" element={<ProtectedRoute><InventarioBani /></ProtectedRoute>} />
+        
+        {/* 👇 INVENTARIO CON PROPS */}
+        <Route path="/inventario" element={<ProtectedRoute><Inventario sucursalId={3} sucursalNombre="Principal" /></ProtectedRoute>} />
+        <Route path="/inventario-bani" element={<ProtectedRoute><Inventario sucursalId={1} sucursalNombre="Baní" /></ProtectedRoute>} />
+        <Route path="/inventario-sabana" element={<ProtectedRoute><Inventario sucursalId={2} sucursalNombre="Sabana" /></ProtectedRoute>} />
+        
         <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
         <Route path="/produccion" element={<ProtectedRoute><Produccion /></ProtectedRoute>} />
         <Route path="/materiales" element={<ProtectedRoute><Materiales /></ProtectedRoute>} />
@@ -48,11 +49,7 @@ function App() {
         <Route path="/historial" element={<ProtectedRoute><Historial /></ProtectedRoute>} />
         <Route path="/sucursales" element={<ProtectedRoute><Sucursales /></ProtectedRoute>} />
         <Route path="/transferencias" element={<ProtectedRoute><Transferencias /></ProtectedRoute>} />
-        <Route path="/inventario-sabana" element={<ProtectedRoute><InventarioSabana /></ProtectedRoute>} />
-        <Route path="/no-entregados" element={<ProtectedRoute><NoEntregados /></ProtectedRoute>} />
         <Route path="/cambios" element={<ProtectedRoute><Cambios /></ProtectedRoute>} />
-
-
       </Routes>
     </BrowserRouter>
   )

@@ -16,41 +16,59 @@ router.get('/', async (req, res) => {
             });
         }
 
-        // 👇 DETECTAR SI ES LA SUCURSAL PRINCIPAL (ID 3)
         const esPrincipal = parseInt(sucursal_id) === 3;
 
-        let query = `
-            SELECT 
-                p.id,
-                p.nombre,
-                p.categoria,
-                p.descripcion,
-                p.precio_mayor,
-                p.cantidad_mayor,
-                p.categoria_icono,
-                p.categoria_color,
-                pi.sucursal_id,
-                pi.stock,
-                s.nombre as sucursal_nombre
-        `;
+        let query;
+        let params = [sucursal_id];
 
-        // 👇 SI ES PRINCIPAL, USAR p.precio (el precio original)
-        // 👇 SI NO ES PRINCIPAL, USAR pi.precio_venta (precio de la sucursal)
         if (esPrincipal) {
-            query += `, p.precio as precio`;
+            // 👇 PARA PRINCIPAL: MOSTRAR TODOS LOS PRODUCTOS (con o sin inventario)
+            query = `
+                SELECT 
+                    p.id,
+                    p.nombre,
+                    p.categoria,
+                    p.descripcion,
+                    p.precio,
+                    p.precio_mayor,
+                    p.cantidad_mayor,
+                    p.categoria_icono,
+                    p.categoria_color,
+                    p.sucursal_id as producto_sucursal_id,
+                    COALESCE(pi.stock, 0) as stock,
+                    p.precio as precio_venta,
+                    'Principal' as sucursal_nombre,
+                    ${sucursal_id} as sucursal_id
+                FROM productos p
+                LEFT JOIN producto_inventario pi ON p.id = pi.producto_id AND pi.sucursal_id = $1
+                ORDER BY p.nombre
+            `;
         } else {
-            query += `, COALESCE(pi.precio_venta, 0) as precio`;
+            // 👇 PARA SUCURSALES: MOSTRAR SOLO PRODUCTOS CON INVENTARIO
+            query = `
+                SELECT 
+                    p.id,
+                    p.nombre,
+                    p.categoria,
+                    p.descripcion,
+                    p.precio_mayor,
+                    p.cantidad_mayor,
+                    p.categoria_icono,
+                    p.categoria_color,
+                    pi.sucursal_id,
+                    pi.stock,
+                    COALESCE(pi.precio_venta, 0) as precio_venta,
+                    s.nombre as sucursal_nombre,
+                    p.precio as precio_original
+                FROM producto_inventario pi
+                JOIN productos p ON pi.producto_id = p.id
+                JOIN sucursales s ON pi.sucursal_id = s.id
+                WHERE pi.sucursal_id = $1
+                ORDER BY p.nombre
+            `;
         }
 
-        query += `
-            FROM producto_inventario pi
-            JOIN productos p ON pi.producto_id = p.id
-            JOIN sucursales s ON pi.sucursal_id = s.id
-            WHERE pi.sucursal_id = $1
-            ORDER BY p.nombre
-        `;
-
-        const result = await pool.query(query, [sucursal_id]);
+        const result = await pool.query(query, params);
         res.json(result.rows || []);
         
     } catch (error) {
@@ -80,7 +98,7 @@ router.put('/precio', async (req, res) => {
             });
         }
 
-        // 👇 VERIFICAR QUE LA SUCURSAL NO SEA LA PRINCIPAL
+        // No permitir modificar precio de la Principal
         if (parseInt(sucursal_id) === 3) {
             return res.status(400).json({
                 success: false,
@@ -88,20 +106,30 @@ router.put('/precio', async (req, res) => {
             });
         }
 
-        const result = await pool.query(
-            `UPDATE producto_inventario 
-             SET precio_venta = $1,
-                 updated_at = NOW()
-             WHERE producto_id = $2 AND sucursal_id = $3
-             RETURNING *`,
-            [precio_venta, producto_id, sucursal_id]
+        // Verificar si existe el producto en la sucursal
+        const existe = await pool.query(
+            'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
+            [producto_id, sucursal_id]
         );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Producto no encontrado en esta sucursal'
-            });
+        let result;
+        if (existe.rows.length > 0) {
+            result = await pool.query(
+                `UPDATE producto_inventario 
+                 SET precio_venta = $1,
+                     updated_at = NOW()
+                 WHERE producto_id = $2 AND sucursal_id = $3
+                 RETURNING *`,
+                [precio_venta, producto_id, sucursal_id]
+            );
+        } else {
+            // Si no existe, crearlo
+            result = await pool.query(
+                `INSERT INTO producto_inventario (producto_id, sucursal_id, stock, precio_venta)
+                 VALUES ($1, $2, 0, $3)
+                 RETURNING *`,
+                [producto_id, sucursal_id, precio_venta]
+            );
         }
 
         res.json({
@@ -140,27 +168,49 @@ router.put('/stock', async (req, res) => {
             });
         }
 
-        const result = await pool.query(
-            `UPDATE producto_inventario 
-             SET stock = $1,
-                 updated_at = NOW()
-             WHERE producto_id = $2 AND sucursal_id = $3
-             RETURNING *`,
-            [stock, producto_id, sucursal_id]
-        );
+        // Para Principal, actualizar solo en productos
+        if (parseInt(sucursal_id) === 3) {
+            await pool.query(
+                `UPDATE productos SET stock = $1 WHERE id = $2`,
+                [stock, producto_id]
+            );
+            
+            // También actualizar inventario si existe
+            await pool.query(
+                `UPDATE producto_inventario SET stock = $1 WHERE producto_id = $2 AND sucursal_id = $3`,
+                [stock, producto_id, sucursal_id]
+            );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Producto no encontrado en esta sucursal'
+            return res.json({
+                success: true,
+                message: '✅ Stock actualizado correctamente en Principal'
             });
         }
 
-        // También actualizar la tabla productos para mantener consistencia
-        await pool.query(
-            `UPDATE productos SET stock = $1 WHERE id = $2`,
-            [stock, producto_id]
+        // Para sucursales
+        const existe = await pool.query(
+            'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
+            [producto_id, sucursal_id]
         );
+
+        let result;
+        if (existe.rows.length > 0) {
+            result = await pool.query(
+                `UPDATE producto_inventario 
+                 SET stock = $1,
+                     updated_at = NOW()
+                 WHERE producto_id = $2 AND sucursal_id = $3
+                 RETURNING *`,
+                [stock, producto_id, sucursal_id]
+            );
+        } else {
+            result = await pool.query(
+                `INSERT INTO producto_inventario (producto_id, sucursal_id, stock)
+                 VALUES ($1, $2, $3)
+                 RETURNING *`,
+                [producto_id, sucursal_id, stock]
+            );
+        }
 
         res.json({
             success: true,
@@ -218,10 +268,8 @@ router.post('/producto', async (req, res) => {
         let productoId;
 
         if (existe.rows.length > 0) {
-            // El producto ya existe en esta sucursal
             productoId = existe.rows[0].id;
             
-            // Actualizar stock y precio
             await pool.query(
                 `UPDATE producto_inventario 
                  SET stock = stock + $1,
@@ -237,29 +285,37 @@ router.post('/producto', async (req, res) => {
                 producto_id: productoId
             });
         } else {
-            // Crear nuevo producto
-            const result = await pool.query(
-                `INSERT INTO productos 
-                 (nombre, categoria, descripcion, precio, precio_mayor, cantidad_mayor, categoria_icono, categoria_color, sucursal_id, stock)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                 RETURNING id`,
-                [
-                    nombre, 
-                    categoria || 'General', 
-                    descripcion || '', 
-                    precioFinal,
-                    precio_mayor || 0,
-                    cantidad_mayor || 0,
-                    categoria_icono || null,
-                    categoria_color || null,
-                    sucursalFinal,
-                    stockFinal
-                ]
+            // Verificar si el producto existe en general (sin sucursal)
+            const existeGeneral = await pool.query(
+                'SELECT id FROM productos WHERE nombre ILIKE $1',
+                [nombre]
             );
 
-            productoId = result.rows[0].id;
+            if (existeGeneral.rows.length > 0) {
+                productoId = existeGeneral.rows[0].id;
+            } else {
+                // Crear nuevo producto
+                const result = await pool.query(
+                    `INSERT INTO productos 
+                     (nombre, categoria, descripcion, precio, precio_mayor, cantidad_mayor, categoria_icono, categoria_color, stock)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                     RETURNING id`,
+                    [
+                        nombre, 
+                        categoria || 'General', 
+                        descripcion || '', 
+                        precioFinal,
+                        precio_mayor || 0,
+                        cantidad_mayor || 0,
+                        categoria_icono || null,
+                        categoria_color || null,
+                        stockFinal
+                    ]
+                );
+                productoId = result.rows[0].id;
+            }
 
-            // Crear inventario con el precio específico de la sucursal
+            // Crear inventario en la sucursal
             await pool.query(
                 `INSERT INTO producto_inventario (producto_id, sucursal_id, stock, precio_venta, precio_mayorista)
                  VALUES ($1, $2, $3, $4, $5)`,
@@ -296,7 +352,7 @@ router.delete('/producto', async (req, res) => {
             });
         }
 
-        // 👇 NO PERMITIR ELIMINAR DE LA PRINCIPAL
+        // No permitir eliminar de la Principal
         if (parseInt(sucursal_id) === 3) {
             return res.status(400).json({
                 success: false,

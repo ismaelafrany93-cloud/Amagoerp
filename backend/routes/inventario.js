@@ -22,7 +22,8 @@ router.get('/', async (req, res) => {
         let params = [sucursal_id];
 
         if (esPrincipal) {
-            // 👇 PARA PRINCIPAL: MOSTRAR TODOS LOS PRODUCTOS (con o sin inventario)
+            // 👇 PARA PRINCIPAL: MOSTRAR TODOS LOS PRODUCTOS DE productos
+            // (con o sin inventario, usando LEFT JOIN sin filtrar por sucursal en el JOIN)
             query = `
                 SELECT 
                     p.id,
@@ -38,7 +39,8 @@ router.get('/', async (req, res) => {
                     COALESCE(pi.stock, 0) as stock,
                     p.precio as precio_venta,
                     'Principal' as sucursal_nombre,
-                    ${sucursal_id} as sucursal_id
+                    ${sucursal_id} as sucursal_id,
+                    pi.precio_venta as precio_sucursal
                 FROM productos p
                 LEFT JOIN producto_inventario pi ON p.id = pi.producto_id AND pi.sucursal_id = $1
                 ORDER BY p.nombre
@@ -74,6 +76,100 @@ router.get('/', async (req, res) => {
     } catch (error) {
         console.error('❌ Error en GET /inventario:', error.message);
         res.status(200).json([]);
+    }
+});
+
+// ============================================
+// PUT /inventario/stock - Actualizar stock manualmente
+// ============================================
+router.put('/stock', async (req, res) => {
+    try {
+        const { producto_id, sucursal_id, stock } = req.body;
+
+        if (!producto_id || !sucursal_id) {
+            return res.status(400).json({
+                success: false,
+                error: 'producto_id y sucursal_id son requeridos'
+            });
+        }
+
+        if (stock === undefined || stock < 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'stock debe ser un número válido mayor o igual a 0'
+            });
+        }
+
+        const esPrincipal = parseInt(sucursal_id) === 3;
+
+        if (esPrincipal) {
+            // Para Principal: actualizar en productos y en inventario
+            await pool.query(
+                `UPDATE productos SET stock = $1 WHERE id = $2`,
+                [stock, producto_id]
+            );
+            
+            // Actualizar o crear inventario en Principal
+            const existe = await pool.query(
+                'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
+                [producto_id, sucursal_id]
+            );
+
+            if (existe.rows.length > 0) {
+                await pool.query(
+                    `UPDATE producto_inventario SET stock = $1 WHERE producto_id = $2 AND sucursal_id = $3`,
+                    [stock, producto_id, sucursal_id]
+                );
+            } else {
+                await pool.query(
+                    `INSERT INTO producto_inventario (producto_id, sucursal_id, stock) VALUES ($1, $2, $3)`,
+                    [producto_id, sucursal_id, stock]
+                );
+            }
+
+            return res.json({
+                success: true,
+                message: '✅ Stock actualizado correctamente en Principal'
+            });
+        }
+
+        // Para sucursales
+        const existe = await pool.query(
+            'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
+            [producto_id, sucursal_id]
+        );
+
+        let result;
+        if (existe.rows.length > 0) {
+            result = await pool.query(
+                `UPDATE producto_inventario 
+                 SET stock = $1,
+                     updated_at = NOW()
+                 WHERE producto_id = $2 AND sucursal_id = $3
+                 RETURNING *`,
+                [stock, producto_id, sucursal_id]
+            );
+        } else {
+            result = await pool.query(
+                `INSERT INTO producto_inventario (producto_id, sucursal_id, stock, precio_venta)
+                 VALUES ($1, $2, $3, 0)
+                 RETURNING *`,
+                [producto_id, sucursal_id, stock]
+            );
+        }
+
+        res.json({
+            success: true,
+            message: '✅ Stock actualizado correctamente',
+            producto: result.rows[0]
+        });
+
+    } catch (error) {
+        console.error('❌ Error en PUT /inventario/stock:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 
@@ -140,86 +236,6 @@ router.put('/precio', async (req, res) => {
 
     } catch (error) {
         console.error('❌ Error en PUT /inventario/precio:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ============================================
-// PUT /inventario/stock - Actualizar stock manualmente
-// ============================================
-router.put('/stock', async (req, res) => {
-    try {
-        const { producto_id, sucursal_id, stock } = req.body;
-
-        if (!producto_id || !sucursal_id) {
-            return res.status(400).json({
-                success: false,
-                error: 'producto_id y sucursal_id son requeridos'
-            });
-        }
-
-        if (stock === undefined || stock < 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'stock debe ser un número válido mayor o igual a 0'
-            });
-        }
-
-        // Para Principal, actualizar solo en productos
-        if (parseInt(sucursal_id) === 3) {
-            await pool.query(
-                `UPDATE productos SET stock = $1 WHERE id = $2`,
-                [stock, producto_id]
-            );
-            
-            // También actualizar inventario si existe
-            await pool.query(
-                `UPDATE producto_inventario SET stock = $1 WHERE producto_id = $2 AND sucursal_id = $3`,
-                [stock, producto_id, sucursal_id]
-            );
-
-            return res.json({
-                success: true,
-                message: '✅ Stock actualizado correctamente en Principal'
-            });
-        }
-
-        // Para sucursales
-        const existe = await pool.query(
-            'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
-            [producto_id, sucursal_id]
-        );
-
-        let result;
-        if (existe.rows.length > 0) {
-            result = await pool.query(
-                `UPDATE producto_inventario 
-                 SET stock = $1,
-                     updated_at = NOW()
-                 WHERE producto_id = $2 AND sucursal_id = $3
-                 RETURNING *`,
-                [stock, producto_id, sucursal_id]
-            );
-        } else {
-            result = await pool.query(
-                `INSERT INTO producto_inventario (producto_id, sucursal_id, stock)
-                 VALUES ($1, $2, $3)
-                 RETURNING *`,
-                [producto_id, sucursal_id, stock]
-            );
-        }
-
-        res.json({
-            success: true,
-            message: '✅ Stock actualizado correctamente',
-            producto: result.rows[0]
-        });
-
-    } catch (error) {
-        console.error('❌ Error en PUT /inventario/stock:', error.message);
         res.status(500).json({
             success: false,
             error: error.message

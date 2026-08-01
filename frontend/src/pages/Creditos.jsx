@@ -3,311 +3,469 @@ import AdminLayout from '../layouts/AdminLayout'
 import API_URL from '../config'
 
 function Creditos() {
-    const [cuentas, setCuentas] = useState([])
-    const [clientes, setClientes] = useState([])
-    const [resumen, setResumen] = useState({
-        total_cuentas: 0,
-        total_adeudado: 0,
-        saldo_total: 0,
-        total_abonado: 0
-    })
-    const [cargando, setCargando] = useState(true)
-    const [mensaje, setMensaje] = useState('')
-    const [selectedCliente, setSelectedCliente] = useState('')
-    const [abonoMonto, setAbonoMonto] = useState('')
-    const [observacionAbono, setObservacionAbono] = useState('')
+  const [creditos, setCreditos] = useState([])
+  const [clientes, setClientes] = useState([])
+  const [cargando, setCargando] = useState(true)
+  const [mensaje, setMensaje] = useState('')
+  const [filtroCliente, setFiltroCliente] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState('')
+  const [mostrarForm, setMostrarForm] = useState(false)
+  const [form, setForm] = useState({
+    cliente_id: '',
+    monto: '',
+    descripcion: '',
+    fecha_vencimiento: ''
+  })
 
-    const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+  const rol = usuario?.rol || ''
+  const sucursalId = usuario?.sucursal_id || null
+  const sucursalNombre = usuario?.sucursal_nombre || 'Principal'
+  
+  // 👇 PERMISOS
+  const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  const esVendedor = ['vendedor', 'vendedora'].includes(rol)
+  const esSuperAdmin = ['dueno', 'dueño', 'admin'].includes(rol)
+  const esSucursalPrincipal = sucursalId === 3
 
-    useEffect(() => {
+  // 👇 DETERMINAR SI PUEDE VER TODOS LOS CRÉDITOS (SOLO DUEÑO/ADMIN)
+  const puedeVerTodos = esSuperAdmin // Solo Dueño/Admin ven todos
+
+  useEffect(() => {
+    cargarCreditos()
+    if (esAdmin) {
+      cargarClientes()
+    }
+  }, [])
+
+  const cargarCreditos = async () => {
+    setCargando(true)
+    try {
+      let url = `${API_URL}/creditos`
+      
+      // 👇 SIEMPRE FILTRAR POR SUCURSAL, EXCEPTO PARA DUEÑO/ADMIN
+      if (!puedeVerTodos && sucursalId) {
+        url = `${API_URL}/creditos?sucursal_id=${sucursalId}`
+      }
+      
+      console.log('📊 Cargando créditos desde:', url)
+      
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`)
+      }
+      const data = await response.json()
+      setCreditos(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error cargando créditos:', error)
+      setMensaje('❌ Error cargando créditos')
+      setCreditos([])
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  const cargarClientes = async () => {
+    try {
+      let url = `${API_URL}/clientes`
+      if (!puedeVerTodos && sucursalId) {
+        url = `${API_URL}/clientes?sucursal_id=${sucursalId}`
+      }
+      const response = await fetch(url)
+      const data = await response.json()
+      setClientes(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error cargando clientes:', error)
+      setClientes([])
+    }
+  }
+
+  const handleAgregarCredito = async (e) => {
+    e.preventDefault()
+    
+    if (!esAdmin) {
+      alert('⛔ No tienes permisos para agregar créditos')
+      return
+    }
+
+    if (!form.cliente_id || !form.monto || form.monto <= 0) {
+      alert('⚠️ Selecciona un cliente y un monto válido')
+      return
+    }
+
+    setCargando(true)
+    try {
+      const response = await fetch(`${API_URL}/creditos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cliente_id: parseInt(form.cliente_id),
+          monto: parseFloat(form.monto),
+          descripcion: form.descripcion,
+          fecha_vencimiento: form.fecha_vencimiento || null,
+          sucursal_id: sucursalId || 3
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setMensaje('✅ Crédito agregado correctamente')
+        setForm({ cliente_id: '', monto: '', descripcion: '', fecha_vencimiento: '' })
+        setMostrarForm(false)
         cargarCreditos()
-        cargarClientes()
-        cargarResumen()
-    }, [])
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        setMensaje('❌ Error: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setMensaje('❌ Error al agregar crédito')
+    } finally {
+      setCargando(false)
+    }
+  }
 
-    const cargarCreditos = async () => {
-        try {
-            const response = await fetch(`${API_URL}/creditos`)
-            if (!response.ok) {
-                throw new Error(`Error ${response.status}`)
-            }
-            const data = await response.json()
-            // Filtrar solo los que tienen saldo pendiente
-            const conDeuda = Array.isArray(data) ? data.filter(c => (c.saldo_pendiente || 0) > 0.01) : []
-            setCuentas(conDeuda)
-        } catch (error) {
-            console.error('Error cargando créditos:', error)
-            setMensaje('❌ Error cargando créditos')
-            setCuentas([])
-        }
+  const handlePagarCredito = async (creditoId) => {
+    if (!esAdmin) {
+      alert('⛔ No tienes permisos para pagar créditos')
+      return
     }
 
-    const cargarClientes = async () => {
-        try {
-            const response = await fetch(`${API_URL}/creditos/clientes`)
-            if (!response.ok) {
-                throw new Error(`Error ${response.status}`)
-            }
-            const data = await response.json()
-            setClientes(Array.isArray(data) ? data : [])
-        } catch (error) {
-            console.error('Error cargando clientes:', error)
-            setClientes([])
-        }
+    const monto = prompt('💰 ¿Cuánto desea abonar?')
+    if (!monto || parseFloat(monto) <= 0) return
+
+    setCargando(true)
+    try {
+      const response = await fetch(`${API_URL}/creditos/${creditoId}/pagar`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          monto: parseFloat(monto)
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setMensaje(`✅ Abono de RD$ ${parseFloat(monto).toFixed(2)} registrado`)
+        cargarCreditos()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        setMensaje('❌ Error: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setMensaje('❌ Error al registrar abono')
+    } finally {
+      setCargando(false)
     }
+  }
 
-    const cargarResumen = async () => {
-        try {
-            const response = await fetch(`${API_URL}/creditos/resumen`)
-            if (!response.ok) {
-                throw new Error(`Error ${response.status}`)
-            }
-            const data = await response.json()
-            setResumen(data)
-        } catch (error) {
-            console.error('Error cargando resumen:', error)
-            setResumen({
-                total_cuentas: 0,
-                total_adeudado: 0,
-                saldo_total: 0,
-                total_abonado: 0
-            })
-        } finally {
-            setCargando(false)
-        }
+  const creditosFiltrados = creditos.filter(c => {
+    if (filtroCliente && c.cliente_id !== parseInt(filtroCliente)) return false
+    if (filtroEstado && c.estado !== filtroEstado) return false
+    return true
+  })
+
+  const getEstadoColor = (estado) => {
+    const colores = {
+      'pendiente': '#ff9800',
+      'pagado': '#4CAF50',
+      'vencido': '#f44336',
+      'cancelado': '#757575'
     }
+    return colores[estado] || '#757575'
+  }
 
-    const registrarAbono = async (e) => {
-        e.preventDefault()
-        if (!selectedCliente || !abonoMonto || parseFloat(abonoMonto) <= 0) {
-            alert('⚠️ Selecciona un cliente y un monto válido')
-            return
-        }
-
-        try {
-            const response = await fetch(`${API_URL}/creditos/abonos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    cliente_id: parseInt(selectedCliente),
-                    monto: parseFloat(abonoMonto),
-                    usuario_id: usuario.id,
-                    observacion: observacionAbono
-                })
-            })
-
-            const data = await response.json()
-
-            if (data.success) {
-                setMensaje(`✅ Abono de RD$ ${parseFloat(abonoMonto).toFixed(2)} registrado correctamente`)
-                setAbonoMonto('')
-                setSelectedCliente('')
-                setObservacionAbono('')
-                cargarCreditos()
-                cargarClientes()
-                cargarResumen()
-                setTimeout(() => setMensaje(''), 3000)
-            } else {
-                alert('❌ Error: ' + (data.error || 'No se pudo registrar'))
-            }
-        } catch (error) {
-            console.error(error)
-            alert('❌ Error registrando abono')
-        }
+  const getEstadoLabel = (estado) => {
+    const estados = {
+      'pendiente': '⏳ Pendiente',
+      'pagado': '✅ Pagado',
+      'vencido': '❌ Vencido',
+      'cancelado': '🚫 Cancelado'
     }
+    return estados[estado] || estado
+  }
 
-    const formatearNumero = (valor) => {
-        if (valor === undefined || valor === null) return '0.00'
-        const num = parseFloat(valor)
-        if (isNaN(num)) return '0.00'
-        return num.toFixed(2)
-    }
-
-    const totalDeuda = cuentas.reduce((acc, c) => acc + (c.saldo_pendiente || 0), 0)
-
-    if (cargando) {
-        return (
-            <AdminLayout>
-                <div style={{ textAlign: 'center', padding: '60px' }}>
-                    <h2>Cargando créditos...</h2>
-                </div>
-            </AdminLayout>
-        )
-    }
-
+  if (cargando) {
     return (
-        <AdminLayout>
-            <h1>💰 Cuentas por Cobrar</h1>
+      <AdminLayout>
+        <div style={{ textAlign: 'center', padding: '60px' }}>
+          <h2>Cargando créditos...</h2>
+        </div>
+      </AdminLayout>
+    )
+  }
 
-            {mensaje && (
-                <div style={{
-                    backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
-                    color: mensaje.includes('✅') ? '#1b5e20' : '#dc2626',
-                    padding: '10px 15px',
-                    borderRadius: '8px',
-                    marginBottom: '20px'
-                }}>
-                    {mensaje}
-                </div>
-            )}
+  return (
+    <AdminLayout>
+      <h1>💰 Créditos y Cobros</h1>
 
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                gap: '20px',
-                marginBottom: '30px'
-            }}>
-                <div style={{ backgroundColor: '#e3f2fd', padding: '20px', borderRadius: '12px' }}>
-                    <h3 style={{ margin: 0, color: '#0d47a1' }}>💰 Total Deuda</h3>
-                    <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0', color: '#d32f2f' }}>
-                        RD$ {formatearNumero(totalDeuda)}
-                    </p>
-                </div>
-                <div style={{ backgroundColor: '#e8f5e9', padding: '20px', borderRadius: '12px' }}>
-                    <h3 style={{ margin: 0, color: '#1b5e20' }}>👥 Clientes con Deuda</h3>
-                    <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
-                        {clientes.length}
-                    </p>
-                </div>
-                <div style={{ backgroundColor: '#fff3e0', padding: '20px', borderRadius: '12px' }}>
-                    <h3 style={{ margin: 0, color: '#e65100' }}>📊 Total Abonado</h3>
-                    <p style={{ fontSize: '2rem', fontWeight: 'bold', margin: '10px 0 0 0' }}>
-                        RD$ {formatearNumero(resumen.total_abonado)}
-                    </p>
-                </div>
+      {/* 👇 BANNER DE SUCURSAL */}
+      <div style={{
+        backgroundColor: '#e3f2fd',
+        padding: '10px 15px',
+        borderRadius: '8px',
+        marginBottom: '20px',
+        borderLeft: '4px solid #003b6f'
+      }}>
+        <p style={{ margin: 0, color: '#003b6f' }}>
+          🏢 <strong>{puedeVerTodos ? 'Todas las sucursales' : sucursalNombre || 'Mi Sucursal'}</strong>
+          {!puedeVerTodos && ' - Solo créditos de tu sucursal'}
+        </p>
+        {puedeVerTodos && (
+          <p style={{ margin: '5px 0 0 0', fontSize: '0.8rem', color: '#666' }}>
+            👑 Como Dueño/Admin puedes ver todos los créditos de todas las sucursales
+          </p>
+        )}
+      </div>
+
+      {mensaje && (
+        <div style={{
+          backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
+          color: mensaje.includes('✅') ? '#1b5e20' : '#dc2626',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
+          {mensaje}
+        </div>
+      )}
+
+      {esAdmin && (
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            onClick={() => setMostrarForm(!mostrarForm)}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#003b6f',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            {mostrarForm ? '✕ Cancelar' : '➕ Agregar Crédito'}
+          </button>
+        </div>
+      )}
+
+      {mostrarForm && esAdmin && (
+        <form onSubmit={handleAgregarCredito} style={{
+          backgroundColor: '#f5f7fb',
+          padding: '25px',
+          borderRadius: '12px',
+          marginBottom: '25px',
+          border: '2px solid #003b6f'
+        }}>
+          <h3 style={{ marginTop: 0, color: '#003b6f' }}>📝 Nuevo Crédito</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cliente *</label>
+              <select
+                value={form.cliente_id}
+                onChange={(e) => setForm({ ...form, cliente_id: e.target.value })}
+                required
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              >
+                <option value="">Seleccionar cliente</option>
+                {clientes.map(c => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
             </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Monto (RD$) *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={form.monto}
+                onChange={(e) => setForm({ ...form, monto: e.target.value })}
+                required
+                placeholder="0.00"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Fecha de Vencimiento</label>
+              <input
+                type="date"
+                value={form.fecha_vencimiento}
+                onChange={(e) => setForm({ ...form, fecha_vencimiento: e.target.value })}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Descripción</label>
+              <input
+                type="text"
+                value={form.descripcion}
+                onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+                placeholder="Motivo del crédito..."
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            disabled={cargando}
+            style={{
+              marginTop: '15px',
+              padding: '12px 30px',
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '1rem'
+            }}
+          >
+            {cargando ? 'Guardando...' : '✅ Guardar Crédito'}
+          </button>
+        </form>
+      )}
 
-            <div style={{
-                border: '2px solid #003b6f',
-                borderRadius: '12px',
-                padding: '25px',
-                marginBottom: '30px',
-                backgroundColor: '#f8faff'
-            }}>
-                <h3 style={{ marginTop: 0, color: '#003b6f' }}>💵 Registrar Abono</h3>
-                <form onSubmit={registrarAbono}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
-                        <div>
-                            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cliente *</label>
-                            <select
-                                value={selectedCliente}
-                                onChange={(e) => setSelectedCliente(e.target.value)}
-                                required
-                                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-                            >
-                                <option value="">Seleccionar cliente</option>
-                                {clientes.map(c => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.nombre} - Debe: RD$ {formatearNumero(c.saldo_pendiente)}
-                                    </option>
-                                ))}
-                            </select>
-                            {clientes.length === 0 && (
-                                <p style={{ fontSize: '0.8rem', color: '#4CAF50', marginTop: '5px' }}>
-                                    ✅ No hay clientes con deuda
-                                </p>
-                            )}
-                        </div>
-                        <div>
-                            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Monto del Abono *</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                value={abonoMonto}
-                                onChange={(e) => setAbonoMonto(e.target.value)}
-                                required
-                                placeholder="0.00"
-                                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Observación</label>
-                            <input
-                                type="text"
-                                value={observacionAbono}
-                                onChange={(e) => setObservacionAbono(e.target.value)}
-                                placeholder="Nota opcional"
-                                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-                            />
-                        </div>
-                    </div>
-                    <button
-                        type="submit"
-                        disabled={clientes.length === 0}
-                        style={{
-                            marginTop: '15px',
-                            padding: '12px 30px',
-                            backgroundColor: clientes.length === 0 ? '#999' : '#4CAF50',
+      {/* FILTROS */}
+      <div style={{
+        display: 'flex',
+        gap: '15px',
+        marginBottom: '20px',
+        flexWrap: 'wrap',
+        alignItems: 'center'
+      }}>
+        <select
+          value={filtroCliente}
+          onChange={(e) => setFiltroCliente(e.target.value)}
+          style={{
+            padding: '8px 16px',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            minWidth: '200px'
+          }}
+        >
+          <option value="">Todos los clientes</option>
+          {clientes.map(c => (
+            <option key={c.id} value={c.id}>{c.nombre}</option>
+          ))}
+        </select>
+
+        <select
+          value={filtroEstado}
+          onChange={(e) => setFiltroEstado(e.target.value)}
+          style={{
+            padding: '8px 16px',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            minWidth: '150px'
+          }}
+        >
+          <option value="">Todos los estados</option>
+          <option value="pendiente">⏳ Pendiente</option>
+          <option value="pagado">✅ Pagado</option>
+          <option value="vencido">❌ Vencido</option>
+          <option value="cancelado">🚫 Cancelado</option>
+        </select>
+
+        <button
+          onClick={cargarCreditos}
+          style={{
+            padding: '8px 20px',
+            backgroundColor: '#4CAF50',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer'
+          }}
+        >
+          🔄 Actualizar
+        </button>
+      </div>
+
+      {/* TABLA DE CRÉDITOS */}
+      <div style={{
+        overflowX: 'auto',
+        backgroundColor: 'white',
+        borderRadius: '8px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
+              <th style={{ padding: '12px', textAlign: 'left' }}>#</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Cliente</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Monto</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Abonado</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Saldo</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Estado</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Vencimiento</th>
+              {esAdmin && (
+                <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {creditosFiltrados.length === 0 ? (
+              <tr>
+                <td colSpan={esAdmin ? 8 : 7} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                  No hay créditos registrados
+                </td>
+              </tr>
+            ) : (
+              creditosFiltrados.map((c, index) => (
+                <tr key={c.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '12px' }}>{index + 1}</td>
+                  <td style={{ padding: '12px' }}>{c.cliente_nombre || 'N/A'}</td>
+                  <td style={{ padding: '12px', textAlign: 'right' }}>
+                    RD$ {Number(c.monto).toFixed(2)}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'right' }}>
+                    RD$ {Number(c.abonado || 0).toFixed(2)}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: (c.saldo || c.monto) > 0 ? '#f44336' : '#4CAF50' }}>
+                    RD$ {Number(c.saldo || c.monto).toFixed(2)}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    <span style={{
+                      backgroundColor: getEstadoColor(c.estado),
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '0.75rem'
+                    }}>
+                      {getEstadoLabel(c.estado)}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    {c.fecha_vencimiento ? new Date(c.fecha_vencimiento).toLocaleDateString() : 'N/A'}
+                  </td>
+                  {esAdmin && (
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {c.estado !== 'pagado' && c.estado !== 'cancelado' && (
+                        <button
+                          onClick={() => handlePagarCredito(c.id)}
+                          style={{
+                            backgroundColor: '#4CAF50',
                             color: 'white',
                             border: 'none',
-                            borderRadius: '8px',
-                            cursor: clientes.length === 0 ? 'not-allowed' : 'pointer',
-                            fontSize: '1rem',
-                            opacity: clientes.length === 0 ? 0.6 : 1
-                        }}
-                    >
-                        {clientes.length === 0 ? '✅ Todos los clientes han pagado' : '✅ Registrar Abono'}
-                    </button>
-                </form>
-            </div>
-
-            <h2>📋 Clientes con Deuda</h2>
-            {cuentas.length === 0 ? (
-                <div style={{
-                    backgroundColor: '#e8f5e9',
-                    padding: '30px',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                    border: '2px solid #4CAF50'
-                }}>
-                    <h3 style={{ margin: 0, color: '#1b5e20' }}>🎉 ¡Todos los clientes han pagado!</h3>
-                    <p style={{ color: '#666' }}>No hay cuentas pendientes por cobrar</p>
-                </div>
-            ) : (
-                <table style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                    backgroundColor: 'white',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                }}>
-                    <thead>
-                        <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
-                            <th style={{ padding: '12px', textAlign: 'left' }}>Cliente</th>
-                            <th style={{ padding: '12px', textAlign: 'right' }}>Teléfono</th>
-                            <th style={{ padding: '12px', textAlign: 'right' }}>Total Ventas</th>
-                            <th style={{ padding: '12px', textAlign: 'right' }}>Abonado</th>
-                            <th style={{ padding: '12px', textAlign: 'right' }}>Saldo Pendiente</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {cuentas.map((c, index) => (
-                            <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
-                                <td style={{ padding: '12px' }}>{c.cliente_nombre || c.cliente_venta || 'N/A'}</td>
-                                <td style={{ padding: '12px', textAlign: 'right' }}>{c.cliente_telefono || 'N/A'}</td>
-                                <td style={{ padding: '12px', textAlign: 'right' }}>
-                                    RD$ {formatearNumero(c.total_venta)}
-                                </td>
-                                <td style={{ padding: '12px', textAlign: 'right' }}>
-                                    RD$ {formatearNumero(c.abonado)}
-                                </td>
-                                <td style={{
-                                    padding: '12px',
-                                    textAlign: 'right',
-                                    color: '#d32f2f',
-                                    fontWeight: 'bold'
-                                }}>
-                                    RD$ {formatearNumero(c.saldo_pendiente)}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                            borderRadius: '4px',
+                            padding: '4px 12px',
+                            cursor: 'pointer',
+                            marginRight: '5px'
+                          }}
+                        >
+                          💰 Abonar
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))
             )}
-        </AdminLayout>
-    )
+          </tbody>
+        </table>
+      </div>
+    </AdminLayout>
+  )
 }
 
 export default Creditos

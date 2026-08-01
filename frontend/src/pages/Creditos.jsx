@@ -22,14 +22,13 @@ function Creditos() {
   const sucursalId = usuario?.sucursal_id || null
   const sucursalNombre = usuario?.sucursal_nombre || 'Principal'
   
-  // 👇 PERMISOS
+  // 👇 PERMISOS - Dueño y Subgerente tienen los mismos permisos
   const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
   const esVendedor = ['vendedor', 'vendedora'].includes(rol)
-  const esSuperAdmin = ['dueno', 'dueño', 'admin'].includes(rol)
-  const esSucursalPrincipal = sucursalId === 3
-
-  // 👇 DETERMINAR SI PUEDE VER TODOS LOS CRÉDITOS (SOLO DUEÑO/ADMIN)
-  const puedeVerTodos = esSuperAdmin // Solo Dueño/Admin ven todos
+  const esSuperAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol) // 👈 SUBGERENTE TAMBIÉN
+  
+  // 👇 DETERMINAR SI PUEDE VER TODOS LOS CRÉDITOS (DUEÑO Y SUBGERENTE)
+  const puedeVerTodos = esSuperAdmin // Dueño y Subgerente ven todos
 
   useEffect(() => {
     cargarCreditos()
@@ -43,7 +42,7 @@ function Creditos() {
     try {
       let url = `${API_URL}/creditos`
       
-      // 👇 SIEMPRE FILTRAR POR SUCURSAL, EXCEPTO PARA DUEÑO/ADMIN
+      // 👇 SIEMPRE FILTRAR POR SUCURSAL, EXCEPTO PARA DUEÑO Y SUBGERENTE
       if (!puedeVerTodos && sucursalId) {
         url = `${API_URL}/creditos?sucursal_id=${sucursalId}`
       }
@@ -214,7 +213,7 @@ function Creditos() {
         </p>
         {puedeVerTodos && (
           <p style={{ margin: '5px 0 0 0', fontSize: '0.8rem', color: '#666' }}>
-            👑 Como Dueño/Admin puedes ver todos los créditos de todas las sucursales
+            👑 Como Dueño o Subgerente puedes ver todos los créditos de todas las sucursales
           </p>
         )}
       </div>

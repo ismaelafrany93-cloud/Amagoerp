@@ -39,6 +39,7 @@ app.use('/operarios', require('./routes/operarios'));
 app.use('/recetas', require('./routes/recetas'));
 app.use('/sucursales', require('./routes/sucursales'));
 app.use('/historial', require('./routes/historial'));
+app.use('/dashboard', require('./routes/dashboard'));
 app.use('/transferencias', require('./routes/transferencias'));
 app.use('/cambios', require('./routes/cambios')); // 👈 NUEVA RUTA DE CAMBIOS
 

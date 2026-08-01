@@ -10,6 +10,7 @@ function Creditos() {
   const [filtroCliente, setFiltroCliente] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
   const [mostrarForm, setMostrarForm] = useState(false)
+  const [editando, setEditando] = useState(null)
   const [form, setForm] = useState({
     cliente_id: '',
     monto: '',
@@ -22,13 +23,9 @@ function Creditos() {
   const sucursalId = usuario?.sucursal_id || null
   const sucursalNombre = usuario?.sucursal_nombre || 'Principal'
   
-  // 👇 PERMISOS - Dueño y Subgerente tienen los mismos permisos
   const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
   const esVendedor = ['vendedor', 'vendedora'].includes(rol)
-  const esSuperAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol) // 👈 SUBGERENTE TAMBIÉN
-  
-  // 👇 DETERMINAR SI PUEDE VER TODOS LOS CRÉDITOS (DUEÑO Y SUBGERENTE)
-  const puedeVerTodos = esSuperAdmin // Dueño y Subgerente ven todos
+  const puedeVerTodos = esAdmin // Dueño y Subgerente ven todos
 
   useEffect(() => {
     cargarCreditos()
@@ -41,8 +38,6 @@ function Creditos() {
     setCargando(true)
     try {
       let url = `${API_URL}/creditos`
-      
-      // 👇 SIEMPRE FILTRAR POR SUCURSAL, EXCEPTO PARA DUEÑO Y SUBGERENTE
       if (!puedeVerTodos && sucursalId) {
         url = `${API_URL}/creditos?sucursal_id=${sucursalId}`
       }
@@ -79,6 +74,85 @@ function Creditos() {
     }
   }
 
+  // 👇 ABRIR EDITAR
+  const abrirEditar = (credito) => {
+    setEditando(credito.id)
+    setForm({
+      cliente_id: credito.cliente_id || '',
+      monto: credito.monto || '',
+      descripcion: credito.descripcion || '',
+      fecha_vencimiento: credito.fecha_vencimiento ? credito.fecha_vencimiento.split('T')[0] : ''
+    })
+    setMostrarForm(true)
+  }
+
+  // 👇 GUARDAR EDICIÓN
+  const handleEditarCredito = async (e) => {
+    e.preventDefault()
+    
+    if (!form.cliente_id || !form.monto || form.monto <= 0) {
+      alert('⚠️ Selecciona un cliente y un monto válido')
+      return
+    }
+
+    setCargando(true)
+    try {
+      const response = await fetch(`${API_URL}/creditos/${editando}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cliente_id: parseInt(form.cliente_id),
+          monto: parseFloat(form.monto),
+          descripcion: form.descripcion,
+          fecha_vencimiento: form.fecha_vencimiento || null
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setMensaje('✅ Crédito actualizado correctamente')
+        setForm({ cliente_id: '', monto: '', descripcion: '', fecha_vencimiento: '' })
+        setMostrarForm(false)
+        setEditando(null)
+        cargarCreditos()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        setMensaje('❌ Error: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setMensaje('❌ Error al actualizar crédito')
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  // 👇 ELIMINAR (CANCELAR CON HISTORIAL)
+  const handleEliminarCredito = async (creditoId) => {
+    if (!window.confirm('⚠️ ¿Estás seguro de cancelar este crédito? Quedará en el historial como cancelado.')) return
+
+    setCargando(true)
+    try {
+      const response = await fetch(`${API_URL}/creditos/${creditoId}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setMensaje('✅ Crédito cancelado correctamente')
+        cargarCreditos()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        setMensaje('❌ Error: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setMensaje('❌ Error al cancelar crédito')
+    } finally {
+      setCargando(false)
+    }
+  }
+
   const handleAgregarCredito = async (e) => {
     e.preventDefault()
     
@@ -111,6 +185,7 @@ function Creditos() {
         setMensaje('✅ Crédito agregado correctamente')
         setForm({ cliente_id: '', monto: '', descripcion: '', fecha_vencimiento: '' })
         setMostrarForm(false)
+        setEditando(null)
         cargarCreditos()
         setTimeout(() => setMensaje(''), 3000)
       } else {
@@ -199,7 +274,6 @@ function Creditos() {
     <AdminLayout>
       <h1>💰 Créditos y Cobros</h1>
 
-      {/* 👇 BANNER DE SUCURSAL */}
       <div style={{
         backgroundColor: '#e3f2fd',
         padding: '10px 15px',
@@ -216,6 +290,9 @@ function Creditos() {
             👑 Como Dueño o Subgerente puedes ver todos los créditos de todas las sucursales
           </p>
         )}
+        <p style={{ margin: '5px 0 0 0', fontSize: '0.8rem', color: '#666' }}>
+          📋 Los créditos cancelados quedan en el historial con estado "Cancelado"
+        </p>
       </div>
 
       {mensaje && (
@@ -233,7 +310,13 @@ function Creditos() {
       {esAdmin && (
         <div style={{ marginBottom: '20px' }}>
           <button
-            onClick={() => setMostrarForm(!mostrarForm)}
+            onClick={() => {
+              setMostrarForm(!mostrarForm)
+              if (!mostrarForm) {
+                setEditando(null)
+                setForm({ cliente_id: '', monto: '', descripcion: '', fecha_vencimiento: '' })
+              }
+            }}
             style={{
               padding: '10px 20px',
               backgroundColor: '#003b6f',
@@ -249,14 +332,16 @@ function Creditos() {
       )}
 
       {mostrarForm && esAdmin && (
-        <form onSubmit={handleAgregarCredito} style={{
+        <form onSubmit={editando ? handleEditarCredito : handleAgregarCredito} style={{
           backgroundColor: '#f5f7fb',
           padding: '25px',
           borderRadius: '12px',
           marginBottom: '25px',
           border: '2px solid #003b6f'
         }}>
-          <h3 style={{ marginTop: 0, color: '#003b6f' }}>📝 Nuevo Crédito</h3>
+          <h3 style={{ marginTop: 0, color: '#003b6f' }}>
+            {editando ? '✏️ Editar Crédito' : '📝 Nuevo Crédito'}
+          </h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             <div>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cliente *</label>
@@ -319,8 +404,31 @@ function Creditos() {
               fontSize: '1rem'
             }}
           >
-            {cargando ? 'Guardando...' : '✅ Guardar Crédito'}
+            {cargando ? 'Guardando...' : editando ? '✅ Actualizar Crédito' : '✅ Guardar Crédito'}
           </button>
+          {editando && (
+            <button
+              type="button"
+              onClick={() => {
+                setMostrarForm(false)
+                setEditando(null)
+                setForm({ cliente_id: '', monto: '', descripcion: '', fecha_vencimiento: '' })
+              }}
+              style={{
+                marginTop: '15px',
+                marginLeft: '10px',
+                padding: '12px 30px',
+                backgroundColor: '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '1rem'
+              }}
+            >
+              ❌ Cancelar Edición
+            </button>
+          )}
         </form>
       )}
 
@@ -411,7 +519,10 @@ function Creditos() {
               </tr>
             ) : (
               creditosFiltrados.map((c, index) => (
-                <tr key={c.id} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={c.id} style={{ 
+                  borderBottom: '1px solid #eee',
+                  opacity: c.estado === 'cancelado' ? 0.6 : 1
+                }}>
                   <td style={{ padding: '12px' }}>{index + 1}</td>
                   <td style={{ padding: '12px' }}>{c.cliente_nombre || 'N/A'}</td>
                   <td style={{ padding: '12px', textAlign: 'right' }}>
@@ -440,20 +551,61 @@ function Creditos() {
                   {esAdmin && (
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       {c.estado !== 'pagado' && c.estado !== 'cancelado' && (
+                        <>
+                          <button
+                            onClick={() => handlePagarCredito(c.id)}
+                            style={{
+                              backgroundColor: '#4CAF50',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 12px',
+                              cursor: 'pointer',
+                              marginRight: '5px'
+                            }}
+                          >
+                            💰 Abonar
+                          </button>
+                          <button
+                            onClick={() => abrirEditar(c)}
+                            style={{
+                              backgroundColor: '#2196F3',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 12px',
+                              cursor: 'pointer',
+                              marginRight: '5px'
+                            }}
+                          >
+                            ✏️ Editar
+                          </button>
+                        </>
+                      )}
+                      {c.estado !== 'pagado' && c.estado !== 'cancelado' && (
                         <button
-                          onClick={() => handlePagarCredito(c.id)}
+                          onClick={() => handleEliminarCredito(c.id)}
                           style={{
-                            backgroundColor: '#4CAF50',
+                            backgroundColor: '#f44336',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
                             padding: '4px 12px',
-                            cursor: 'pointer',
-                            marginRight: '5px'
+                            cursor: 'pointer'
                           }}
                         >
-                          💰 Abonar
+                          🗑️ Cancelar
                         </button>
+                      )}
+                      {c.estado === 'cancelado' && (
+                        <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                          Cancelado
+                        </span>
+                      )}
+                      {c.estado === 'pagado' && (
+                        <span style={{ color: '#4CAF50', fontSize: '0.75rem' }}>
+                          Pagado
+                        </span>
                       )}
                     </td>
                   )}

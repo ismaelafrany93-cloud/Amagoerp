@@ -22,8 +22,7 @@ router.get('/', async (req, res) => {
         let params = [sucursal_id];
 
         if (esPrincipal) {
-            // 👇 PARA PRINCIPAL: MOSTRAR TODOS LOS PRODUCTOS DE productos
-            // (con o sin inventario, usando LEFT JOIN sin filtrar por sucursal en el JOIN)
+            // 👇 PARA PRINCIPAL: MOSTRAR TODOS LOS PRODUCTOS (sin categoria_icono)
             query = `
                 SELECT 
                     p.id,
@@ -33,14 +32,11 @@ router.get('/', async (req, res) => {
                     p.precio,
                     p.precio_mayor,
                     p.cantidad_mayor,
-                    p.categoria_icono,
-                    p.categoria_color,
                     p.sucursal_id as producto_sucursal_id,
                     COALESCE(pi.stock, 0) as stock,
                     p.precio as precio_venta,
                     'Principal' as sucursal_nombre,
-                    ${sucursal_id} as sucursal_id,
-                    pi.precio_venta as precio_sucursal
+                    ${sucursal_id} as sucursal_id
                 FROM productos p
                 LEFT JOIN producto_inventario pi ON p.id = pi.producto_id AND pi.sucursal_id = $1
                 ORDER BY p.nombre
@@ -55,8 +51,6 @@ router.get('/', async (req, res) => {
                     p.descripcion,
                     p.precio_mayor,
                     p.cantidad_mayor,
-                    p.categoria_icono,
-                    p.categoria_color,
                     pi.sucursal_id,
                     pi.stock,
                     COALESCE(pi.precio_venta, 0) as precio_venta,
@@ -109,7 +103,6 @@ router.put('/stock', async (req, res) => {
                 [stock, producto_id]
             );
             
-            // Actualizar o crear inventario en Principal
             const existe = await pool.query(
                 'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
                 [producto_id, sucursal_id]
@@ -202,7 +195,6 @@ router.put('/precio', async (req, res) => {
             });
         }
 
-        // Verificar si existe el producto en la sucursal
         const existe = await pool.query(
             'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
             [producto_id, sucursal_id]
@@ -219,7 +211,6 @@ router.put('/precio', async (req, res) => {
                 [precio_venta, producto_id, sucursal_id]
             );
         } else {
-            // Si no existe, crearlo
             result = await pool.query(
                 `INSERT INTO producto_inventario (producto_id, sucursal_id, stock, precio_venta)
                  VALUES ($1, $2, 0, $3)
@@ -256,9 +247,7 @@ router.post('/producto', async (req, res) => {
             stock,
             sucursal_id,
             precio_mayor,
-            cantidad_mayor,
-            categoria_icono,
-            categoria_color
+            cantidad_mayor
         } = req.body;
 
         if (!nombre || !precio) {
@@ -272,7 +261,6 @@ router.post('/producto', async (req, res) => {
         const stockFinal = stock || 0;
         const precioFinal = precio || 0;
 
-        // Verificar si el producto ya existe en esta sucursal
         const existe = await pool.query(
             `SELECT p.id, pi.id as inventario_id
              FROM productos p
@@ -301,7 +289,6 @@ router.post('/producto', async (req, res) => {
                 producto_id: productoId
             });
         } else {
-            // Verificar si el producto existe en general (sin sucursal)
             const existeGeneral = await pool.query(
                 'SELECT id FROM productos WHERE nombre ILIKE $1',
                 [nombre]
@@ -310,11 +297,10 @@ router.post('/producto', async (req, res) => {
             if (existeGeneral.rows.length > 0) {
                 productoId = existeGeneral.rows[0].id;
             } else {
-                // Crear nuevo producto
                 const result = await pool.query(
                     `INSERT INTO productos 
-                     (nombre, categoria, descripcion, precio, precio_mayor, cantidad_mayor, categoria_icono, categoria_color, stock)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                     (nombre, categoria, descripcion, precio, precio_mayor, cantidad_mayor, stock)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)
                      RETURNING id`,
                     [
                         nombre, 
@@ -323,15 +309,12 @@ router.post('/producto', async (req, res) => {
                         precioFinal,
                         precio_mayor || 0,
                         cantidad_mayor || 0,
-                        categoria_icono || null,
-                        categoria_color || null,
                         stockFinal
                     ]
                 );
                 productoId = result.rows[0].id;
             }
 
-            // Crear inventario en la sucursal
             await pool.query(
                 `INSERT INTO producto_inventario (producto_id, sucursal_id, stock, precio_venta, precio_mayorista)
                  VALUES ($1, $2, $3, $4, $5)`,
@@ -368,7 +351,6 @@ router.delete('/producto', async (req, res) => {
             });
         }
 
-        // No permitir eliminar de la Principal
         if (parseInt(sucursal_id) === 3) {
             return res.status(400).json({
                 success: false,

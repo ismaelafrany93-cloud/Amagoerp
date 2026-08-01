@@ -3,7 +3,6 @@ import AdminLayout from '../layouts/AdminLayout'
 import API_URL from '../config'
 
 function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNombre }) {
-  // 👆 RECIBIR PROPS
 
   const [productos, setProductos] = useState([])
   const [todosProductos, setTodosProductos] = useState([])
@@ -20,16 +19,27 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
   })
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+  const rol = usuario?.rol || ''
+  
+  // 👇 PERMISOS - Subgerente y Dueño/Admin tienen los mismos permisos
+  const esSuperAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  const esVendedor = ['vendedor', 'vendedora'].includes(rol)
+  
   const esSucursalPrincipal = usuario.sucursal_id === 3
   const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
 
-  // 👇 DETERMINAR SUCURSAL ID (props o usuario)
   const sucursalId = propSucursalId || usuario.sucursal_id || null
   const sucursalNombre = propSucursalNombre || usuario.sucursal_nombre || 'Mi Sucursal'
   const esSucursalBani = sucursalId === 1
   const esSucursalSabana = sucursalId === 2
   const esPrincipal = sucursalId === 3
+
+  // 👇 DETERMINAR SI PUEDE EDITAR
+  // - Dueño/Admin/Subgerente pueden editar TODO
+  // - Vendedor SOLO puede ver (no editar)
+  const puedeEditar = esSubgerente // 👈 Subgerente, Dueño y Admin pueden editar todo
+  const puedeVer = true // Todos pueden ver
 
   useEffect(() => {
     cargarInventario()
@@ -42,7 +52,6 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
     setCargando(true)
     setError('')
     try {
-      // 👇 USAR sucursalId para construir la URL
       let url = `${API_URL}/inventario`
       
       if (sucursalId) {
@@ -82,6 +91,13 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
 
   const handleAgregarProducto = async (e) => {
     e.preventDefault()
+    
+    // 👇 BLOQUEAR SI NO TIENE PERMISO
+    if (!puedeEditar) {
+      alert('⛔ No tienes permisos para agregar productos')
+      return
+    }
+
     if (!form.producto_id) {
       alert('⚠️ Selecciona un producto')
       return
@@ -121,6 +137,12 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
   }
 
   const handleEliminarProducto = async (productoId) => {
+    // 👇 BLOQUEAR SI NO TIENE PERMISO
+    if (!puedeEditar) {
+      alert('⛔ No tienes permisos para eliminar productos')
+      return
+    }
+
     if (!window.confirm('¿Eliminar este producto del inventario de la sucursal?')) return
 
     try {
@@ -147,6 +169,14 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
     if (sucursalId === 2) return '🏢 Inventario - Sabana'
     if (sucursalId) return `🏢 Inventario - ${sucursalNombre}`
     return '📊 Inventario'
+  }
+
+  // 👇 MENSAJE DE PERMISOS
+  const getPermisoMensaje = () => {
+    if (!puedeEditar && sucursalId && sucursalId !== 3) {
+      return '🔒 Solo el Dueño, Subgerente o Administrador puede modificar el inventario de esta sucursal'
+    }
+    return null
   }
 
   if (cargando) {
@@ -200,7 +230,31 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
         </div>
       )}
 
-      {esSubgerente && sucursalId && sucursalId !== 3 && (
+      {/* 👇 BANNER DE PERMISOS */}
+      {getPermisoMensaje() && (
+        <div style={{
+          backgroundColor: '#fff3e0',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #ff9800',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <span style={{ fontSize: '1.5rem' }}>🔒</span>
+          <div>
+            <p style={{ margin: 0, color: '#e65100', fontWeight: 'bold' }}>
+              {getPermisoMensaje()}
+            </p>
+            <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#666' }}>
+              Puedes ver los productos, pero no agregar, editar ni eliminar
+            </p>
+          </div>
+        </div>
+      )}
+
+      {esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar && (
         <div style={{
           backgroundColor: '#e3f2fd',
           padding: '15px',
@@ -217,7 +271,8 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
         </div>
       )}
 
-      {esSubgerente && sucursalId && sucursalId !== 3 && (
+      {/* 👇 BOTÓN AGREGAR - SOLO SI TIENE PERMISO */}
+      {esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar && (
         <button
           onClick={() => setMostrarForm(!mostrarForm)}
           style={{
@@ -235,7 +290,7 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
         </button>
       )}
 
-      {mostrarForm && esSubgerente && sucursalId && sucursalId !== 3 && (
+      {mostrarForm && esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar && (
         <form onSubmit={handleAgregarProducto} style={{
           backgroundColor: '#f5f7fb',
           padding: '25px',
@@ -358,7 +413,7 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
             <th style={{ padding: '12px', textAlign: 'right' }}>Precio</th>
             <th style={{ padding: '12px', textAlign: 'right' }}>Precio Mayor</th>
             <th style={{ padding: '12px', textAlign: 'center' }}>Cant. Mín.</th>
-            {esSubgerente && sucursalId && sucursalId !== 3 && (
+            {esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar && (
               <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             )}
           </tr>
@@ -366,9 +421,9 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
         <tbody>
           {!Array.isArray(productos) || productos.length === 0 ? (
             <tr>
-              <td colSpan={esSubgerente && sucursalId && sucursalId !== 3 ? 8 : 7} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+              <td colSpan={esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar ? 8 : 7} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                 {sucursalId && sucursalId !== 3
-                  ? `No hay productos en ${sucursalNombre}. Agrega productos desde el botón "Agregar Producto a Sucursal"`
+                  ? `No hay productos en ${sucursalNombre}.`
                   : 'No hay productos en el inventario'}
               </td>
             </tr>
@@ -395,7 +450,7 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
                 <td style={{ padding: '12px', textAlign: 'center' }}>
                   {p.cantidad_mayor || 0}
                 </td>
-                {esSubgerente && sucursalId && sucursalId !== 3 && (
+                {esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar && (
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     <button
                       onClick={() => handleEliminarProducto(p.id)}
@@ -410,6 +465,11 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
                     >
                       🗑️ Eliminar
                     </button>
+                  </td>
+                )}
+                {esSubgerente && sucursalId && sucursalId !== 3 && !puedeEditar && (
+                  <td style={{ padding: '12px', textAlign: 'center', color: '#999', fontSize: '0.8rem' }}>
+                    🔒 Solo lectura
                   </td>
                 )}
               </tr>

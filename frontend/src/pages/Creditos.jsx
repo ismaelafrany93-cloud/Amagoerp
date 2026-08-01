@@ -505,15 +505,13 @@ function Creditos() {
               <th style={{ padding: '12px', textAlign: 'right' }}>Saldo</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Estado</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Vencimiento</th>
-              {esAdmin && (
-                <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
-              )}
+              <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {creditosFiltrados.length === 0 ? (
               <tr>
-                <td colSpan={esAdmin ? 8 : 7} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                <td colSpan="8" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                   No hay créditos registrados
                 </td>
               </tr>
@@ -548,67 +546,74 @@ function Creditos() {
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     {c.fecha_vencimiento ? new Date(c.fecha_vencimiento).toLocaleDateString() : 'N/A'}
                   </td>
-                  {esAdmin && (
-                    <td style={{ padding: '12px', textAlign: 'center' }}>
-                      {c.estado !== 'pagado' && c.estado !== 'cancelado' && (
-                        <>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    {esAdmin && (
+                      <>
+                        {c.estado !== 'pagado' && c.estado !== 'cancelado' && (
+                          <>
+                            <button
+                              onClick={() => handlePagarCredito(c.id)}
+                              style={{
+                                backgroundColor: '#4CAF50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                cursor: 'pointer',
+                                marginRight: '5px',
+                                fontSize: '0.75rem'
+                              }}
+                              title="Abonar"
+                            >
+                              💰
+                            </button>
+                            <button
+                              onClick={() => abrirEditar(c)}
+                              style={{
+                                backgroundColor: '#2196F3',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                cursor: 'pointer',
+                                marginRight: '5px',
+                                fontSize: '0.75rem'
+                              }}
+                              title="Editar"
+                            >
+                              ✏️
+                            </button>
+                          </>
+                        )}
+                        {c.estado !== 'pagado' && c.estado !== 'cancelado' && (
                           <button
-                            onClick={() => handlePagarCredito(c.id)}
+                            onClick={() => handleEliminarCredito(c.id)}
                             style={{
-                              backgroundColor: '#4CAF50',
+                              backgroundColor: '#f44336',
                               color: 'white',
                               border: 'none',
                               borderRadius: '4px',
-                              padding: '4px 12px',
+                              padding: '4px 8px',
                               cursor: 'pointer',
-                              marginRight: '5px'
+                              fontSize: '0.75rem'
                             }}
+                            title="Cancelar"
                           >
-                            💰 Abonar
+                            🗑️
                           </button>
-                          <button
-                            onClick={() => abrirEditar(c)}
-                            style={{
-                              backgroundColor: '#2196F3',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '4px 12px',
-                              cursor: 'pointer',
-                              marginRight: '5px'
-                            }}
-                          >
-                            ✏️ Editar
-                          </button>
-                        </>
-                      )}
-                      {c.estado !== 'pagado' && c.estado !== 'cancelado' && (
-                        <button
-                          onClick={() => handleEliminarCredito(c.id)}
-                          style={{
-                            backgroundColor: '#f44336',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 12px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          🗑️ Cancelar
-                        </button>
-                      )}
-                      {c.estado === 'cancelado' && (
-                        <span style={{ color: '#999', fontSize: '0.75rem' }}>
-                          Cancelado
-                        </span>
-                      )}
-                      {c.estado === 'pagado' && (
-                        <span style={{ color: '#4CAF50', fontSize: '0.75rem' }}>
-                          Pagado
-                        </span>
-                      )}
-                    </td>
-                  )}
+                        )}
+                        {c.estado === 'cancelado' && (
+                          <span style={{ color: '#999', fontSize: '0.75rem' }}>Cancelado</span>
+                        )}
+                        {c.estado === 'pagado' && (
+                          <span style={{ color: '#4CAF50', fontSize: '0.75rem' }}>Pagado</span>
+                        )}
+                      </>
+                    )}
+                    {!esAdmin && (
+                      <span style={{ color: '#999', fontSize: '0.75rem' }}>Solo lectura</span>
+                    )}
+                  </td>
                 </tr>
               ))
             )}

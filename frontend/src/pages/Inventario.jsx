@@ -21,25 +21,19 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
   
-  // 👇 PERMISOS - Subgerente y Dueño/Admin tienen los mismos permisos
-  const esSuperAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
   const esVendedor = ['vendedor', 'vendedora'].includes(rol)
   
   const esSucursalPrincipal = usuario.sucursal_id === 3
   const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
 
-  const sucursalId = propSucursalId || usuario.sucursal_id || null
-  const sucursalNombre = propSucursalNombre || usuario.sucursal_nombre || 'Mi Sucursal'
-  const esSucursalBani = sucursalId === 1
-  const esSucursalSabana = sucursalId === 2
+  // 👇 SUCURSAL ID: props > usuario > 3 (por defecto)
+  const sucursalId = propSucursalId || usuario.sucursal_id || 3
+  const sucursalNombre = propSucursalNombre || usuario.sucursal_nombre || 'Principal'
   const esPrincipal = sucursalId === 3
 
-  // 👇 DETERMINAR SI PUEDE EDITAR
-  // - Dueño/Admin/Subgerente pueden editar TODO
-  // - Vendedor SOLO puede ver (no editar)
-  const puedeEditar = esSubgerente // 👈 Subgerente, Dueño y Admin pueden editar todo
-  const puedeVer = true // Todos pueden ver
+  const puedeEditar = esSubgerente
+  const puedeVer = true
 
   useEffect(() => {
     cargarInventario()
@@ -48,19 +42,13 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
     }
   }, [sucursalId])
 
+  // 👇 FUNCIÓN CORREGIDA - SIEMPRE USA sucursal_id
   const cargarInventario = async () => {
     setCargando(true)
     setError('')
     try {
-      let url = `${API_URL}/inventario`
-      
-      if (sucursalId) {
-        url = `${API_URL}/inventario?sucursal_id=${sucursalId}`
-      } else if (esSucursal && !esSucursalPrincipal) {
-        url = `${API_URL}/inventario?sucursal_id=${usuario.sucursal_id}`
-      } else if (esSucursalPrincipal) {
-        url = `${API_URL}/inventario?sucursal_id=3`
-      }
+      const idSucursal = sucursalId || usuario.sucursal_id || 3
+      const url = `${API_URL}/inventario?sucursal_id=${idSucursal}`
       
       console.log('📊 Cargando inventario desde:', url)
       
@@ -92,7 +80,6 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
   const handleAgregarProducto = async (e) => {
     e.preventDefault()
     
-    // 👇 BLOQUEAR SI NO TIENE PERMISO
     if (!puedeEditar) {
       alert('⛔ No tienes permisos para agregar productos')
       return
@@ -137,7 +124,6 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
   }
 
   const handleEliminarProducto = async (productoId) => {
-    // 👇 BLOQUEAR SI NO TIENE PERMISO
     if (!puedeEditar) {
       alert('⛔ No tienes permisos para eliminar productos')
       return
@@ -167,11 +153,9 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
     if (sucursalId === 3) return '📊 Inventario General - Principal'
     if (sucursalId === 1) return '🏢 Inventario - Baní'
     if (sucursalId === 2) return '🏢 Inventario - Sabana'
-    if (sucursalId) return `🏢 Inventario - ${sucursalNombre}`
-    return '📊 Inventario'
+    return `🏢 Inventario - ${sucursalNombre}`
   }
 
-  // 👇 MENSAJE DE PERMISOS
   const getPermisoMensaje = () => {
     if (!puedeEditar && sucursalId && sucursalId !== 3) {
       return '🔒 Solo el Dueño, Subgerente o Administrador puede modificar el inventario de esta sucursal'
@@ -230,7 +214,6 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
         </div>
       )}
 
-      {/* 👇 BANNER DE PERMISOS */}
       {getPermisoMensaje() && (
         <div style={{
           backgroundColor: '#fff3e0',
@@ -271,7 +254,6 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
         </div>
       )}
 
-      {/* 👇 BOTÓN AGREGAR - SOLO SI TIENE PERMISO */}
       {esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar && (
         <button
           onClick={() => setMostrarForm(!mostrarForm)}

@@ -17,6 +17,7 @@ function Inventario({ sucursalId, sucursalNombre }) {
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+  const esPrincipal = parseInt(sucursalId) === 3
 
   useEffect(() => {
     cargarInventario()
@@ -27,6 +28,7 @@ function Inventario({ sucursalId, sucursalNombre }) {
     try {
       const response = await fetch(`${API_URL}/inventario?sucursal_id=${sucursalId}`)
       const data = await response.json()
+      console.log(`📦 ${sucursalNombre} - Productos recibidos:`, data.length)
       setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando inventario:', error)
@@ -36,8 +38,13 @@ function Inventario({ sucursalId, sucursalNombre }) {
     }
   }
 
-  // 👇 ACTUALIZAR PRECIO EN LA SUCURSAL
+  // 👇 ACTUALIZAR PRECIO
   const actualizarPrecio = async (productoId, nuevoPrecio) => {
+    if (esPrincipal) {
+      alert('⚠️ No se puede modificar el precio en la sucursal Principal')
+      return
+    }
+
     try {
       const response = await fetch(`${API_URL}/inventario/precio`, {
         method: 'PUT',
@@ -90,8 +97,13 @@ function Inventario({ sucursalId, sucursalNombre }) {
     }
   }
 
-  // 👇 ELIMINAR PRODUCTO DE LA SUCURSAL
+  // 👇 ELIMINAR PRODUCTO
   const eliminarProducto = async (productoId) => {
+    if (esPrincipal) {
+      alert('⚠️ No se puede eliminar productos de la sucursal Principal')
+      return
+    }
+
     if (!window.confirm(`¿Estás seguro de eliminar este producto de ${sucursalNombre}?`)) return
 
     try {
@@ -162,7 +174,6 @@ function Inventario({ sucursalId, sucursalNombre }) {
     }
   }
 
-  // 👇 FORMATO DE MONEDA
   const formatearPrecio = (precio) => {
     return `RD$ ${Number(precio).toFixed(2)}`
   }
@@ -180,14 +191,24 @@ function Inventario({ sucursalId, sucursalNombre }) {
         borderLeft: '4px solid #003b6f'
       }}>
         <p style={{ margin: 0, color: '#003b6f' }}>
-          🔑 <strong>Precios exclusivos para {sucursalNombre}</strong> - Cada sucursal tiene sus propios precios
+          {esPrincipal ? (
+            <strong>📋 Inventario General - Total: {productos.length} productos</strong>
+          ) : (
+            <strong>🔑 Precios exclusivos para {sucursalNombre}</strong>
+          )}
         </p>
         <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
-          📦 Puedes editar el precio y stock directamente en la tabla
+          {esPrincipal ? (
+            '📦 Catálogo completo de todos los productos'
+          ) : (
+            '📦 Puedes editar el precio y stock directamente en la tabla'
+          )}
         </p>
-        <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#ff9800' }}>
-          ⚠️ Los productos con precio 0 aparecen en naranja - ¡Configúralos!
-        </p>
+        {!esPrincipal && (
+          <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#ff9800' }}>
+            ⚠️ Los productos con precio 0 aparecen en naranja - ¡Configúralos!
+          </p>
+        )}
       </div>
 
       {mensaje && (
@@ -202,7 +223,7 @@ function Inventario({ sucursalId, sucursalNombre }) {
         </div>
       )}
 
-      {esAdmin && (
+      {esAdmin && !esPrincipal && (
         <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button
             onClick={() => setMostrarFormulario(!mostrarFormulario)}
@@ -212,8 +233,7 @@ function Inventario({ sucursalId, sucursalNombre }) {
               color: 'white',
               border: 'none',
               borderRadius: '8px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease'
+              cursor: 'pointer'
             }}
           >
             {mostrarFormulario ? '✕ Cerrar' : '➕ Agregar Producto a ' + sucursalNombre}
@@ -234,7 +254,7 @@ function Inventario({ sucursalId, sucursalNombre }) {
         </div>
       )}
 
-      {mostrarFormulario && (
+      {mostrarFormulario && !esPrincipal && (
         <div style={{
           backgroundColor: 'white',
           borderRadius: '12px',
@@ -345,9 +365,11 @@ function Inventario({ sucursalId, sucursalNombre }) {
         <span>
           <strong>Total productos:</strong> {productos.length}
         </span>
-        <span>
-          <strong>Sin precio:</strong> {productos.filter(p => (p.precio || 0) === 0).length}
-        </span>
+        {!esPrincipal && (
+          <span>
+            <strong>Sin precio:</strong> {productos.filter(p => (p.precio || 0) === 0).length}
+          </span>
+        )}
         <span>
           <strong>Stock total:</strong> {productos.reduce((acc, p) => acc + (p.stock || 0), 0)}
         </span>
@@ -391,7 +413,7 @@ function Inventario({ sucursalId, sucursalNombre }) {
                 return (
                   <tr key={p.id} style={{ 
                     borderBottom: '1px solid #eee',
-                    backgroundColor: precioEsCero ? '#fff8e1' : 'white'
+                    backgroundColor: esPrincipal ? 'white' : (precioEsCero ? '#fff8e1' : 'white')
                   }}>
                     <td style={{ padding: '10px' }}>{p.id}</td>
                     <td style={{ padding: '10px' }}>{p.nombre}</td>
@@ -430,27 +452,31 @@ function Inventario({ sucursalId, sucursalNombre }) {
                         value={p.precio || 0}
                         onChange={(e) => {
                           const nuevoPrecio = parseFloat(e.target.value) || 0
-                          if (nuevoPrecio >= 0) {
+                          if (nuevoPrecio >= 0 && !esPrincipal) {
                             actualizarPrecio(p.id, nuevoPrecio)
                           }
                         }}
+                        disabled={esPrincipal}
                         style={{
                           width: '120px',
                           padding: '4px 8px',
                           border: '1px solid #ddd',
                           borderRadius: '4px',
                           textAlign: 'center',
-                          backgroundColor: precioEsCero ? '#fff3e0' : 'white',
-                          fontWeight: precioEsCero ? 'bold' : 'normal',
-                          color: precioEsCero ? '#ff9800' : '#333'
+                          backgroundColor: esPrincipal ? '#f5f5f5' : (precioEsCero ? '#fff3e0' : 'white'),
+                          color: esPrincipal ? '#666' : (precioEsCero ? '#ff9800' : '#333'),
+                          cursor: esPrincipal ? 'not-allowed' : 'text'
                         }}
                       />
-                      {precioEsCero && (
+                      {esPrincipal ? (
+                        <span style={{ fontSize: '0.6rem', color: '#666', display: 'block' }}>
+                          Precio fijo
+                        </span>
+                      ) : precioEsCero ? (
                         <span style={{ fontSize: '0.6rem', color: '#ff9800', display: 'block' }}>
                           ⚠️ Configurar precio
                         </span>
-                      )}
-                      {!precioEsCero && (
+                      ) : (
                         <span style={{ fontSize: '0.6rem', color: '#666', display: 'block' }}>
                           {formatearPrecio(p.precio)}
                         </span>
@@ -459,20 +485,24 @@ function Inventario({ sucursalId, sucursalNombre }) {
                     <td style={{ padding: '10px', textAlign: 'center' }}>
                       <button
                         onClick={() => eliminarProducto(p.id)}
+                        disabled={esPrincipal}
                         style={{
-                          backgroundColor: '#f44336',
+                          backgroundColor: esPrincipal ? '#999' : '#f44336',
                           color: 'white',
                           border: 'none',
                           borderRadius: '4px',
                           padding: '4px 12px',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease'
+                          cursor: esPrincipal ? 'not-allowed' : 'pointer',
+                          opacity: esPrincipal ? 0.6 : 1
                         }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = '#d32f2f'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = '#f44336'}
                       >
                         🗑️ Eliminar
                       </button>
+                      {esPrincipal && (
+                        <span style={{ fontSize: '0.6rem', color: '#999', display: 'block' }}>
+                          No se puede eliminar
+                        </span>
+                      )}
                     </td>
                   </tr>
                 )

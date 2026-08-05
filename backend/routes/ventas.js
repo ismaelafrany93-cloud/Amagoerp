@@ -339,7 +339,6 @@ router.get('/:id/reimprimir', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Buscar la venta
         const ventaResult = await pool.query(
             `SELECT 
                 v.*,
@@ -360,7 +359,6 @@ router.get('/:id/reimprimir', async (req, res) => {
 
         const venta = ventaResult.rows[0];
 
-        // Buscar los detalles de la venta
         const detallesResult = await pool.query(
             `SELECT 
                 d.*,
@@ -372,7 +370,6 @@ router.get('/:id/reimprimir', async (req, res) => {
             [id]
         );
 
-        // Buscar la sucursal
         const sucursalResult = await pool.query(
             `SELECT nombre, direccion, telefono FROM sucursales WHERE id = $1`,
             [venta.sucursal_id || 3]
@@ -536,6 +533,257 @@ router.put('/:id/cancelar', async (req, res) => {
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('❌ Error en PUT /ventas/:id/cancelar:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    } finally {
+        client.release();
+    }
+});
+
+// ============================================
+// PUT /ventas/:id - Editar venta (SOLO ADMIN/SUBGERENTE)
+// ============================================
+router.put('/:id', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const {
+            usuario_id,
+            tipo_entrega,
+            cliente_nombre,
+            cliente_telefono,
+            cliente_direccion,
+            cliente_referencia,
+            detalles
+        } = req.body;
+
+        // Verificar que la venta existe
+        const ventaExistente = await client.query(
+            'SELECT * FROM ventas WHERE id = $1 AND estado != $2',
+            [id, 'cancelada']
+        );
+
+        if (ventaExistente.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Venta no encontrada o ya cancelada'
+            });
+        }
+
+        const venta = ventaExistente.rows[0];
+
+        // Verificar permisos (solo admin/subgerente)
+        const usuario = await client.query(
+            'SELECT rol, sucursal_id FROM usuarios WHERE id = $1',
+            [usuario_id]
+        );
+
+        if (usuario.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuario no encontrado'
+            });
+        }
+
+        const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rows[0].rol);
+        if (!esAdmin) {
+            return res.status(403).json({
+                success: false,
+                error: 'No tienes permisos para editar esta venta'
+            });
+        }
+
+        await client.query('BEGIN');
+
+        // Si cambió a domicilio, generar código de entrega
+        let codigo = venta.codigo_entrega;
+        if (tipo_entrega === 'domicilio' && venta.tipo_entrega !== 'domicilio') {
+            let existe = true;
+            while (existe) {
+                codigo = generarCodigo();
+                const check = await client.query(
+                    'SELECT id FROM ventas WHERE codigo_entrega = $1',
+                    [codigo]
+                );
+                existe = check.rows.length > 0;
+            }
+            
+            await client.query(
+                `UPDATE ventas SET codigo_entrega = $1 WHERE id = $2`,
+                [codigo, id]
+            );
+
+            // Crear registro de entrega
+            await client.query(
+                `INSERT INTO entregas (venta_id, direccion, estado, codigo, fecha_salida)
+                 VALUES ($1, $2, 'pendiente', $3, NOW())`,
+                [id, cliente_direccion || venta.cliente_direccion, codigo]
+            );
+        }
+
+        // Si cambió de domicilio a retiro, eliminar código de entrega
+        if (tipo_entrega === 'retiro' && venta.tipo_entrega === 'domicilio') {
+            await client.query(
+                `UPDATE ventas SET codigo_entrega = NULL WHERE id = $1`,
+                [id]
+            );
+
+            // Marcar como cancelada la entrega
+            await client.query(
+                `UPDATE entregas SET estado = 'cancelada' WHERE venta_id = $1`,
+                [id]
+            );
+        }
+
+        // Actualizar la venta
+        const result = await client.query(
+            `UPDATE ventas 
+             SET tipo_entrega = $1,
+                 cliente_nombre = $2,
+                 cliente_telefono = $3,
+                 cliente_direccion = $4,
+                 cliente_referencia = $5,
+                 detalles = $6,
+                 updated_at = NOW()
+             WHERE id = $7
+             RETURNING *`,
+            [
+                tipo_entrega || venta.tipo_entrega,
+                cliente_nombre || venta.cliente_nombre,
+                cliente_telefono || venta.cliente_telefono,
+                cliente_direccion || venta.cliente_direccion,
+                cliente_referencia || venta.cliente_referencia,
+                detalles || venta.detalles,
+                id
+            ]
+        );
+
+        await client.query('COMMIT');
+
+        res.json({
+            success: true,
+            message: '✅ Venta actualizada correctamente',
+            venta: result.rows[0]
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error en PUT /ventas/:id:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    } finally {
+        client.release();
+    }
+});
+
+// ============================================
+// DELETE /ventas/:id - Eliminar venta (SOLO ADMIN/SUBGERENTE)
+// ============================================
+router.delete('/:id', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { usuario_id } = req.body;
+
+        // Verificar que la venta existe
+        const ventaExistente = await client.query(
+            'SELECT * FROM ventas WHERE id = $1 AND estado != $2',
+            [id, 'cancelada']
+        );
+
+        if (ventaExistente.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Venta no encontrada o ya cancelada'
+            });
+        }
+
+        const venta = ventaExistente.rows[0];
+
+        // Verificar permisos (solo admin/subgerente)
+        const usuario = await client.query(
+            'SELECT rol FROM usuarios WHERE id = $1',
+            [usuario_id]
+        );
+
+        if (usuario.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuario no encontrado'
+            });
+        }
+
+        const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rows[0].rol);
+        if (!esAdmin) {
+            return res.status(403).json({
+                success: false,
+                error: 'No tienes permisos para eliminar esta venta'
+            });
+        }
+
+        await client.query('BEGIN');
+
+        // Si era venta a crédito, cancelar la cuenta por cobrar
+        if (venta.tipo_venta === 'credito') {
+            await client.query(
+                `UPDATE cuentas_por_cobrar 
+                 SET estado = 'cancelado' 
+                 WHERE venta_id = $1`,
+                [id]
+            );
+        }
+
+        // Si tenía entrega, cancelarla
+        await client.query(
+            `UPDATE entregas SET estado = 'cancelada' WHERE venta_id = $1`,
+            [id]
+        );
+
+        // Devolver stock
+        const detalles = await client.query(
+            'SELECT * FROM detalle_ventas WHERE venta_id = $1',
+            [id]
+        );
+
+        for (const item of detalles.rows) {
+            await client.query(
+                `UPDATE producto_inventario 
+                 SET stock = stock + $1
+                 WHERE producto_id = $2 AND sucursal_id = $3`,
+                [item.cantidad, item.producto_id, venta.sucursal_id || 3]
+            );
+
+            await client.query(
+                `UPDATE productos SET stock = stock + $1 WHERE id = $2`,
+                [item.cantidad, item.producto_id]
+            );
+        }
+
+        // Marcar venta como cancelada (no se elimina físicamente)
+        await client.query(
+            `UPDATE ventas 
+             SET estado = 'cancelada',
+                 motivo_cancelacion = 'Eliminada por el usuario',
+                 fecha_cancelacion = NOW(),
+                 cancelado_por = $1
+             WHERE id = $2`,
+            [usuario_id, id]
+        );
+
+        await client.query('COMMIT');
+
+        res.json({
+            success: true,
+            message: '✅ Venta cancelada correctamente'
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error en DELETE /ventas/:id:', error.message);
         res.status(500).json({
             success: false,
             error: error.message

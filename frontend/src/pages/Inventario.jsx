@@ -91,7 +91,7 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
     }
   }
 
-  // 👇 ACTUALIZAR ÁREA DEL PRODUCTO (NUEVO)
+  // 👇 ACTUALIZAR ÁREA DEL PRODUCTO
   const actualizarArea = async (productoId, areaId) => {
     if (!esSubgerente) {
       alert('⛔ No tienes permisos para asignar áreas')
@@ -99,7 +99,6 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
     }
 
     try {
-      // Primero obtener el producto actual
       const productoActual = productos.find(p => p.id === productoId)
       if (!productoActual) return
 
@@ -258,6 +257,7 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
     }
   }
 
+  // 👇 ELIMINAR PRODUCTO DE LA SUCURSAL (CORREGIDO)
   const handleEliminarProducto = async (productoId) => {
     if (!puedeEditar) {
       alert('⛔ No tienes permisos para eliminar productos')
@@ -269,23 +269,28 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
       return
     }
 
-    if (!window.confirm('¿Eliminar este producto del inventario de la sucursal?')) return
+    if (!window.confirm(`¿Estás seguro de eliminar este producto de ${sucursalNombre}?`)) return
 
+    setCargando(true)
     try {
-      const response = await fetch(`${API_URL}/inventario/${productoId}?sucursal_id=${sucursalId || 3}`, {
+      // 👇 CORRECCIÓN: Usar la ruta correcta
+      const response = await fetch(`${API_URL}/inventario/${productoId}?sucursal_id=${sucursalId}`, {
         method: 'DELETE'
       })
+
       const data = await response.json()
       if (data.success) {
         setMensaje('✅ Producto eliminado de la sucursal')
         cargarInventario()
         setTimeout(() => setMensaje(''), 3000)
       } else {
-        setMensaje('❌ Error: ' + data.error)
+        alert('❌ Error: ' + (data.error || 'No se pudo eliminar'))
       }
     } catch (error) {
       console.error('Error:', error)
-      setMensaje('❌ Error al eliminar producto')
+      alert('❌ Error eliminando producto: ' + error.message)
+    } finally {
+      setCargando(false)
     }
   }
 

@@ -26,13 +26,9 @@ function Historial() {
   const rol = usuario?.rol || ''
   
   // 👇 PERMISOS ACTUALIZADOS
-  const esSuperAdmin = ['dueno', 'dueño', 'admin'].includes(rol)
-  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  const esSuperAdmin = ['dueno', 'dueño', 'admin'].includes(rol) // Solo Dueño/Admin
+  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol) // Subgerente, Dueño, Admin
   const esVendedor = ['vendedor', 'vendedora'].includes(rol)
-  
-  // 👇 DUEÑO Y ADMIN PUEDEN ELIMINAR TODO (INCLUYENDO ENTREGADOS)
-  const puedeEliminarSiempre = esSuperAdmin // Solo Dueño y Admin
-  const puedeEliminarNoEntregados = esSubgerente // Subgerente también puede eliminar no entregados
   
   const sucursalId = usuario?.sucursal_id || null
 
@@ -188,12 +184,13 @@ function Historial() {
   const eliminarVenta = async (venta) => {
     const yaEntregado = esEntregado(venta)
     
-    // 👇 VERIFICAR PERMISOS PARA ELIMINAR
+    // 👇 SUBGERENTE PUEDE ELIMINAR SOLO NO ENTREGADOS
     if (yaEntregado && !esSuperAdmin) {
       alert('⛔ Solo el Dueño o Administrador puede eliminar ventas ya entregadas')
       return
     }
     
+    // 👇 VERIFICAR QUE SEA SUBGERENTE (Dueño, Admin o Subgerente)
     if (!esSubgerente) {
       alert('⛔ No tienes permisos para eliminar ventas')
       return
@@ -618,6 +615,11 @@ function Historial() {
             🔑 <strong>Dueño/Admin:</strong> Puedes eliminar cualquier venta, incluso las entregadas
           </p>
         )}
+        {esSubgerente && !esSuperAdmin && (
+          <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#ff9800' }}>
+            ⚠️ <strong>Subgerente:</strong> Puedes eliminar ventas NO entregadas. Solo Dueño/Admin puede eliminar entregadas
+          </p>
+        )}
       </div>
 
       {mensaje && (
@@ -675,7 +677,10 @@ function Historial() {
                 const tiempoTexto = esSubgerente ? '∞ Ilimitado' : formatearTiempoRestante(tiempoRestante)
 
                 // 👇 PERMISOS PARA ELIMINAR
-                const puedeEliminar = esSuperAdmin || (esSubgerente && !yaEntregado)
+                // Subgerente puede eliminar NO entregados
+                // Solo Dueño/Admin puede eliminar ENTREGADOS
+                const puedeEliminar = esSubgerente && !yaEntregado
+                const puedeEliminarEntregado = esSuperAdmin
 
                 return (
                   <tr key={v.id} style={{ 
@@ -765,7 +770,7 @@ function Historial() {
                       {yaEntregado || v.estado === 'cancelada' ? (
                         <>
                           {/* 👇 BOTÓN ELIMINAR - SOLO PARA DUEÑO/ADMIN EN ENTREGADOS */}
-                          {esSuperAdmin && v.estado !== 'cancelada' && (
+                          {puedeEliminarEntregado && v.estado !== 'cancelada' && (
                             <button
                               onClick={() => eliminarVenta(v)}
                               style={{
@@ -804,7 +809,7 @@ function Historial() {
                                 marginRight: '5px',
                                 fontSize: '0.75rem'
                               }}
-                              title="Eliminar venta"
+                              title="Eliminar venta (Solo no entregadas)"
                             >
                               🗑️ Eliminar
                             </button>

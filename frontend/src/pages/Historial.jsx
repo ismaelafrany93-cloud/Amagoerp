@@ -24,7 +24,6 @@ function Historial() {
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
   
-  // 👇 PERMISOS
   const esSuperAdmin = ['dueno', 'dueño', 'admin'].includes(rol)
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
   
@@ -53,7 +52,7 @@ function Historial() {
       const ahora = Date.now()
 
       ventas.forEach(v => {
-        if (v.estado !== 'cancelada' && !esEntregado(v)) {
+        if (v.estado !== 'cancelada' && !esEntregadoReal(v)) {
           const fechaVenta = new Date(v.fecha || v.created_at).getTime()
           const tiempoTranscurrido = ahora - fechaVenta
           const tiempoRestante = TIEMPO_LIMITE_MS - tiempoTranscurrido
@@ -108,7 +107,7 @@ function Historial() {
   const estaDentroDelTiempo = (venta) => {
     if (esSubgerente) return true
     if (venta.estado === 'cancelada') return false
-    if (esEntregado(venta)) return false
+    if (esEntregadoReal(venta)) return false
     
     const fechaVenta = new Date(venta.fecha || venta.created_at).getTime()
     const ahora = Date.now()
@@ -122,11 +121,54 @@ function Historial() {
   }
 
   // ============================================
+  // FUNCIÓN PARA DETERMINAR SI REALMENTE FUE ENTREGADO
+  // ============================================
+  const esEntregadoReal = (venta) => {
+    // Si el tipo de entrega es 'domicilio' y estado_entrega es 'entregado' o 'entregada' -> REALMENTE entregado
+    if (venta.tipo_entrega === 'domicilio' && 
+        (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada')) {
+      return true
+    }
+    // Si el tipo de entrega es 'retiro' -> NUNCA fue entregado realmente (es retiro en tienda)
+    // Esto es un error de la vendedora, debe poder eliminarse
+    if (venta.tipo_entrega === 'retiro') {
+      return false // NO fue entregado realmente
+    }
+    // Si es 'retirado' pero tipo_entrega es 'retiro', es un error
+    if (venta.estado_entrega === 'retirado' && venta.tipo_entrega === 'retiro') {
+      return false // NO fue entregado realmente
+    }
+    return false
+  }
+
+  // ============================================
+  // FUNCIÓN PARA VER SI SE PUEDE ELIMINAR
+  // ============================================
+  const puedeEliminarVenta = (venta) => {
+    // Dueño/Admin pueden eliminar todo
+    if (esSuperAdmin) return true
+    
+    // Subgerente puede eliminar:
+    // 1. Ventas NO entregadas realmente
+    // 2. Ventas con error de entrega (retiro en tienda)
+    if (esSubgerente) {
+      // Si es retiro en tienda, siempre se puede eliminar (error de vendedora)
+      if (venta.tipo_entrega === 'retiro') return true
+      // Si es domicilio y NO está entregado realmente
+      if (venta.tipo_entrega === 'domicilio' && !esEntregadoReal(venta)) return true
+      return false
+    }
+    
+    return false
+  }
+
+  // ============================================
   // ABRIR EDITAR VENTA
   // ============================================
   const abrirEditarVenta = (venta) => {
-    if (esEntregado(venta) && !esSuperAdmin) {
-      alert('⚠️ No puedes editar una venta ya entregada')
+    // Solo si no está realmente entregado o es SuperAdmin
+    if (esEntregadoReal(venta) && !esSuperAdmin) {
+      alert('⚠️ No puedes editar una venta que ya fue entregada a domicilio')
       return
     }
     
@@ -176,26 +218,18 @@ function Historial() {
   }
 
   // ============================================
-  // ELIMINAR VENTA - INDEPENDIENTE DEL TIEMPO
+  // ELIMINAR VENTA
   // ============================================
   const eliminarVenta = async (venta) => {
-    const yaEntregado = esEntregado(venta)
-    
-    // 👇 SUBGERENTE PUEDE ELIMINAR SOLO NO ENTREGADOS
-    if (yaEntregado && !esSuperAdmin) {
-      alert('⛔ Solo el Dueño o Administrador puede eliminar ventas ya entregadas')
-      return
-    }
-    
-    // 👇 VERIFICAR QUE SEA SUBGERENTE
-    if (!esSubgerente) {
-      alert('⛔ No tienes permisos para eliminar ventas')
+    if (!puedeEliminarVenta(venta)) {
+      alert('⛔ No tienes permisos para eliminar esta venta')
       return
     }
 
-    const mensajeConfirmacion = yaEntregado 
-      ? '⚠️ Esta venta ya fue entregada. ¿Estás seguro de eliminarla?\n\nEl stock se devolverá al inventario y la venta quedará en el historial como cancelada.'
-      : '⚠️ ¿Estás seguro de eliminar esta venta?\n\nEl stock se devolverá al inventario y la venta quedará en el historial como cancelada.'
+    const esRetiro = venta.tipo_entrega === 'retiro'
+    const mensajeConfirmacion = esRetiro
+      ? '⚠️ Esta venta fue marcada como "Retiro en tienda" (error de entrega). ¿Estás seguro de eliminarla?\n\nEl stock se devolverá al inventario.'
+      : '⚠️ ¿Estás seguro de eliminar esta venta?\n\nEl stock se devolverá al inventario.'
 
     if (!window.confirm(mensajeConfirmacion)) return
 
@@ -211,7 +245,7 @@ function Historial() {
 
       const data = await response.json()
       if (data.success) {
-        setMensaje('✅ Venta cancelada correctamente')
+        setMensaje('✅ Venta eliminada correctamente')
         cargarHistorial()
         setTimeout(() => setMensaje(''), 3000)
       } else {
@@ -238,8 +272,8 @@ function Historial() {
       return
     }
 
-    if (esEntregado(venta)) {
-      alert('⚠️ No se puede cancelar una venta que ya fue entregada')
+    if (esEntregadoReal(venta)) {
+      alert('⚠️ No se puede cancelar una venta que ya fue entregada a domicilio')
       return
     }
 
@@ -393,27 +427,24 @@ function Historial() {
     return 'Mi Sucursal'
   }
 
-  const esEntregado = (venta) => {
-    if (venta.estado_entrega === 'entregado' || 
-        venta.estado_entrega === 'entregada' || 
-        venta.estado_entrega === 'retirado') {
-      return true
+  // ============================================
+  // FUNCIÓN PARA OBTENER TEXTO DE ENTREGA REAL
+  // ============================================
+  const getEstadoEntregaReal = (venta) => {
+    if (venta.tipo_entrega === 'retiro') {
+      return { texto: '🏪 Retiro (Error)', color: '#ff9800' }
     }
-    return false
-  }
-
-  const esEditable = (venta) => {
-    if (venta.estado === 'cancelada') return false
-    if (esEntregado(venta)) return false
-    if (!estaDentroDelTiempo(venta)) return false
-    return true
-  }
-
-  const esCancelable = (venta) => {
-    if (venta.estado === 'cancelada') return false
-    if (esEntregado(venta)) return false
-    if (!estaDentroDelTiempo(venta)) return false
-    return true
+    if (venta.tipo_entrega === 'domicilio' && 
+        (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada')) {
+      return { texto: '✅ Entregado', color: '#4CAF50' }
+    }
+    if (venta.tipo_entrega === 'domicilio' && venta.estado_entrega === 'pendiente') {
+      return { texto: '⏳ Pendiente', color: '#ff9800' }
+    }
+    if (venta.tipo_entrega === 'domicilio' && venta.estado_entrega === 'fallido') {
+      return { texto: '❌ Fallido', color: '#f44336' }
+    }
+    return { texto: 'N/A', color: '#757575' }
   }
 
   const getEstadoEntrega = (venta) => {
@@ -606,12 +637,12 @@ function Historial() {
         </p>
         {esSuperAdmin && (
           <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#f44336' }}>
-            🔑 <strong>Dueño/Admin:</strong> Puedes eliminar cualquier venta, incluso las entregadas
+            🔑 <strong>Dueño/Admin:</strong> Puedes eliminar cualquier venta
           </p>
         )}
         {esSubgerente && !esSuperAdmin && (
           <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#ff9800' }}>
-            ⚠️ <strong>Subgerente:</strong> Puedes eliminar ventas NO entregadas (sin importar el tiempo)
+            ⚠️ <strong>Subgerente:</strong> Puedes eliminar ventas con error de entrega (Retiro en tienda) y ventas NO entregadas a domicilio
           </p>
         )}
       </div>
@@ -665,14 +696,14 @@ function Historial() {
                 const puedeCancelar = (esSubgerente || esMismaSucursal) && esCancelable(v)
                 const puedeEditar = esEditable(v)
                 const entregaInfo = getEstadoEntrega(v)
-                const yaEntregado = esEntregado(v)
+                const entregaRealInfo = getEstadoEntregaReal(v)
+                const yaEntregado = esEntregadoReal(v)
                 const tiempoRestante = getTiempoRestante(v.id)
                 const dentroDelTiempo = esSubgerente || (tiempoRestante > 0 && !yaEntregado && v.estado !== 'cancelada')
                 const tiempoTexto = esSubgerente ? '∞ Ilimitado' : formatearTiempoRestante(tiempoRestante)
 
-                // 👇 PERMISOS PARA ELIMINAR - INDEPENDIENTE DEL TIEMPO
-                const puedeEliminar = esSubgerente && !yaEntregado
-                const puedeEliminarEntregado = esSuperAdmin
+                // 👇 PERMISOS PARA ELIMINAR
+                const puedeEliminar = puedeEliminarVenta(v)
 
                 return (
                   <tr key={v.id} style={{ 
@@ -691,13 +722,13 @@ function Historial() {
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       <span style={{
-                        backgroundColor: entregaInfo.color,
+                        backgroundColor: v.tipo_entrega === 'retiro' ? '#ff9800' : entregaInfo.color,
                         color: 'white',
                         padding: '2px 12px',
                         borderRadius: '12px',
                         fontSize: '0.75rem'
                       }}>
-                        {entregaInfo.texto}
+                        {v.tipo_entrega === 'retiro' ? '🏪 Retiro (Error)' : entregaInfo.texto}
                       </span>
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
@@ -759,40 +790,18 @@ function Historial() {
                       )}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
-                      {yaEntregado || v.estado === 'cancelada' ? (
-                        <>
-                          {/* 👇 BOTÓN ELIMINAR - SOLO PARA DUEÑO/ADMIN EN ENTREGADOS */}
-                          {puedeEliminarEntregado && v.estado !== 'cancelada' && (
-                            <button
-                              onClick={() => eliminarVenta(v)}
-                              style={{
-                                backgroundColor: '#d32f2f',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                padding: '4px 10px',
-                                cursor: 'pointer',
-                                marginRight: '5px',
-                                fontSize: '0.75rem',
-                                fontWeight: 'bold'
-                              }}
-                              title="Eliminar venta entregada (Solo Dueño/Admin)"
-                            >
-                              🗑️ Eliminar
-                            </button>
-                          )}
-                          <span style={{ color: '#999', fontSize: '0.75rem' }}>
-                            {v.estado === 'cancelada' ? 'Cancelada' : '✅ Completada'}
-                          </span>
-                        </>
+                      {v.estado === 'cancelada' ? (
+                        <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                          Cancelada
+                        </span>
                       ) : (
                         <>
-                          {/* 👇 BOTÓN ELIMINAR - PARA SUBGERENTE EN NO ENTREGADOS */}
-                          {puedeEliminar && v.estado !== 'cancelada' && (
+                          {/* 👇 BOTÓN ELIMINAR - PARA SUBGERENTE Y DUEÑO */}
+                          {puedeEliminar && (
                             <button
                               onClick={() => eliminarVenta(v)}
                               style={{
-                                backgroundColor: '#f44336',
+                                backgroundColor: v.tipo_entrega === 'retiro' ? '#ff9800' : '#f44336',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '4px',
@@ -801,7 +810,7 @@ function Historial() {
                                 marginRight: '5px',
                                 fontSize: '0.75rem'
                               }}
-                              title="Eliminar venta (Solo no entregadas)"
+                              title={v.tipo_entrega === 'retiro' ? 'Eliminar venta con error de entrega' : 'Eliminar venta'}
                             >
                               🗑️ Eliminar
                             </button>
@@ -1008,7 +1017,7 @@ function Historial() {
       {/* Modal de edición de factura (existente) */}
       {mostrarEdicion && ventaSeleccionada && 
        ventaSeleccionada.estado !== 'cancelada' && 
-       !esEntregado(ventaSeleccionada) && 
+       !esEntregadoReal(ventaSeleccionada) && 
        (esSubgerente || estaDentroDelTiempo(ventaSeleccionada)) && (
         <div style={{
           position: 'fixed',

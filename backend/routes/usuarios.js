@@ -66,13 +66,12 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// GET /usuarios/:id - Obtener usuario por ID (DEBE IR DESPUÉS DE /areas)
+// GET /usuarios/:id - Obtener usuario por ID
 // ============================================
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         
-        // Validar que id sea un número
         if (isNaN(id) || parseInt(id) <= 0) {
             return res.status(400).json({
                 success: false,
@@ -125,7 +124,6 @@ router.post('/', async (req, res) => {
     try {
         const { nombre, correo, password, rol, sucursal_id, area_id } = req.body;
 
-        // Validar que el correo no esté registrado
         const existe = await pool.query(
             'SELECT id FROM usuarios WHERE correo = $1',
             [correo]
@@ -161,14 +159,13 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
-// PUT /usuarios/:id - Actualizar usuario
+// PUT /usuarios/:id - Actualizar usuario (SIN updated_at)
 // ============================================
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { nombre, correo, rol, sucursal_id, area_id, password } = req.body;
 
-        // Verificar que el usuario existe
         const existe = await pool.query(
             'SELECT id FROM usuarios WHERE id = $1',
             [id]
@@ -187,13 +184,11 @@ router.put('/:id', async (req, res) => {
                 correo = $2, 
                 rol = $3, 
                 sucursal_id = $4,
-                area_id = $5,
-                updated_at = NOW()
+                area_id = $5
         `;
         let params = [nombre, correo, rol, sucursal_id || null, area_id || null];
         let paramIndex = 6;
 
-        // Si se envió contraseña, actualizarla
         if (password && password.trim() !== '') {
             query += `, password = $${paramIndex}`;
             params.push(password);
@@ -205,7 +200,6 @@ router.put('/:id', async (req, res) => {
 
         const result = await pool.query(query, params);
 
-        // Obtener nombres de sucursal y área
         const sucursalResult = await pool.query(
             'SELECT nombre FROM sucursales WHERE id = $1',
             [result.rows[0].sucursal_id]
@@ -341,7 +335,7 @@ router.put('/:id/sucursal', async (req, res) => {
         }
 
         await pool.query(
-            'UPDATE usuarios SET sucursal_id = $1, updated_at = NOW() WHERE id = $2',
+            'UPDATE usuarios SET sucursal_id = $1 WHERE id = $2',
             [sucursal_id, id]
         );
 
@@ -386,7 +380,7 @@ router.post('/asignar-masivos', async (req, res) => {
 
         const result = await pool.query(
             `UPDATE usuarios 
-             SET sucursal_id = $1, updated_at = NOW() 
+             SET sucursal_id = $1
              WHERE id = ANY($2::int[])
              RETURNING id, nombre, correo, rol`,
             [sucursal_id, usuario_ids]

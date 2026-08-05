@@ -5,6 +5,7 @@ import API_URL from '../config'
 function Productos() {
   const [productos, setProductos] = useState([])
   const [sucursales, setSucursales] = useState([])
+  const [areas, setAreas] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editando, setEditando] = useState(null)
@@ -17,20 +18,47 @@ function Productos() {
     precio_mayor: '',
     cantidad_mayor: '',
     stock: '',
-    sucursal_id: ''
+    sucursal_id: '',
+    area_id: ''
   })
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+  const rol = usuario?.rol || ''
+  const areaId = usuario?.area_id || null
+  
+  // 👇 DETECTAR SI ES SUPERVISOR
+  const esSupervisor = rol === 'supervisor'
+  const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  
+  // 👇 ÁREA DEL SUPERVISOR (se usa para filtrar)
+  const areaDelSupervisor = esSupervisor ? areaId : null
 
   useEffect(() => {
     cargarProductos()
     cargarSucursales()
+    if (esAdmin) {
+      cargarAreas()
+    }
   }, [])
 
   const cargarProductos = async () => {
+    setCargando(true)
     try {
-      const response = await fetch(`${API_URL}/productos`)
+      let url = `${API_URL}/productos`
+      const params = new URLSearchParams()
+      
+      // 👇 SI ES SUPERVISOR, FILTRAR POR SU ÁREA
+      if (esSupervisor && areaDelSupervisor) {
+        params.append('area_id', areaDelSupervisor)
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`
+      }
+      
+      console.log('📦 Cargando productos desde:', url)
+      
+      const response = await fetch(url)
       const data = await response.json()
       setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -45,10 +73,34 @@ function Productos() {
     try {
       const response = await fetch(`${API_URL}/sucursales`)
       const data = await response.json()
-      setSucursales(data)
+      setSucursales(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando sucursales:', error)
+      setSucursales([])
     }
+  }
+
+  const cargarAreas = async () => {
+    try {
+      const response = await fetch(`${API_URL}/produccion/areas`)
+      const data = await response.json()
+      setAreas(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error cargando áreas:', error)
+      setAreas([])
+    }
+  }
+
+  // 👇 OBTENER NOMBRE DEL ÁREA
+  const getAreaNombre = (areaId) => {
+    const area = areas.find(a => a.id === parseInt(areaId))
+    return area ? area.nombre : 'Sin área'
+  }
+
+  // 👇 OBTENER ICONO DEL ÁREA
+  const getAreaIcono = (areaId) => {
+    const area = areas.find(a => a.id === parseInt(areaId))
+    return area ? area.icono : '🏭'
   }
 
   const handleSubmit = async (e) => {
@@ -68,7 +120,8 @@ function Productos() {
         precio_mayor: form.precio_mayor ? parseFloat(form.precio_mayor) : null,
         cantidad_mayor: parseInt(form.cantidad_mayor) || 0,
         stock: parseInt(form.stock) || 0,
-        sucursal_id: form.sucursal_id || null
+        sucursal_id: form.sucursal_id || null,
+        area_id: form.area_id || areaDelSupervisor || null
       }
 
       const response = await fetch(url, {
@@ -81,7 +134,7 @@ function Productos() {
 
       if (data.success) {
         setMensaje(editando ? '✅ Producto actualizado correctamente' : '✅ Producto creado correctamente')
-        setForm({ nombre: '', categoria: '', descripcion: '', precio: '', precio_mayor: '', cantidad_mayor: '', stock: '', sucursal_id: '' })
+        setForm({ nombre: '', categoria: '', descripcion: '', precio: '', precio_mayor: '', cantidad_mayor: '', stock: '', sucursal_id: '', area_id: '' })
         setMostrarForm(false)
         setEditando(null)
         cargarProductos()
@@ -106,7 +159,8 @@ function Productos() {
       precio_mayor: producto.precio_mayor || '',
       cantidad_mayor: producto.cantidad_mayor || '',
       stock: producto.stock || '',
-      sucursal_id: producto.sucursal_id || ''
+      sucursal_id: producto.sucursal_id || '',
+      area_id: producto.area_id || ''
     })
     setEditando(producto.id)
     setMostrarForm(true)
@@ -134,7 +188,6 @@ function Productos() {
     }
   }
 
-  // Función para actualizar solo el stock
   const handleUpdateStock = async (productoId, nuevoStock) => {
     if (nuevoStock === undefined || nuevoStock === null) return
 
@@ -144,7 +197,7 @@ function Productos() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           stock: parseInt(nuevoStock) || 0,
-          sucursal_id: 3 // Cambia según la sucursal que quieras editar
+          sucursal_id: 3
         })
       })
 
@@ -176,6 +229,30 @@ function Productos() {
     <AdminLayout>
       <h1>📦 Productos</h1>
 
+      {/* 👇 BANNER DEL ÁREA DEL SUPERVISOR */}
+      {esSupervisor && areaDelSupervisor && (
+        <div style={{
+          backgroundColor: '#e3f2fd',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #003b6f',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <span style={{ fontSize: '2rem' }}>{getAreaIcono(areaDelSupervisor)}</span>
+          <div>
+            <p style={{ margin: 0, color: '#003b6f', fontWeight: 'bold' }}>
+              👋 Bienvenido, Supervisor de {getAreaNombre(areaDelSupervisor)}
+            </p>
+            <p style={{ margin: '2px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
+              📦 Solo ves los productos de tu área asignada
+            </p>
+          </div>
+        </div>
+      )}
+
       {mensaje && (
         <div style={{
           backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
@@ -188,12 +265,12 @@ function Productos() {
         </div>
       )}
 
-      {esSubgerente && (
+      {esAdmin && (
         <button
           onClick={() => {
             setMostrarForm(!mostrarForm)
             setEditando(null)
-            setForm({ nombre: '', categoria: '', descripcion: '', precio: '', precio_mayor: '', cantidad_mayor: '', stock: '', sucursal_id: '' })
+            setForm({ nombre: '', categoria: '', descripcion: '', precio: '', precio_mayor: '', cantidad_mayor: '', stock: '', sucursal_id: '', area_id: '' })
           }}
           style={{
             marginBottom: '20px',
@@ -210,7 +287,7 @@ function Productos() {
         </button>
       )}
 
-      {mostrarForm && esSubgerente && (
+      {mostrarForm && esAdmin && (
         <form onSubmit={handleSubmit} style={{
           backgroundColor: '#f5f7fb',
           padding: '25px',
@@ -313,6 +390,23 @@ function Productos() {
                 ))}
               </select>
             </div>
+            {esAdmin && (
+              <div>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Área</label>
+                <select
+                  value={form.area_id}
+                  onChange={(e) => setForm({ ...form, area_id: e.target.value })}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+                >
+                  <option value="">Sin área</option>
+                  {areas.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.icono || '🏭'} {a.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <button
@@ -350,9 +444,9 @@ function Productos() {
               <th style={{ padding: '12px', textAlign: 'left' }}>ID</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Producto</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Categoría</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Área</th>
               <th style={{ padding: '12px', textAlign: 'right' }}>Precio</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Stock</th>
-              <th style={{ padding: '12px', textAlign: 'right' }}>Precio Mayor</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
           </thead>
@@ -360,7 +454,9 @@ function Productos() {
             {productos.length === 0 ? (
               <tr>
                 <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
-                  No hay productos registrados
+                  {esSupervisor 
+                    ? `No hay productos en tu área (${getAreaNombre(areaDelSupervisor)})`
+                    : 'No hay productos registrados'}
                 </td>
               </tr>
             ) : (
@@ -369,6 +465,21 @@ function Productos() {
                   <td style={{ padding: '12px' }}>{p.id}</td>
                   <td style={{ padding: '12px' }}>{p.nombre}</td>
                   <td style={{ padding: '12px' }}>{p.categoria || 'N/A'}</td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    {p.area_id ? (
+                      <span style={{
+                        backgroundColor: '#e3f2fd',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.75rem',
+                        color: '#003b6f'
+                      }}>
+                        {getAreaIcono(p.area_id)} {getAreaNombre(p.area_id)}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#999', fontSize: '0.75rem' }}>Sin área</span>
+                    )}
+                  </td>
                   <td style={{ padding: '12px', textAlign: 'right' }}>
                     RD$ {Number(p.precio).toFixed(2)}
                   </td>
@@ -401,37 +512,42 @@ function Productos() {
                       }}
                     />
                   </td>
-                  <td style={{ padding: '12px', textAlign: 'right' }}>
-                    {p.precio_mayor ? `RD$ ${Number(p.precio_mayor).toFixed(2)}` : 'N/A'}
-                  </td>
                   <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => handleEdit(p)}
-                      style={{
-                        backgroundColor: '#2196F3',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '4px 10px',
-                        cursor: 'pointer',
-                        marginRight: '5px'
-                      }}
-                    >
-                      ✏️ Editar
-                    </button>
-                    <button
-                      onClick={() => handleDelete(p.id)}
-                      style={{
-                        backgroundColor: '#f44336',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '4px 10px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      🗑️
-                    </button>
+                    {esAdmin ? (
+                      <>
+                        <button
+                          onClick={() => handleEdit(p)}
+                          style={{
+                            backgroundColor: '#2196F3',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            cursor: 'pointer',
+                            marginRight: '5px'
+                          }}
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.id)}
+                          style={{
+                            backgroundColor: '#f44336',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🗑️
+                        </button>
+                      </>
+                    ) : esSupervisor ? (
+                      <span style={{ color: '#999', fontSize: '0.75rem' }}>Solo lectura</span>
+                    ) : (
+                      <span style={{ color: '#999', fontSize: '0.75rem' }}>Sin permisos</span>
+                    )}
                   </td>
                 </tr>
               ))

@@ -3,11 +3,11 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /productos - Obtener productos filtrados por sucursal
+// GET /productos - Obtener productos filtrados por sucursal y área
 // ============================================
 router.get('/', async (req, res) => {
     try {
-        const { sucursal_id } = req.query;
+        const { sucursal_id, area_id } = req.query;
         
         let query = `
             SELECT 
@@ -18,20 +18,35 @@ router.get('/', async (req, res) => {
                 p.precio,
                 p.precio_mayor,
                 p.cantidad_mayor,
+                p.categoria_icono,
+                p.categoria_color,
+                p.area_id,
+                a.nombre as area_nombre,
+                a.icono as area_icono,
+                a.color as area_color,
                 COALESCE(pi.stock, 0) as stock,
                 pi.sucursal_id,
                 s.nombre as sucursal_nombre
             FROM productos p
             LEFT JOIN producto_inventario pi ON p.id = pi.producto_id
             LEFT JOIN sucursales s ON pi.sucursal_id = s.id
+            LEFT JOIN areas a ON p.area_id = a.id
             WHERE 1=1
         `;
         let params = [];
         let paramIndex = 1;
 
+        // 👇 FILTRO POR SUCURSAL
         if (sucursal_id) {
             query += ` AND pi.sucursal_id = $${paramIndex}`;
             params.push(sucursal_id);
+            paramIndex++;
+        }
+
+        // 👇 FILTRO POR ÁREA (NUEVO)
+        if (area_id) {
+            query += ` AND p.area_id = $${paramIndex}`;
+            params.push(area_id);
             paramIndex++;
         }
 
@@ -64,10 +79,12 @@ router.get('/:id', async (req, res) => {
             `SELECT 
                 p.*,
                 COALESCE(pi.stock, 0) as stock_inventario,
-                s.nombre as sucursal_nombre
+                s.nombre as sucursal_nombre,
+                a.nombre as area_nombre
              FROM productos p
              LEFT JOIN producto_inventario pi ON p.id = pi.producto_id
              LEFT JOIN sucursales s ON pi.sucursal_id = s.id
+             LEFT JOIN areas a ON p.area_id = a.id
              WHERE p.id = $1`,
             [id]
         );
@@ -91,7 +108,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ============================================
-// POST /productos - Crear producto
+// POST /productos - Crear producto con área
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -103,7 +120,10 @@ router.post('/', async (req, res) => {
             precio_mayor,
             cantidad_mayor,
             stock,
-            sucursal_id
+            sucursal_id,
+            categoria_icono,
+            categoria_color,
+            area_id
         } = req.body;
 
         if (!nombre || !precio) {
@@ -113,10 +133,13 @@ router.post('/', async (req, res) => {
             });
         }
 
+        const sucursalFinal = sucursal_id || 3;
+        const stockFinal = stock || 0;
+
         const result = await pool.query(
             `INSERT INTO productos 
-             (nombre, categoria, descripcion, precio, precio_mayor, cantidad_mayor)
-             VALUES ($1, $2, $3, $4, $5, $6)
+             (nombre, categoria, descripcion, precio, precio_mayor, cantidad_mayor, categoria_icono, categoria_color, sucursal_id, area_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              RETURNING *`,
             [
                 nombre, 
@@ -124,24 +147,27 @@ router.post('/', async (req, res) => {
                 descripcion || '', 
                 precio,
                 precio_mayor || null,
-                cantidad_mayor || 0
+                cantidad_mayor || 0,
+                categoria_icono || null,
+                categoria_color || null,
+                sucursalFinal,
+                area_id || null
             ]
         );
 
         const producto = result.rows[0];
 
-        if (sucursal_id && stock) {
-            await pool.query(
-                `INSERT INTO producto_inventario (producto_id, sucursal_id, stock)
-                 VALUES ($1, $2, $3)`,
-                [producto.id, sucursal_id, stock]
-            );
-        }
+        // Crear inventario
+        await pool.query(
+            `INSERT INTO producto_inventario (producto_id, sucursal_id, stock, precio_venta, precio_mayorista)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [producto.id, sucursalFinal, stockFinal, precio, precio_mayor || 0]
+        );
 
         res.json({ 
             success: true, 
             producto: producto,
-            message: 'Producto creado correctamente'
+            message: '✅ Producto creado correctamente'
         });
         
     } catch (error) {
@@ -154,7 +180,7 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
-// PUT /productos/:id - Actualizar producto
+// PUT /productos/:id - Actualizar producto con área
 // ============================================
 router.put('/:id', async (req, res) => {
     try {
@@ -167,7 +193,10 @@ router.put('/:id', async (req, res) => {
             precio_mayor,
             cantidad_mayor,
             stock,
-            sucursal_id
+            sucursal_id,
+            categoria_icono,
+            categoria_color,
+            area_id
         } = req.body;
 
         if (isNaN(id) || parseInt(id) <= 0) {
@@ -196,8 +225,12 @@ router.put('/:id', async (req, res) => {
                  descripcion = $3, 
                  precio = $4,
                  precio_mayor = $5,
-                 cantidad_mayor = $6
-             WHERE id = $7
+                 cantidad_mayor = $6,
+                 categoria_icono = $7,
+                 categoria_color = $8,
+                 sucursal_id = $9,
+                 area_id = $10
+             WHERE id = $11
              RETURNING *`,
             [
                 nombre, 
@@ -206,14 +239,20 @@ router.put('/:id', async (req, res) => {
                 precio,
                 precio_mayor || null,
                 cantidad_mayor || 0,
+                categoria_icono || null,
+                categoria_color || null,
+                sucursal_id || 3,
+                area_id || null,
                 id
             ]
         );
 
-        if (sucursal_id && stock !== undefined && stock !== null) {
+        const sucursalFinal = sucursal_id || 3;
+
+        if (stock !== undefined && stock !== null) {
             const existeInventario = await pool.query(
                 'SELECT id FROM producto_inventario WHERE producto_id = $1 AND sucursal_id = $2',
-                [id, sucursal_id]
+                [id, sucursalFinal]
             );
 
             if (existeInventario.rows.length > 0) {
@@ -221,13 +260,13 @@ router.put('/:id', async (req, res) => {
                     `UPDATE producto_inventario 
                      SET stock = $1
                      WHERE producto_id = $2 AND sucursal_id = $3`,
-                    [stock, id, sucursal_id]
+                    [stock, id, sucursalFinal]
                 );
             } else {
                 await pool.query(
                     `INSERT INTO producto_inventario (producto_id, sucursal_id, stock)
                      VALUES ($1, $2, $3)`,
-                    [id, sucursal_id, stock]
+                    [id, sucursalFinal, stock]
                 );
             }
         }
@@ -254,7 +293,6 @@ router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Validar ID
         if (isNaN(id) || parseInt(id) <= 0) {
             return res.status(400).json({
                 success: false,
@@ -264,7 +302,6 @@ router.delete('/:id', async (req, res) => {
 
         console.log(`🗑️ Intentando eliminar producto ID: ${id}`);
 
-        // 1. Verificar que el producto existe
         const existe = await pool.query(
             'SELECT id, nombre FROM productos WHERE id = $1',
             [id]
@@ -280,7 +317,6 @@ router.delete('/:id', async (req, res) => {
 
         console.log(`📦 Producto encontrado: ${existe.rows[0].nombre} (ID: ${id})`);
 
-        // 2. Verificar si tiene ventas asociadas
         const ventas = await pool.query(
             'SELECT id FROM detalle_ventas WHERE producto_id = $1 LIMIT 1',
             [id]
@@ -294,7 +330,6 @@ router.delete('/:id', async (req, res) => {
             });
         }
 
-        // 3. Verificar si tiene inventario
         const inventario = await pool.query(
             'SELECT id FROM producto_inventario WHERE producto_id = $1',
             [id]
@@ -305,15 +340,13 @@ router.delete('/:id', async (req, res) => {
             await pool.query('DELETE FROM producto_inventario WHERE producto_id = $1', [id]);
         }
         
-        // 4. Eliminar producto
-        console.log(`🗑️ Eliminando producto ${id}`);
         await pool.query('DELETE FROM productos WHERE id = $1', [id]);
 
         console.log(`✅ Producto ${id} eliminado correctamente`);
 
         res.json({ 
             success: true,
-            message: 'Producto eliminado correctamente'
+            message: '✅ Producto eliminado correctamente'
         });
         
     } catch (error) {

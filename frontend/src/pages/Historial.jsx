@@ -11,7 +11,6 @@ function Historial() {
   const [mensaje, setMensaje] = useState('')
   const [tiemposRestantes, setTiemposRestantes] = useState({})
 
-  // 👇 ESTADOS PARA EDITAR VENTA
   const [editandoVenta, setEditandoVenta] = useState(null)
   const [ventaEdit, setVentaEdit] = useState({
     tipo_entrega: '',
@@ -25,10 +24,9 @@ function Historial() {
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
   
-  // 👇 PERMISOS ACTUALIZADOS
-  const esSuperAdmin = ['dueno', 'dueño', 'admin'].includes(rol) // Solo Dueño/Admin
-  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol) // Subgerente, Dueño, Admin
-  const esVendedor = ['vendedor', 'vendedora'].includes(rol)
+  // 👇 PERMISOS
+  const esSuperAdmin = ['dueno', 'dueño', 'admin'].includes(rol)
+  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
   
   const sucursalId = usuario?.sucursal_id || null
 
@@ -127,7 +125,6 @@ function Historial() {
   // ABRIR EDITAR VENTA
   // ============================================
   const abrirEditarVenta = (venta) => {
-    // Solo si no está entregada o es SuperAdmin
     if (esEntregado(venta) && !esSuperAdmin) {
       alert('⚠️ No puedes editar una venta ya entregada')
       return
@@ -179,7 +176,7 @@ function Historial() {
   }
 
   // ============================================
-  // ELIMINAR VENTA (ACTUALIZADO)
+  // ELIMINAR VENTA - INDEPENDIENTE DEL TIEMPO
   // ============================================
   const eliminarVenta = async (venta) => {
     const yaEntregado = esEntregado(venta)
@@ -190,7 +187,7 @@ function Historial() {
       return
     }
     
-    // 👇 VERIFICAR QUE SEA SUBGERENTE (Dueño, Admin o Subgerente)
+    // 👇 VERIFICAR QUE SEA SUBGERENTE
     if (!esSubgerente) {
       alert('⛔ No tienes permisos para eliminar ventas')
       return
@@ -229,7 +226,7 @@ function Historial() {
   }
 
   // ============================================
-  // CANCELAR VENTA (EXISTENTE)
+  // CANCELAR VENTA (SOLO SI ESTÁ DENTRO DEL TIEMPO)
   // ============================================
   const cancelarVenta = async (ventaId) => {
     const venta = ventas.find(v => v.id === ventaId)
@@ -435,9 +432,6 @@ function Historial() {
     return { texto: 'N/A', color: '#757575' }
   }
 
-  // ============================================
-  // REIMPRIMIR FACTURA
-  // ============================================
   const handleReimprimir = async (ventaId) => {
     try {
       const loading = document.createElement('div')
@@ -617,7 +611,7 @@ function Historial() {
         )}
         {esSubgerente && !esSuperAdmin && (
           <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#ff9800' }}>
-            ⚠️ <strong>Subgerente:</strong> Puedes eliminar ventas NO entregadas. Solo Dueño/Admin puede eliminar entregadas
+            ⚠️ <strong>Subgerente:</strong> Puedes eliminar ventas NO entregadas (sin importar el tiempo)
           </p>
         )}
       </div>
@@ -676,9 +670,7 @@ function Historial() {
                 const dentroDelTiempo = esSubgerente || (tiempoRestante > 0 && !yaEntregado && v.estado !== 'cancelada')
                 const tiempoTexto = esSubgerente ? '∞ Ilimitado' : formatearTiempoRestante(tiempoRestante)
 
-                // 👇 PERMISOS PARA ELIMINAR
-                // Subgerente puede eliminar NO entregados
-                // Solo Dueño/Admin puede eliminar ENTREGADOS
+                // 👇 PERMISOS PARA ELIMINAR - INDEPENDIENTE DEL TIEMPO
                 const puedeEliminar = esSubgerente && !yaEntregado
                 const puedeEliminarEntregado = esSuperAdmin
 

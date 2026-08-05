@@ -18,8 +18,6 @@ router.get('/', async (req, res) => {
                 p.precio,
                 p.precio_mayor,
                 p.cantidad_mayor,
-                p.categoria_icono,
-                p.categoria_color,
                 p.area_id,
                 a.nombre as area_nombre,
                 a.icono as area_icono,
@@ -121,8 +119,6 @@ router.post('/', async (req, res) => {
             cantidad_mayor,
             stock,
             sucursal_id,
-            categoria_icono,
-            categoria_color,
             area_id
         } = req.body;
 
@@ -138,8 +134,8 @@ router.post('/', async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO productos 
-             (nombre, categoria, descripcion, precio, precio_mayor, cantidad_mayor, categoria_icono, categoria_color, sucursal_id, area_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             (nombre, categoria, descripcion, precio, precio_mayor, cantidad_mayor, sucursal_id, area_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *`,
             [
                 nombre, 
@@ -148,8 +144,6 @@ router.post('/', async (req, res) => {
                 precio,
                 precio_mayor || null,
                 cantidad_mayor || 0,
-                categoria_icono || null,
-                categoria_color || null,
                 sucursalFinal,
                 area_id || null
             ]
@@ -194,8 +188,6 @@ router.put('/:id', async (req, res) => {
             cantidad_mayor,
             stock,
             sucursal_id,
-            categoria_icono,
-            categoria_color,
             area_id
         } = req.body;
 
@@ -226,11 +218,9 @@ router.put('/:id', async (req, res) => {
                  precio = $4,
                  precio_mayor = $5,
                  cantidad_mayor = $6,
-                 categoria_icono = $7,
-                 categoria_color = $8,
-                 sucursal_id = $9,
-                 area_id = $10
-             WHERE id = $11
+                 sucursal_id = $7,
+                 area_id = $8
+             WHERE id = $9
              RETURNING *`,
             [
                 nombre, 
@@ -239,8 +229,6 @@ router.put('/:id', async (req, res) => {
                 precio,
                 precio_mayor || null,
                 cantidad_mayor || 0,
-                categoria_icono || null,
-                categoria_color || null,
                 sucursal_id || 3,
                 area_id || null,
                 id

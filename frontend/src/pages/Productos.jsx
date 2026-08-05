@@ -48,6 +48,7 @@ function Productos() {
       // 👇 SOLO SI ES SUPERVISOR, FILTRAR POR SU ÁREA
       if (esSupervisor && areaDelSupervisor) {
         params.append('area_id', areaDelSupervisor)
+        console.log('🔍 Supervisor filtrando por área:', areaDelSupervisor)
       }
       // Si es Subgerente/Dueño/Admin, NO FILTRAR (ver todos)
       
@@ -58,7 +59,11 @@ function Productos() {
       console.log('📦 Cargando productos desde:', url)
       
       const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`)
+      }
       const data = await response.json()
+      console.log('📦 Productos recibidos:', data.length)
       setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando productos:', error)
@@ -81,7 +86,7 @@ function Productos() {
 
   const cargarAreas = async () => {
     try {
-      const response = await fetch(`${API_URL}/produccion/areas`)
+      const response = await fetch(`${API_URL}/usuarios/areas`)
       const data = await response.json()
       setAreas(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -146,6 +151,44 @@ function Productos() {
       setMensaje('❌ Error al guardar')
     } finally {
       setCargando(false)
+    }
+  }
+
+  // 👇 FUNCIÓN PARA ACTUALIZAR ÁREA DESDE EL SELECT
+  const handleAreaChange = async (productoId, nuevoAreaId) => {
+    try {
+      // Buscar el producto actual
+      const productoActual = productos.find(p => p.id === productoId)
+      if (!productoActual) return
+
+      // Actualizar el producto con el nuevo área
+      const response = await fetch(`${API_URL}/productos/${productoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: productoActual.nombre,
+          categoria: productoActual.categoria || 'General',
+          descripcion: productoActual.descripcion || '',
+          precio: productoActual.precio || 0,
+          precio_mayor: productoActual.precio_mayor || null,
+          cantidad_mayor: productoActual.cantidad_mayor || 0,
+          stock: productoActual.stock || 0,
+          sucursal_id: productoActual.sucursal_id || 3,
+          area_id: nuevoAreaId || null
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setMensaje('✅ Área actualizada correctamente')
+        cargarProductos()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        alert('❌ Error: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('❌ Error actualizando área')
     }
   }
 
@@ -463,9 +506,11 @@ function Productos() {
         <span>
           <strong>Total productos:</strong> {productos.length}
         </span>
-        <span>
-          <strong>Sin área:</strong> {productos.filter(p => !p.area_id).length}
-        </span>
+        {esSubgerente && (
+          <span>
+            <strong>Sin área:</strong> {productos.filter(p => !p.area_id).length}
+          </span>
+        )}
         <span>
           <strong>Con área:</strong> {productos.filter(p => p.area_id).length}
         </span>
@@ -487,16 +532,21 @@ function Productos() {
               <th style={{ padding: '12px', textAlign: 'left' }}>ID</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Producto</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Categoría</th>
-              <th style={{ padding: '12px', textAlign: 'center' }}>Área</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>🏷️ Área</th>
               <th style={{ padding: '12px', textAlign: 'right' }}>Precio</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Stock</th>
-              <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
+              {esSubgerente && (
+                <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
+              )}
+              {esSupervisor && (
+                <th style={{ padding: '12px', textAlign: 'center' }}>Acción</th>
+              )}
             </tr>
           </thead>
           <tbody>
             {productos.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                <td colSpan={esSubgerente ? 7 : (esSupervisor ? 7 : 6)} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                   {esSupervisor 
                     ? `No hay productos en tu área (${getAreaNombre(areaDelSupervisor)})`
                     : 'No hay productos registrados'}
@@ -518,26 +568,25 @@ function Productos() {
                         <select
                           value={p.area_id || ''}
                           onChange={(e) => {
-                            const nuevoProductos = productos.map(prod => {
+                            const nuevoAreaId = e.target.value ? parseInt(e.target.value) : null
+                            // Actualizar localmente primero
+                            const productosActualizados = productos.map(prod => {
                               if (prod.id === p.id) {
-                                return { ...prod, area_id: e.target.value ? parseInt(e.target.value) : null }
+                                return { ...prod, area_id: nuevoAreaId }
                               }
                               return prod
                             })
-                            setProductos(nuevosProductos)
-                          }}
-                          onBlur={() => {
-                            const productoActual = productos.find(prod => prod.id === p.id)
-                            if (productoActual && productoActual.area_id !== p.area_id) {
-                              handleSubmitArea(p.id, p.area_id)
-                            }
+                            setProductos(productosActualizados)
+                            // Luego guardar en la base de datos
+                            handleAreaChange(p.id, nuevoAreaId)
                           }}
                           style={{
                             padding: '4px 8px',
                             border: '1px solid #ddd',
                             borderRadius: '4px',
                             backgroundColor: sinArea ? '#fff3e0' : 'white',
-                            fontSize: '0.85rem'
+                            fontSize: '0.85rem',
+                            minWidth: '120px'
                           }}
                         >
                           <option value="">Sin área</option>
@@ -595,43 +644,42 @@ function Productos() {
                         }}
                       />
                     </td>
-                    <td style={{ padding: '12px', textAlign: 'center' }}>
-                      {esSubgerente ? (
-                        <>
-                          <button
-                            onClick={() => handleEdit(p)}
-                            style={{
-                              backgroundColor: '#2196F3',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '4px 10px',
-                              cursor: 'pointer',
-                              marginRight: '5px'
-                            }}
-                          >
-                            ✏️ Editar
-                          </button>
-                          <button
-                            onClick={() => handleDelete(p.id)}
-                            style={{
-                              backgroundColor: '#f44336',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '4px 10px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            🗑️
-                          </button>
-                        </>
-                      ) : esSupervisor ? (
-                        <span style={{ color: '#999', fontSize: '0.75rem' }}>Solo lectura</span>
-                      ) : (
-                        <span style={{ color: '#999', fontSize: '0.75rem' }}>Sin permisos</span>
-                      )}
-                    </td>
+                    {esSubgerente && (
+                      <td style={{ padding: '12px', textAlign: 'center' }}>
+                        <button
+                          onClick={() => handleEdit(p)}
+                          style={{
+                            backgroundColor: '#2196F3',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            cursor: 'pointer',
+                            marginRight: '5px'
+                          }}
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.id)}
+                          style={{
+                            backgroundColor: '#f44336',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🗑️
+                        </button>
+                      </td>
+                    )}
+                    {esSupervisor && (
+                      <td style={{ padding: '12px', textAlign: 'center', color: '#999', fontSize: '0.8rem' }}>
+                        Solo lectura
+                      </td>
+                    )}
                   </tr>
                 )
               })

@@ -43,7 +43,7 @@ router.get('/', async (req, res) => {
             paramIndex++;
         }
 
-        // 👇 FILTRO POR ÁREA (NUEVO)
+        // 👇 FILTRO POR ÁREA (SOLO si se envía)
         if (area_id) {
             query += ` AND p.area_id = $${paramIndex}`;
             params.push(area_id);
@@ -108,7 +108,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ============================================
-// POST /productos - Crear producto con área
+// POST /productos - Crear producto
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -180,7 +180,7 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
-// PUT /productos/:id - Actualizar producto con área
+// PUT /productos/:id - Actualizar producto
 // ============================================
 router.put('/:id', async (req, res) => {
     try {
@@ -287,7 +287,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // ============================================
-// DELETE /productos/:id - Eliminar producto (CON VALIDACIONES)
+// DELETE /productos/:id - Eliminar producto
 // ============================================
 router.delete('/:id', async (req, res) => {
     try {

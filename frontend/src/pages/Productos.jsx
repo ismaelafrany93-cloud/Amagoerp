@@ -26,19 +26,17 @@ function Productos() {
   const rol = usuario?.rol || ''
   const areaId = usuario?.area_id || null
   
-  // 👇 DETECTAR SI ES SUPERVISOR
+  // 👇 DETECTAR ROLES
   const esSupervisor = rol === 'supervisor'
-  const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
   
-  // 👇 ÁREA DEL SUPERVISOR (se usa para filtrar)
+  // 👇 ÁREA DEL SUPERVISOR (solo para filtrar si es supervisor)
   const areaDelSupervisor = esSupervisor ? areaId : null
 
   useEffect(() => {
     cargarProductos()
     cargarSucursales()
-    if (esAdmin) {
-      cargarAreas()
-    }
+    cargarAreas()
   }, [])
 
   const cargarProductos = async () => {
@@ -47,10 +45,11 @@ function Productos() {
       let url = `${API_URL}/productos`
       const params = new URLSearchParams()
       
-      // 👇 SI ES SUPERVISOR, FILTRAR POR SU ÁREA
+      // 👇 SOLO SI ES SUPERVISOR, FILTRAR POR SU ÁREA
       if (esSupervisor && areaDelSupervisor) {
         params.append('area_id', areaDelSupervisor)
       }
+      // Si es Subgerente/Dueño/Admin, NO FILTRAR (ver todos)
       
       if (params.toString()) {
         url += `?${params.toString()}`
@@ -121,7 +120,7 @@ function Productos() {
         cantidad_mayor: parseInt(form.cantidad_mayor) || 0,
         stock: parseInt(form.stock) || 0,
         sucursal_id: form.sucursal_id || null,
-        area_id: form.area_id || areaDelSupervisor || null
+        area_id: form.area_id || null
       }
 
       const response = await fetch(url, {
@@ -229,7 +228,7 @@ function Productos() {
     <AdminLayout>
       <h1>📦 Productos</h1>
 
-      {/* 👇 BANNER DEL ÁREA DEL SUPERVISOR */}
+      {/* 👇 BANNER DEL ÁREA DEL SUPERVISOR (SOLO SI ES SUPERVISOR) */}
       {esSupervisor && areaDelSupervisor && (
         <div style={{
           backgroundColor: '#e3f2fd',
@@ -253,6 +252,30 @@ function Productos() {
         </div>
       )}
 
+      {/* 👇 BANNER PARA SUBGERENTE/DUEÑO */}
+      {esSubgerente && (
+        <div style={{
+          backgroundColor: '#e8f5e9',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #4CAF50',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <span style={{ fontSize: '2rem' }}>👑</span>
+          <div>
+            <p style={{ margin: 0, color: '#1b5e20', fontWeight: 'bold' }}>
+              {rol === 'subgerente' ? 'Subgerente' : 'Administrador'} - Visión completa
+            </p>
+            <p style={{ margin: '2px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
+              📦 Puedes ver y asignar áreas a todos los productos
+            </p>
+          </div>
+        </div>
+      )}
+
       {mensaje && (
         <div style={{
           backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
@@ -265,7 +288,7 @@ function Productos() {
         </div>
       )}
 
-      {esAdmin && (
+      {esSubgerente && (
         <button
           onClick={() => {
             setMostrarForm(!mostrarForm)
@@ -287,7 +310,7 @@ function Productos() {
         </button>
       )}
 
-      {mostrarForm && esAdmin && (
+      {mostrarForm && esSubgerente && (
         <form onSubmit={handleSubmit} style={{
           backgroundColor: '#f5f7fb',
           padding: '25px',
@@ -390,23 +413,21 @@ function Productos() {
                 ))}
               </select>
             </div>
-            {esAdmin && (
-              <div>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Área</label>
-                <select
-                  value={form.area_id}
-                  onChange={(e) => setForm({ ...form, area_id: e.target.value })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
-                >
-                  <option value="">Sin área</option>
-                  {areas.map(a => (
-                    <option key={a.id} value={a.id}>
-                      {a.icono || '🏭'} {a.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Área</label>
+              <select
+                value={form.area_id}
+                onChange={(e) => setForm({ ...form, area_id: e.target.value })}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              >
+                <option value="">Sin área</option>
+                {areas.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {a.icono || '🏭'} {a.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <button
@@ -427,6 +448,28 @@ function Productos() {
           </button>
         </form>
       )}
+
+      {/* CONTADOR DE PRODUCTOS */}
+      <div style={{
+        marginBottom: '15px',
+        padding: '10px 15px',
+        backgroundColor: '#f5f5f5',
+        borderRadius: '8px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap'
+      }}>
+        <span>
+          <strong>Total productos:</strong> {productos.length}
+        </span>
+        <span>
+          <strong>Sin área:</strong> {productos.filter(p => !p.area_id).length}
+        </span>
+        <span>
+          <strong>Con área:</strong> {productos.filter(p => p.area_id).length}
+        </span>
+      </div>
 
       <div style={{
         overflowX: 'auto',
@@ -460,97 +503,138 @@ function Productos() {
                 </td>
               </tr>
             ) : (
-              productos.map((p) => (
-                <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px' }}>{p.id}</td>
-                  <td style={{ padding: '12px' }}>{p.nombre}</td>
-                  <td style={{ padding: '12px' }}>{p.categoria || 'N/A'}</td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    {p.area_id ? (
-                      <span style={{
-                        backgroundColor: '#e3f2fd',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        fontSize: '0.75rem',
-                        color: '#003b6f'
-                      }}>
-                        {getAreaIcono(p.area_id)} {getAreaNombre(p.area_id)}
-                      </span>
-                    ) : (
-                      <span style={{ color: '#999', fontSize: '0.75rem' }}>Sin área</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'right' }}>
-                    RD$ {Number(p.precio).toFixed(2)}
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <input
-                      type="number"
-                      min="0"
-                      value={p.stock || 0}
-                      onChange={(e) => {
-                        const nuevosProductos = productos.map(prod => {
-                          if (prod.id === p.id) {
-                            return { ...prod, stock: parseInt(e.target.value) || 0 }
+              productos.map((p) => {
+                const sinArea = !p.area_id
+                return (
+                  <tr key={p.id} style={{ 
+                    borderBottom: '1px solid #eee',
+                    backgroundColor: sinArea ? '#fff8e1' : 'white'
+                  }}>
+                    <td style={{ padding: '12px' }}>{p.id}</td>
+                    <td style={{ padding: '12px' }}>{p.nombre}</td>
+                    <td style={{ padding: '12px' }}>{p.categoria || 'N/A'}</td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {esSubgerente ? (
+                        <select
+                          value={p.area_id || ''}
+                          onChange={(e) => {
+                            const nuevoProductos = productos.map(prod => {
+                              if (prod.id === p.id) {
+                                return { ...prod, area_id: e.target.value ? parseInt(e.target.value) : null }
+                              }
+                              return prod
+                            })
+                            setProductos(nuevosProductos)
+                          }}
+                          onBlur={() => {
+                            const productoActual = productos.find(prod => prod.id === p.id)
+                            if (productoActual && productoActual.area_id !== p.area_id) {
+                              handleSubmitArea(p.id, p.area_id)
+                            }
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            backgroundColor: sinArea ? '#fff3e0' : 'white',
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          <option value="">Sin área</option>
+                          {areas.map(a => (
+                            <option key={a.id} value={a.id}>
+                              {a.icono || '🏭'} {a.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        p.area_id ? (
+                          <span style={{
+                            backgroundColor: '#e3f2fd',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            color: '#003b6f'
+                          }}>
+                            {getAreaIcono(p.area_id)} {getAreaNombre(p.area_id)}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#ff9800', fontSize: '0.75rem' }}>⚠️ Sin área</span>
+                        )
+                      )}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>
+                      RD$ {Number(p.precio).toFixed(2)}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        value={p.stock || 0}
+                        onChange={(e) => {
+                          const nuevosProductos = productos.map(prod => {
+                            if (prod.id === p.id) {
+                              return { ...prod, stock: parseInt(e.target.value) || 0 }
+                            }
+                            return prod
+                          })
+                          setProductos(nuevosProductos)
+                        }}
+                        onBlur={(e) => {
+                          const nuevoStock = parseInt(e.target.value) || 0
+                          if (nuevoStock !== p.stock) {
+                            handleUpdateStock(p.id, nuevoStock)
                           }
-                          return prod
-                        })
-                        setProductos(nuevosProductos)
-                      }}
-                      onBlur={(e) => {
-                        const nuevoStock = parseInt(e.target.value) || 0
-                        if (nuevoStock !== p.stock) {
-                          handleUpdateStock(p.id, nuevoStock)
-                        }
-                      }}
-                      style={{
-                        width: '80px',
-                        padding: '6px',
-                        border: '1px solid #ddd',
-                        borderRadius: '4px',
-                        textAlign: 'center'
-                      }}
-                    />
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    {esAdmin ? (
-                      <>
-                        <button
-                          onClick={() => handleEdit(p)}
-                          style={{
-                            backgroundColor: '#2196F3',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 10px',
-                            cursor: 'pointer',
-                            marginRight: '5px'
-                          }}
-                        >
-                          ✏️ Editar
-                        </button>
-                        <button
-                          onClick={() => handleDelete(p.id)}
-                          style={{
-                            backgroundColor: '#f44336',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 10px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          🗑️
-                        </button>
-                      </>
-                    ) : esSupervisor ? (
-                      <span style={{ color: '#999', fontSize: '0.75rem' }}>Solo lectura</span>
-                    ) : (
-                      <span style={{ color: '#999', fontSize: '0.75rem' }}>Sin permisos</span>
-                    )}
-                  </td>
-                </tr>
-              ))
+                        }}
+                        style={{
+                          width: '80px',
+                          padding: '6px',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          textAlign: 'center'
+                        }}
+                      />
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {esSubgerente ? (
+                        <>
+                          <button
+                            onClick={() => handleEdit(p)}
+                            style={{
+                              backgroundColor: '#2196F3',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 10px',
+                              cursor: 'pointer',
+                              marginRight: '5px'
+                            }}
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            onClick={() => handleDelete(p.id)}
+                            style={{
+                              backgroundColor: '#f44336',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 10px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🗑️
+                          </button>
+                        </>
+                      ) : esSupervisor ? (
+                        <span style={{ color: '#999', fontSize: '0.75rem' }}>Solo lectura</span>
+                      ) : (
+                        <span style={{ color: '#999', fontSize: '0.75rem' }}>Sin permisos</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>

@@ -53,7 +53,6 @@ function Produccion() {
   ]
 
   useEffect(() => {
-    cargarProductos()
     cargarAreas()
     cargarEstadisticas()
 
@@ -63,6 +62,8 @@ function Produccion() {
       setForm(prev => ({ ...prev, area_id: String(areaDelSupervisor) }))
     }
 
+    // 👇 Cargar productos después de definir el área
+    cargarProductos()
     cargarProducciones()
     cargarResumen()
     cargarDetalleOperarios()
@@ -71,6 +72,8 @@ function Produccion() {
 
   // Recargar cuando cambia el área seleccionada
   useEffect(() => {
+    // 👇 Recargar productos cuando cambia el área
+    cargarProductos()
     cargarProducciones()
     cargarResumen()
     cargarDetalleOperarios()
@@ -78,13 +81,32 @@ function Produccion() {
     cargarEstadisticas()
   }, [areaSeleccionada])
 
+  // 👇 FUNCIÓN PARA CARGAR PRODUCTOS FILTRADOS POR ÁREA
   const cargarProductos = async () => {
     try {
-      const response = await fetch(`${API_URL}/productos`)
+      let url = `${API_URL}/productos`
+      const params = new URLSearchParams()
+      
+      // 👇 FILTRAR POR ÁREA SI ESTÁ SELECCIONADA
+      const areaId = areaSeleccionada || areaDelSupervisor
+      if (areaId) {
+        params.append('area_id', areaId)
+        console.log('🔍 Cargando productos del área:', areaId)
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`
+      }
+      
+      console.log('📦 URL productos:', url)
+      
+      const response = await fetch(url)
       const data = await response.json()
       setProductos(Array.isArray(data) ? data : [])
+      console.log('📦 Productos cargados:', data.length)
     } catch (error) {
       console.error('Error cargando productos:', error)
+      setProductos([])
     }
   }
 
@@ -189,7 +211,7 @@ function Produccion() {
   }
 
   // ============================================
-  // GESTIÓN DE OPERARIOS - CORREGIDO
+  // GESTIÓN DE OPERARIOS
   // ============================================
   const handleAgregarOperario = async (e) => {
     e.preventDefault()
@@ -199,8 +221,7 @@ function Produccion() {
     }
 
     try {
-      // Asegurar que el área se envía correctamente
-      const areaId = nuevoOperarioArea || areaDelSupervisor || null
+      const areaId = nuevoOperarioArea || areaSeleccionada || areaDelSupervisor || null
 
       console.log('📝 Enviando operario:', {
         nombre: nuevoOperario.trim(),
@@ -223,10 +244,7 @@ function Produccion() {
         setMensaje('✅ Operario agregado correctamente')
         setNuevoOperario('')
         setNuevoOperarioArea('')
-
-        // Recargar la lista de operarios
         await cargarOperarios()
-
         setTimeout(() => setMensaje(''), 3000)
       } else {
         alert('❌ Error: ' + (data.error || data.message || 'No se pudo agregar'))
@@ -252,7 +270,6 @@ function Produccion() {
 
       if (data.success) {
         setMensaje('✅ Operario eliminado correctamente')
-        // Recargar la lista
         await cargarOperarios()
         setTimeout(() => setMensaje(''), 3000)
       } else {
@@ -323,7 +340,7 @@ function Produccion() {
     }
 
     // Si el supervisor tiene área, usarla automáticamente
-    const areaId = form.area_id || areaDelSupervisor
+    const areaId = form.area_id || areaSeleccionada || areaDelSupervisor
 
     if (!areaId) {
       alert('⚠️ Selecciona un área de producción')
@@ -365,7 +382,7 @@ function Produccion() {
           fecha: new Date().toISOString().split('T')[0],
           observacion_general: '',
           productos: [],
-          area_id: areaId // Mantener el área
+          area_id: areaId
         })
         cargarProducciones()
         cargarResumen()
@@ -395,7 +412,7 @@ function Produccion() {
         cantidad: produccion.cantidad,
         observacion: produccion.observacion || ''
       }],
-      area_id: produccion.area_id || areaDelSupervisor || ''
+      area_id: produccion.area_id || areaSeleccionada || areaDelSupervisor || ''
     })
   }
 
@@ -437,13 +454,7 @@ function Produccion() {
     const area = e.target.value
     setAreaSeleccionada(area)
     setForm({ ...form, area_id: area })
-    setTimeout(() => {
-      cargarProducciones()
-      cargarResumen()
-      cargarDetalleOperarios()
-      cargarOperarios()
-      cargarEstadisticas()
-    }, 100)
+    // 👇 El useEffect se encargará de recargar los productos
   }
 
   const getAreaNombre = (areaId) => {
@@ -460,11 +471,6 @@ function Produccion() {
     const area = areas.find(a => a.id === parseInt(areaId))
     return area ? area.color : '#757575'
   }
-
-  // Áreas que puede ver el usuario
-  const areasVisibles = esSupervisorDeArea
-    ? areas.filter(a => a.id === areaDelSupervisor)
-    : areas
 
   if (cargando) {
     return (
@@ -587,11 +593,21 @@ function Produccion() {
           <span style={{ color: '#666', fontSize: '0.85rem' }}>
             {areaSeleccionada ? `Mostrando: ${getAreaIcono(areaSeleccionada)} ${getAreaNombre(areaSeleccionada)}` : 'Mostrando todas las áreas'}
           </span>
+          <span style={{
+            marginLeft: 'auto',
+            fontSize: '0.85rem',
+            color: '#666',
+            backgroundColor: '#f0f4f8',
+            padding: '4px 12px',
+            borderRadius: '12px'
+          }}>
+            {productos.length} productos disponibles
+          </span>
         </div>
       </div>
 
       {/* ========================================== */}
-      {/* GESTIÓN DE OPERARIOS - PANEL FLOTANTE CORREGIDO */}
+      {/* GESTIÓN DE OPERARIOS */}
       {/* ========================================== */}
       {puedeGestionarOperarios && (
         <div style={{
@@ -739,7 +755,7 @@ function Produccion() {
       )}
 
       {/* ========================================== */}
-      {/* FORMULARIO DE PRODUCCIÓN MÚLTIPLE */}
+      {/* FORMULARIO DE PRODUCCIÓN */}
       {/* ========================================== */}
       {esSupervisor && (
         <div style={{
@@ -758,6 +774,15 @@ function Produccion() {
                 color: getAreaColor(areaDelSupervisor)
               }}>
                 - {getAreaIcono(areaDelSupervisor)} {getAreaNombre(areaDelSupervisor)}
+              </span>
+            )}
+            {areaSeleccionada && !esSupervisorDeArea && (
+              <span style={{
+                marginLeft: '10px',
+                fontSize: '0.85rem',
+                color: getAreaColor(areaSeleccionada)
+              }}>
+                - {getAreaIcono(areaSeleccionada)} {getAreaNombre(areaSeleccionada)}
               </span>
             )}
           </h3>
@@ -781,7 +806,7 @@ function Produccion() {
               <div>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>🏷️ Área *</label>
                 <select
-                  value={form.area_id || areaDelSupervisor || ''}
+                  value={form.area_id || areaSeleccionada || areaDelSupervisor || ''}
                   onChange={(e) => setForm({ ...form, area_id: e.target.value })}
                   required
                   disabled={esSupervisorDeArea}
@@ -831,13 +856,36 @@ function Produccion() {
               />
             </div>
 
+            {/* 👇 AGREGAR PRODUCTOS CON FILTRO POR ÁREA */}
             <div style={{
               backgroundColor: '#f0f4f8',
               padding: '15px',
               borderRadius: '8px',
               marginBottom: '15px'
             }}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#003b6f' }}>➕ Agregar Productos</h4>
+              <h4 style={{ margin: '0 0 10px 0', color: '#003b6f' }}>
+                ➕ Agregar Productos
+                {areaSeleccionada && (
+                  <span style={{
+                    fontSize: '0.8rem',
+                    fontWeight: 'normal',
+                    color: '#666',
+                    marginLeft: '10px'
+                  }}>
+                    ({productos.length} productos disponibles en {getAreaNombre(areaSeleccionada)})
+                  </span>
+                )}
+                {!areaSeleccionada && !esSupervisorDeArea && (
+                  <span style={{
+                    fontSize: '0.8rem',
+                    fontWeight: 'normal',
+                    color: '#ff9800',
+                    marginLeft: '10px'
+                  }}>
+                    ⚠️ Selecciona un área para ver productos
+                  </span>
+                )}
+              </h4>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '10px', alignItems: 'end' }}>
                 <div>
                   <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Producto</label>
@@ -846,11 +894,25 @@ function Produccion() {
                     onChange={(e) => setProductoSeleccionado(e.target.value)}
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
                   >
-                    <option value="">Seleccionar producto</option>
+                    <option value="">
+                      {areaSeleccionada 
+                        ? `Seleccionar producto de ${getAreaNombre(areaSeleccionada)}`
+                        : 'Seleccionar producto'}
+                    </option>
                     {productos.map(p => (
                       <option key={p.id} value={p.id}>{p.nombre}</option>
                     ))}
                   </select>
+                  {!areaSeleccionada && !esSupervisorDeArea && (
+                    <p style={{ fontSize: '0.7rem', color: '#ff9800', marginTop: '3px' }}>
+                      ⚠️ Selecciona un área para ver productos
+                    </p>
+                  )}
+                  {areaSeleccionada && productos.length === 0 && (
+                    <p style={{ fontSize: '0.7rem', color: '#ff9800', marginTop: '3px' }}>
+                      ⚠️ No hay productos en esta área
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Cantidad</label>
@@ -965,7 +1027,7 @@ function Produccion() {
       )}
 
       {/* ========================================== */}
-      {/* DETALLE POR OPERARIO - PANEL PRINCIPAL */}
+      {/* DETALLE POR OPERARIO */}
       {/* ========================================== */}
       <div style={{
         backgroundColor: '#f5f7fb',

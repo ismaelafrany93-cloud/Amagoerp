@@ -22,61 +22,91 @@ function Productos() {
     area_id: ''
   })
 
+  // ============================================
+  // 1. OBTENER USUARIO Y LOGS DE DEPURACIÓN
+  // ============================================
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+  console.log('🔍 1. Usuario desde localStorage:', usuario)
+  
   const rol = usuario?.rol || ''
+  console.log('🔍 2. Rol:', rol)
+  
   const areaId = usuario?.area_id || null
+  console.log('🔍 3. area_id:', areaId)
   
-  // 👇 DETECTAR ROLES
   const esSupervisor = rol === 'supervisor'
-  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  console.log('🔍 4. esSupervisor:', esSupervisor)
   
-  // 👇 ÁREA DEL SUPERVISOR (solo para filtrar si es supervisor)
+  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  console.log('🔍 5. esSubgerente:', esSubgerente)
+  
   const areaDelSupervisor = esSupervisor ? areaId : null
+  console.log('🔍 6. areaDelSupervisor:', areaDelSupervisor)
 
+  // ============================================
+  // 2. EFECTO PARA CARGAR DATOS AL INICIAR
+  // ============================================
   useEffect(() => {
+    console.log('🔄 useEffect ejecutándose - cargando datos...')
     cargarProductos()
     cargarSucursales()
     cargarAreas()
   }, [])
 
+  // ============================================
+  // 3. CARGAR PRODUCTOS CON FILTRO POR ÁREA
+  // ============================================
   const cargarProductos = async () => {
+    console.log('📦 Iniciando cargarProductos...')
     setCargando(true)
     try {
       let url = `${API_URL}/productos`
       const params = new URLSearchParams()
       
-      // 👇 SOLO SI ES SUPERVISOR, FILTRAR POR SU ÁREA
+      // 👇 SOLO SI ES SUPERVISOR Y TIENE ÁREA, FILTRAR
       if (esSupervisor && areaDelSupervisor) {
         params.append('area_id', areaDelSupervisor)
-        console.log('🔍 Supervisor filtrando por área:', areaDelSupervisor)
+        console.log('🔍 APLICANDO FILTRO - Supervisor filtrando por área:', areaDelSupervisor)
+      } else {
+        console.log('🔍 SIN FILTRO - No es supervisor o no tiene área')
+        console.log('   - Rol:', rol)
+        console.log('   - esSupervisor:', esSupervisor)
+        console.log('   - areaDelSupervisor:', areaDelSupervisor)
       }
-      // Si es Subgerente/Dueño/Admin, NO FILTRAR (ver todos)
       
       if (params.toString()) {
         url += `?${params.toString()}`
       }
       
-      console.log('📦 Cargando productos desde:', url)
+      console.log('📦 URL FINAL:', url)
       
       const response = await fetch(url)
+      console.log('📦 Response status:', response.status)
+      
       if (!response.ok) {
         throw new Error(`Error ${response.status}`)
       }
       const data = await response.json()
       console.log('📦 Productos recibidos:', data.length)
+      console.log('📦 Primeros 5 productos:', data.slice(0, 5).map(p => ({ id: p.id, nombre: p.nombre, area_id: p.area_id })))
       setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
-      console.error('Error cargando productos:', error)
+      console.error('❌ Error cargando productos:', error)
       setMensaje('❌ Error cargando productos')
     } finally {
       setCargando(false)
+      console.log('📦 cargarProductos finalizado')
     }
   }
 
+  // ============================================
+  // 4. CARGAR SUCURSALES Y ÁREAS
+  // ============================================
   const cargarSucursales = async () => {
     try {
       const response = await fetch(`${API_URL}/sucursales`)
       const data = await response.json()
+      console.log('📦 Sucursales cargadas:', data.length)
       setSucursales(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando sucursales:', error)
@@ -88,6 +118,7 @@ function Productos() {
     try {
       const response = await fetch(`${API_URL}/usuarios/areas`)
       const data = await response.json()
+      console.log('📦 Áreas cargadas:', data.length)
       setAreas(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando áreas:', error)
@@ -95,18 +126,22 @@ function Productos() {
     }
   }
 
-  // 👇 OBTENER NOMBRE DEL ÁREA
+  // ============================================
+  // 5. FUNCIONES AUXILIARES
+  // ============================================
   const getAreaNombre = (areaId) => {
     const area = areas.find(a => a.id === parseInt(areaId))
     return area ? area.nombre : 'Sin área'
   }
 
-  // 👇 OBTENER ICONO DEL ÁREA
   const getAreaIcono = (areaId) => {
     const area = areas.find(a => a.id === parseInt(areaId))
     return area ? area.icono : '🏭'
   }
 
+  // ============================================
+  // 6. CRUD DE PRODUCTOS
+  // ============================================
   const handleSubmit = async (e) => {
     e.preventDefault()
     setCargando(true)
@@ -154,14 +189,11 @@ function Productos() {
     }
   }
 
-  // 👇 FUNCIÓN PARA ACTUALIZAR ÁREA DESDE EL SELECT
   const handleAreaChange = async (productoId, nuevoAreaId) => {
     try {
-      // Buscar el producto actual
       const productoActual = productos.find(p => p.id === productoId)
       if (!productoActual) return
 
-      // Actualizar el producto con el nuevo área
       const response = await fetch(`${API_URL}/productos/${productoId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -257,6 +289,9 @@ function Productos() {
     }
   }
 
+  // ============================================
+  // 7. RENDER
+  // ============================================
   if (cargando) {
     return (
       <AdminLayout>
@@ -271,7 +306,7 @@ function Productos() {
     <AdminLayout>
       <h1>📦 Productos</h1>
 
-      {/* 👇 BANNER DEL ÁREA DEL SUPERVISOR (SOLO SI ES SUPERVISOR) */}
+      {/* 👇 BANNER DEL ÁREA DEL SUPERVISOR */}
       {esSupervisor && areaDelSupervisor && (
         <div style={{
           backgroundColor: '#e3f2fd',
@@ -569,7 +604,6 @@ function Productos() {
                           value={p.area_id || ''}
                           onChange={(e) => {
                             const nuevoAreaId = e.target.value ? parseInt(e.target.value) : null
-                            // Actualizar localmente primero
                             const productosActualizados = productos.map(prod => {
                               if (prod.id === p.id) {
                                 return { ...prod, area_id: nuevoAreaId }
@@ -577,7 +611,6 @@ function Productos() {
                               return prod
                             })
                             setProductos(productosActualizados)
-                            // Luego guardar en la base de datos
                             handleAreaChange(p.id, nuevoAreaId)
                           }}
                           style={{

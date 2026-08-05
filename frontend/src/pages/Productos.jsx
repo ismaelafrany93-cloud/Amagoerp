@@ -22,91 +22,66 @@ function Productos() {
     area_id: ''
   })
 
-  // ============================================
-  // 1. OBTENER USUARIO Y LOGS DE DEPURACIÓN
-  // ============================================
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-  console.log('🔍 1. Usuario desde localStorage:', usuario)
-  
   const rol = usuario?.rol || ''
-  console.log('🔍 2. Rol:', rol)
-  
   const areaId = usuario?.area_id || null
-  console.log('🔍 3. area_id:', areaId)
   
+  // 👇 DETECTAR ROLES
   const esSupervisor = rol === 'supervisor'
-  console.log('🔍 4. esSupervisor:', esSupervisor)
-  
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
-  console.log('🔍 5. esSubgerente:', esSubgerente)
   
-  const areaDelSupervisor = esSupervisor ? areaId : null
-  console.log('🔍 6. areaDelSupervisor:', areaDelSupervisor)
+  // 👇 ÁREA SELECCIONADA (para el filtro)
+  const [areaSeleccionada, setAreaSeleccionada] = useState(areaId || '')
 
-  // ============================================
-  // 2. EFECTO PARA CARGAR DATOS AL INICIAR
-  // ============================================
   useEffect(() => {
-    console.log('🔄 useEffect ejecutándose - cargando datos...')
     cargarProductos()
     cargarSucursales()
     cargarAreas()
   }, [])
 
-  // ============================================
-  // 3. CARGAR PRODUCTOS CON FILTRO POR ÁREA
-  // ============================================
+  // 👇 Recargar cuando cambia el área seleccionada
+  useEffect(() => {
+    cargarProductos()
+  }, [areaSeleccionada])
+
   const cargarProductos = async () => {
-    console.log('📦 Iniciando cargarProductos...')
+    console.log('📦 Cargando productos con área:', areaSeleccionada)
     setCargando(true)
     try {
       let url = `${API_URL}/productos`
       const params = new URLSearchParams()
       
-      // 👇 SOLO SI ES SUPERVISOR Y TIENE ÁREA, FILTRAR
-      if (esSupervisor && areaDelSupervisor) {
-        params.append('area_id', areaDelSupervisor)
-        console.log('🔍 APLICANDO FILTRO - Supervisor filtrando por área:', areaDelSupervisor)
-      } else {
-        console.log('🔍 SIN FILTRO - No es supervisor o no tiene área')
-        console.log('   - Rol:', rol)
-        console.log('   - esSupervisor:', esSupervisor)
-        console.log('   - areaDelSupervisor:', areaDelSupervisor)
+      // 👇 SIEMPRE filtrar por área seleccionada
+      if (areaSeleccionada) {
+        params.append('area_id', areaSeleccionada)
+        console.log('🔍 Filtrando por área:', areaSeleccionada)
       }
       
       if (params.toString()) {
         url += `?${params.toString()}`
       }
       
-      console.log('📦 URL FINAL:', url)
+      console.log('📦 URL final:', url)
       
       const response = await fetch(url)
-      console.log('📦 Response status:', response.status)
-      
       if (!response.ok) {
         throw new Error(`Error ${response.status}`)
       }
       const data = await response.json()
       console.log('📦 Productos recibidos:', data.length)
-      console.log('📦 Primeros 5 productos:', data.slice(0, 5).map(p => ({ id: p.id, nombre: p.nombre, area_id: p.area_id })))
       setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
-      console.error('❌ Error cargando productos:', error)
+      console.error('Error cargando productos:', error)
       setMensaje('❌ Error cargando productos')
     } finally {
       setCargando(false)
-      console.log('📦 cargarProductos finalizado')
     }
   }
 
-  // ============================================
-  // 4. CARGAR SUCURSALES Y ÁREAS
-  // ============================================
   const cargarSucursales = async () => {
     try {
       const response = await fetch(`${API_URL}/sucursales`)
       const data = await response.json()
-      console.log('📦 Sucursales cargadas:', data.length)
       setSucursales(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando sucursales:', error)
@@ -118,7 +93,6 @@ function Productos() {
     try {
       const response = await fetch(`${API_URL}/usuarios/areas`)
       const data = await response.json()
-      console.log('📦 Áreas cargadas:', data.length)
       setAreas(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando áreas:', error)
@@ -126,9 +100,6 @@ function Productos() {
     }
   }
 
-  // ============================================
-  // 5. FUNCIONES AUXILIARES
-  // ============================================
   const getAreaNombre = (areaId) => {
     const area = areas.find(a => a.id === parseInt(areaId))
     return area ? area.nombre : 'Sin área'
@@ -139,9 +110,6 @@ function Productos() {
     return area ? area.icono : '🏭'
   }
 
-  // ============================================
-  // 6. CRUD DE PRODUCTOS
-  // ============================================
   const handleSubmit = async (e) => {
     e.preventDefault()
     setCargando(true)
@@ -289,9 +257,6 @@ function Productos() {
     }
   }
 
-  // ============================================
-  // 7. RENDER
-  // ============================================
   if (cargando) {
     return (
       <AdminLayout>
@@ -306,8 +271,57 @@ function Productos() {
     <AdminLayout>
       <h1>📦 Productos</h1>
 
+      {/* 👇 FILTRO POR ÁREA - PARA TODOS */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        padding: '15px 20px',
+        marginBottom: '20px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        display: 'flex',
+        gap: '15px',
+        flexWrap: 'wrap',
+        alignItems: 'center'
+      }}>
+        <label style={{ fontWeight: 'bold', color: '#003b6f' }}>🏷️ Filtrar por Área:</label>
+        <select
+          value={areaSeleccionada}
+          onChange={(e) => setAreaSeleccionada(e.target.value)}
+          style={{
+            padding: '8px 16px',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            minWidth: '200px',
+            backgroundColor: areaSeleccionada ? '#e3f2fd' : 'white'
+          }}
+        >
+          <option value="">📋 Todas las áreas</option>
+          {areas.map(a => (
+            <option key={a.id} value={a.id}>
+              {a.icono || '🏭'} {a.nombre}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={cargarProductos}
+          style={{
+            padding: '8px 20px',
+            backgroundColor: '#003b6f',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer'
+          }}
+        >
+          🔄 Actualizar
+        </button>
+        <span style={{ fontSize: '0.85rem', color: '#666' }}>
+          {productos.length} productos encontrados
+        </span>
+      </div>
+
       {/* 👇 BANNER DEL ÁREA DEL SUPERVISOR */}
-      {esSupervisor && areaDelSupervisor && (
+      {esSupervisor && areaSeleccionada && (
         <div style={{
           backgroundColor: '#e3f2fd',
           padding: '10px 15px',
@@ -318,13 +332,13 @@ function Productos() {
           alignItems: 'center',
           gap: '12px'
         }}>
-          <span style={{ fontSize: '2rem' }}>{getAreaIcono(areaDelSupervisor)}</span>
+          <span style={{ fontSize: '2rem' }}>{getAreaIcono(areaSeleccionada)}</span>
           <div>
             <p style={{ margin: 0, color: '#003b6f', fontWeight: 'bold' }}>
-              👋 Bienvenido, Supervisor de {getAreaNombre(areaDelSupervisor)}
+              👋 Mostrando productos de {getAreaNombre(areaSeleccionada)}
             </p>
             <p style={{ margin: '2px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
-              📦 Solo ves los productos de tu área asignada
+              📦 Puedes cambiar el área desde el filtro superior
             </p>
           </div>
         </div>
@@ -582,8 +596,8 @@ function Productos() {
             {productos.length === 0 ? (
               <tr>
                 <td colSpan={esSubgerente ? 7 : (esSupervisor ? 7 : 6)} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
-                  {esSupervisor 
-                    ? `No hay productos en tu área (${getAreaNombre(areaDelSupervisor)})`
+                  {areaSeleccionada 
+                    ? `No hay productos en el área "${getAreaNombre(areaSeleccionada)}"`
                     : 'No hay productos registrados'}
                 </td>
               </tr>

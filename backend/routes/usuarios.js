@@ -3,6 +3,21 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
+// GET /usuarios/areas - Obtener todas las áreas (DEBE IR PRIMERO)
+// ============================================
+router.get('/areas', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT id, nombre, icono, color FROM areas ORDER BY nombre`
+        );
+        res.json(result.rows || []);
+    } catch (error) {
+        console.error('❌ Error en GET /usuarios/areas:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
 // GET /usuarios - Obtener todos los usuarios
 // ============================================
 router.get('/', async (req, res) => {
@@ -51,12 +66,20 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// GET /usuarios/:id - Obtener usuario por ID
+// GET /usuarios/:id - Obtener usuario por ID (DEBE IR DESPUÉS DE /areas)
 // ============================================
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         
+        // Validar que id sea un número
+        if (isNaN(id) || parseInt(id) <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de usuario inválido'
+            });
+        }
+
         const result = await pool.query(
             `SELECT 
                 u.id, 
@@ -332,21 +355,6 @@ router.put('/:id/sucursal', async (req, res) => {
             success: false, 
             error: error.message 
         });
-    }
-});
-
-// ============================================
-// GET /usuarios/areas - Obtener todas las áreas
-// ============================================
-router.get('/areas', async (req, res) => {
-    try {
-        const result = await pool.query(
-            `SELECT id, nombre, icono, color FROM areas ORDER BY nombre`
-        );
-        res.json(result.rows || []);
-    } catch (error) {
-        console.error('❌ Error en GET /usuarios/areas:', error.message);
-        res.status(200).json([]);
     }
 });
 

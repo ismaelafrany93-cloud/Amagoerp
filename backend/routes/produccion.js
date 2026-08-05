@@ -156,79 +156,6 @@ router.get('/detalle-por-operario', async (req, res) => {
 });
 
 // ============================================
-// GET /produccion/detalle-por-operario/fecha/:fecha - Detalle por fecha específica
-// ============================================
-router.get('/detalle-por-operario/fecha/:fecha', async (req, res) => {
-    try {
-        const { fecha } = req.params;
-        const { area_id } = req.query;
-
-        let query = `
-            SELECT 
-                p.operario,
-                p.producto_id,
-                prod.nombre as producto_nombre,
-                COALESCE(SUM(p.cantidad), 0) as total_cantidad,
-                COUNT(p.id) as numero_registros,
-                a.nombre as area_nombre,
-                a.id as area_id,
-                a.icono as area_icono,
-                a.color as area_color
-            FROM produccion p
-            LEFT JOIN productos prod ON p.producto_id = prod.id
-            LEFT JOIN areas a ON p.area_id = a.id
-            WHERE DATE(p.fecha) = $1
-        `;
-        let params = [fecha];
-        let paramIndex = 2;
-
-        if (area_id) {
-            query += ` AND p.area_id = $${paramIndex}`;
-            params.push(area_id);
-            paramIndex++;
-        }
-
-        query += ` GROUP BY p.operario, p.producto_id, prod.nombre, a.nombre, a.id, a.icono, a.color
-                   ORDER BY p.operario, total_cantidad DESC`;
-
-        const result = await pool.query(query, params);
-
-        // Agrupar por operario
-        const operariosMap = {};
-        result.rows.forEach(row => {
-            if (!operariosMap[row.operario]) {
-                operariosMap[row.operario] = {
-                    operario: row.operario,
-                    total_general: 0,
-                    area: row.area_nombre || 'Sin área',
-                    area_id: row.area_id,
-                    area_icono: row.area_icono || '🏭',
-                    area_color: row.area_color || '#757575',
-                    productos: []
-                };
-            }
-            operariosMap[row.operario].productos.push({
-                producto_id: row.producto_id,
-                producto_nombre: row.producto_nombre || 'Producto sin nombre',
-                cantidad: parseInt(row.total_cantidad),
-                numero_registros: parseInt(row.numero_registros)
-            });
-            operariosMap[row.operario].total_general += parseInt(row.total_cantidad);
-        });
-
-        const resultado = Object.values(operariosMap).map(op => ({
-            ...op,
-            productos: op.productos.sort((a, b) => b.cantidad - a.cantidad)
-        }));
-
-        res.json(resultado || []);
-    } catch (error) {
-        console.error('❌ Error en GET /produccion/detalle-por-operario/fecha/:fecha:', error.message);
-        res.status(200).json([]);
-    }
-});
-
-// ============================================
 // POST /produccion/multiple - Registrar producción múltiple
 // ============================================
 router.post('/multiple', async (req, res) => {
@@ -273,7 +200,6 @@ router.post('/multiple', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Verificar que el área existe
         const areaCheck = await client.query(
             'SELECT id, nombre, icono FROM areas WHERE id = $1',
             [area_id]
@@ -574,7 +500,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // ============================================
-// GET /produccion/resumen - Resumen por operario
+// GET /produccion/resumen - Resumen por área y operario
 // ============================================
 router.get('/resumen', async (req, res) => {
     try {
@@ -614,48 +540,8 @@ router.get('/resumen', async (req, res) => {
 });
 
 // ============================================
-// GET /produccion/operarios - Obtener operarios
-// ============================================
-router.get('/operarios', async (req, res) => {
-    try {
-        const { area_id } = req.query;
-        
-        let query = `
-            SELECT 
-                u.id, 
-                u.nombre, 
-                u.rol, 
-                u.sucursal_id, 
-                u.area_id,
-                a.nombre as area_nombre,
-                a.icono as area_icono,
-                a.color as area_color
-            FROM usuarios u
-            LEFT JOIN areas a ON u.area_id = a.id
-            WHERE u.rol = 'operario' OR u.rol = 'supervisor'
-        `;
-        let params = [];
-        
-        if (area_id) {
-            query += ` AND u.area_id = $1`;
-            params.push(area_id);
-        }
-        
-        query += ` ORDER BY u.nombre`;
-
-        const result = await pool.query(query, params);
-        res.json(result.rows || []);
-    } catch (error) {
-        console.error('❌ Error en GET /produccion/operarios:', error.message);
-        res.status(200).json([]);
-    }
-});
-
-// ============================================
-// NUEVAS RUTAS PARA ÁREAS
-// ============================================
-
 // GET /produccion/estadisticas - Estadísticas por área
+// ============================================
 router.get('/estadisticas', async (req, res) => {
     try {
         const { area_id } = req.query;
@@ -691,6 +577,44 @@ router.get('/estadisticas', async (req, res) => {
         res.json(result.rows || []);
     } catch (error) {
         console.error('❌ Error en GET /produccion/estadisticas:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
+// GET /produccion/operarios - Obtener operarios por área
+// ============================================
+router.get('/operarios', async (req, res) => {
+    try {
+        const { area_id } = req.query;
+        
+        let query = `
+            SELECT 
+                u.id, 
+                u.nombre, 
+                u.rol, 
+                u.sucursal_id, 
+                u.area_id,
+                a.nombre as area_nombre,
+                a.icono as area_icono,
+                a.color as area_color
+            FROM usuarios u
+            LEFT JOIN areas a ON u.area_id = a.id
+            WHERE u.rol = 'operario'
+        `;
+        let params = [];
+        
+        if (area_id) {
+            query += ` AND u.area_id = $1`;
+            params.push(area_id);
+        }
+        
+        query += ` ORDER BY u.nombre`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows || []);
+    } catch (error) {
+        console.error('❌ Error en GET /produccion/operarios:', error.message);
         res.status(200).json([]);
     }
 });

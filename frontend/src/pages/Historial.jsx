@@ -129,12 +129,7 @@ function Historial() {
         (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada')) {
       return true
     }
-    // Si el tipo de entrega es 'retiro' -> NUNCA fue entregado realmente (es retiro en tienda)
-    // Esto es un error de la vendedora, debe poder eliminarse
-    if (venta.tipo_entrega === 'retiro') {
-      return false // NO fue entregado realmente
-    }
-    // Si es 'retirado' pero tipo_entrega es 'retiro', es un error
+    // Si es 'retirado' pero tipo_entrega es 'retiro', es un error de la vendedora
     if (venta.estado_entrega === 'retirado' && venta.tipo_entrega === 'retiro') {
       return false // NO fue entregado realmente
     }
@@ -149,8 +144,8 @@ function Historial() {
     if (esSuperAdmin) return true
     
     // Subgerente puede eliminar:
-    // 1. Ventas NO entregadas realmente
-    // 2. Ventas con error de entrega (retiro en tienda)
+    // 1. Ventas con error de entrega (retiro en tienda)
+    // 2. Ventas NO entregadas realmente (domicilio pendiente)
     if (esSubgerente) {
       // Si es retiro en tienda, siempre se puede eliminar (error de vendedora)
       if (venta.tipo_entrega === 'retiro') return true
@@ -160,6 +155,26 @@ function Historial() {
     }
     
     return false
+  }
+
+  // ============================================
+  // FUNCIÓN PARA SABER SI ES EDITABLE
+  // ============================================
+  const esEditable = (venta) => {
+    if (venta.estado === 'cancelada') return false
+    if (esEntregadoReal(venta)) return false
+    if (!esSubgerente && !estaDentroDelTiempo(venta)) return false
+    return true
+  }
+
+  // ============================================
+  // FUNCIÓN PARA SABER SI ES CANCELABLE (SOLO DENTRO DEL TIEMPO)
+  // ============================================
+  const esCancelable = (venta) => {
+    if (venta.estado === 'cancelada') return false
+    if (esEntregadoReal(venta)) return false
+    if (!esSubgerente && !estaDentroDelTiempo(venta)) return false
+    return true
   }
 
   // ============================================
@@ -427,26 +442,6 @@ function Historial() {
     return 'Mi Sucursal'
   }
 
-  // ============================================
-  // FUNCIÓN PARA OBTENER TEXTO DE ENTREGA REAL
-  // ============================================
-  const getEstadoEntregaReal = (venta) => {
-    if (venta.tipo_entrega === 'retiro') {
-      return { texto: '🏪 Retiro (Error)', color: '#ff9800' }
-    }
-    if (venta.tipo_entrega === 'domicilio' && 
-        (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada')) {
-      return { texto: '✅ Entregado', color: '#4CAF50' }
-    }
-    if (venta.tipo_entrega === 'domicilio' && venta.estado_entrega === 'pendiente') {
-      return { texto: '⏳ Pendiente', color: '#ff9800' }
-    }
-    if (venta.tipo_entrega === 'domicilio' && venta.estado_entrega === 'fallido') {
-      return { texto: '❌ Fallido', color: '#f44336' }
-    }
-    return { texto: 'N/A', color: '#757575' }
-  }
-
   const getEstadoEntrega = (venta) => {
     if (venta.estado_entrega === 'entregado' || venta.estado_entrega === 'entregada') {
       return { texto: '✅ Entregado', color: '#4CAF50' }
@@ -696,7 +691,6 @@ function Historial() {
                 const puedeCancelar = (esSubgerente || esMismaSucursal) && esCancelable(v)
                 const puedeEditar = esEditable(v)
                 const entregaInfo = getEstadoEntrega(v)
-                const entregaRealInfo = getEstadoEntregaReal(v)
                 const yaEntregado = esEntregadoReal(v)
                 const tiempoRestante = getTiempoRestante(v.id)
                 const dentroDelTiempo = esSubgerente || (tiempoRestante > 0 && !yaEntregado && v.estado !== 'cancelada')

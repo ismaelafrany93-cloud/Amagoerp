@@ -23,7 +23,17 @@ function Historial() {
   })
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
+  const rol = usuario?.rol || ''
+  
+  // 👇 PERMISOS ACTUALIZADOS
+  const esSuperAdmin = ['dueno', 'dueño', 'admin'].includes(rol)
+  const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  const esVendedor = ['vendedor', 'vendedora'].includes(rol)
+  
+  // 👇 DUEÑO Y ADMIN PUEDEN ELIMINAR TODO (INCLUYENDO ENTREGADOS)
+  const puedeEliminarSiempre = esSuperAdmin // Solo Dueño y Admin
+  const puedeEliminarNoEntregados = esSubgerente // Subgerente también puede eliminar no entregados
+  
   const sucursalId = usuario?.sucursal_id || null
 
   const [carritoEdit, setCarritoEdit] = useState([])
@@ -121,6 +131,12 @@ function Historial() {
   // ABRIR EDITAR VENTA
   // ============================================
   const abrirEditarVenta = (venta) => {
+    // Solo si no está entregada o es SuperAdmin
+    if (esEntregado(venta) && !esSuperAdmin) {
+      alert('⚠️ No puedes editar una venta ya entregada')
+      return
+    }
+    
     setEditandoVenta(venta.id)
     setVentaEdit({
       tipo_entrega: venta.tipo_entrega || 'retiro',
@@ -167,14 +183,31 @@ function Historial() {
   }
 
   // ============================================
-  // ELIMINAR VENTA
+  // ELIMINAR VENTA (ACTUALIZADO)
   // ============================================
-  const eliminarVenta = async (ventaId) => {
-    if (!window.confirm('⚠️ ¿Estás seguro de eliminar esta venta?\n\nEl stock se devolverá al inventario y la venta quedará en el historial como cancelada.')) return
+  const eliminarVenta = async (venta) => {
+    const yaEntregado = esEntregado(venta)
+    
+    // 👇 VERIFICAR PERMISOS PARA ELIMINAR
+    if (yaEntregado && !esSuperAdmin) {
+      alert('⛔ Solo el Dueño o Administrador puede eliminar ventas ya entregadas')
+      return
+    }
+    
+    if (!esSubgerente) {
+      alert('⛔ No tienes permisos para eliminar ventas')
+      return
+    }
+
+    const mensajeConfirmacion = yaEntregado 
+      ? '⚠️ Esta venta ya fue entregada. ¿Estás seguro de eliminarla?\n\nEl stock se devolverá al inventario y la venta quedará en el historial como cancelada.'
+      : '⚠️ ¿Estás seguro de eliminar esta venta?\n\nEl stock se devolverá al inventario y la venta quedará en el historial como cancelada.'
+
+    if (!window.confirm(mensajeConfirmacion)) return
 
     setCargando(true)
     try {
-      const response = await fetch(`${API_URL}/ventas/${ventaId}`, {
+      const response = await fetch(`${API_URL}/ventas/${venta.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -580,6 +613,11 @@ function Historial() {
         <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#666' }}>
           {esSubgerente ? '👑 Como subgerente/dueño, puedes editar sin límite de tiempo' : '🛒 Solo puedes editar/cancelar dentro de la primera hora'}
         </p>
+        {esSuperAdmin && (
+          <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#f44336' }}>
+            🔑 <strong>Dueño/Admin:</strong> Puedes eliminar cualquier venta, incluso las entregadas
+          </p>
+        )}
       </div>
 
       {mensaje && (
@@ -635,6 +673,9 @@ function Historial() {
                 const tiempoRestante = getTiempoRestante(v.id)
                 const dentroDelTiempo = esSubgerente || (tiempoRestante > 0 && !yaEntregado && v.estado !== 'cancelada')
                 const tiempoTexto = esSubgerente ? '∞ Ilimitado' : formatearTiempoRestante(tiempoRestante)
+
+                // 👇 PERMISOS PARA ELIMINAR
+                const puedeEliminar = esSuperAdmin || (esSubgerente && !yaEntregado)
 
                 return (
                   <tr key={v.id} style={{ 
@@ -722,35 +763,37 @@ function Historial() {
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       {yaEntregado || v.estado === 'cancelada' ? (
-                        <span style={{ color: '#999', fontSize: '0.75rem' }}>
-                          {v.estado === 'cancelada' ? 'Cancelada' : '✅ Completada'}
-                        </span>
-                      ) : (
                         <>
-                          {/* 👇 BOTÓN EDITAR VENTA */}
-                          {esSubgerente && !yaEntregado && v.estado !== 'cancelada' && (
+                          {/* 👇 BOTÓN ELIMINAR - SOLO PARA DUEÑO/ADMIN EN ENTREGADOS */}
+                          {esSuperAdmin && v.estado !== 'cancelada' && (
                             <button
-                              onClick={() => abrirEditarVenta(v)}
+                              onClick={() => eliminarVenta(v)}
                               style={{
-                                backgroundColor: '#2196F3',
+                                backgroundColor: '#d32f2f',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '4px',
                                 padding: '4px 10px',
                                 cursor: 'pointer',
                                 marginRight: '5px',
-                                fontSize: '0.75rem'
+                                fontSize: '0.75rem',
+                                fontWeight: 'bold'
                               }}
-                              title="Editar venta"
+                              title="Eliminar venta entregada (Solo Dueño/Admin)"
                             >
-                              ✏️ Editar
+                              🗑️ Eliminar
                             </button>
                           )}
-                          
-                          {/* 👇 BOTÓN ELIMINAR VENTA */}
-                          {esSubgerente && !yaEntregado && v.estado !== 'cancelada' && (
+                          <span style={{ color: '#999', fontSize: '0.75rem' }}>
+                            {v.estado === 'cancelada' ? 'Cancelada' : '✅ Completada'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          {/* 👇 BOTÓN ELIMINAR - PARA SUBGERENTE EN NO ENTREGADOS */}
+                          {puedeEliminar && v.estado !== 'cancelada' && (
                             <button
-                              onClick={() => eliminarVenta(v.id)}
+                              onClick={() => eliminarVenta(v)}
                               style={{
                                 backgroundColor: '#f44336',
                                 color: 'white',
@@ -789,7 +832,7 @@ function Historial() {
                             <button
                               onClick={() => cancelarVenta(v.id)}
                               style={{
-                                backgroundColor: '#f44336',
+                                backgroundColor: '#ff9800',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '4px',

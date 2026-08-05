@@ -10,6 +10,7 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
   const [error, setError] = useState('')
   const [mostrarForm, setMostrarForm] = useState(false)
   const [mensaje, setMensaje] = useState('')
+  const [areas, setAreas] = useState([])
   const [form, setForm] = useState({
     producto_id: '',
     stock: 0,
@@ -34,7 +35,6 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
   const puedeEditar = esSubgerente
   const puedeVer = true
 
-  // 👇 ESTADOS PARA EDICIÓN EN LÍNEA
   const [editandoPrecio, setEditandoPrecio] = useState(null)
   const [editandoStock, setEditandoStock] = useState(null)
 
@@ -42,6 +42,7 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
     cargarInventario()
     if (esSubgerente) {
       cargarTodosProductos()
+      cargarAreas()
     }
   }, [sucursalId])
 
@@ -76,6 +77,59 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
       setTodosProductos(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando productos:', error)
+    }
+  }
+
+  const cargarAreas = async () => {
+    try {
+      const response = await fetch(`${API_URL}/produccion/areas`)
+      const data = await response.json()
+      setAreas(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error cargando áreas:', error)
+      setAreas([])
+    }
+  }
+
+  // 👇 ACTUALIZAR ÁREA DEL PRODUCTO (NUEVO)
+  const actualizarArea = async (productoId, areaId) => {
+    if (!esSubgerente) {
+      alert('⛔ No tienes permisos para asignar áreas')
+      return
+    }
+
+    try {
+      // Primero obtener el producto actual
+      const productoActual = productos.find(p => p.id === productoId)
+      if (!productoActual) return
+
+      const response = await fetch(`${API_URL}/productos/${productoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: productoActual.nombre,
+          categoria: productoActual.categoria || 'General',
+          descripcion: productoActual.descripcion || '',
+          precio: productoActual.precio || 0,
+          precio_mayor: productoActual.precio_mayor || null,
+          cantidad_mayor: productoActual.cantidad_mayor || 0,
+          stock: productoActual.stock || 0,
+          sucursal_id: productoActual.sucursal_id || 3,
+          area_id: areaId || null
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setMensaje('✅ Área asignada correctamente')
+        cargarInventario()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        alert('❌ Error: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('❌ Error asignando área')
     }
   }
 
@@ -249,6 +303,18 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
     return null
   }
 
+  // 👇 OBTENER NOMBRE DEL ÁREA
+  const getAreaNombre = (areaId) => {
+    const area = areas.find(a => a.id === parseInt(areaId))
+    return area ? area.nombre : 'Sin área'
+  }
+
+  // 👇 OBTENER ICONO DEL ÁREA
+  const getAreaIcono = (areaId) => {
+    const area = areas.find(a => a.id === parseInt(areaId))
+    return area ? area.icono : '🏭'
+  }
+
   const formatearPrecio = (precio) => {
     return `RD$ ${Number(precio).toFixed(2)}`
   }
@@ -322,6 +388,30 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
             </p>
             <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#666' }}>
               Puedes ver los productos, pero no agregar, editar ni eliminar
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 👇 BANNER DE ASIGNACIÓN DE ÁREAS (SOLO EN PRINCIPAL) */}
+      {esPrincipal && esSubgerente && (
+        <div style={{
+          backgroundColor: '#e8f5e9',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          borderLeft: '4px solid #4CAF50',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <span style={{ fontSize: '1.5rem' }}>🏷️</span>
+          <div>
+            <p style={{ margin: 0, color: '#1b5e20', fontWeight: 'bold' }}>
+              Asignación de Áreas en Inventario General
+            </p>
+            <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#666' }}>
+              Desde aquí puedes asignar cada producto a su área correspondiente
             </p>
           </div>
         </div>
@@ -484,7 +574,7 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
         </span>
         {!esPrincipal && (
           <span>
-            <strong>Sin precio:</strong> {productos.filter(p => (p.precio_venta || 0) === 0).length}
+            <strong>Sin precio:</strong> {productos.filter(p => (p.precio_venta || p.precio || 0) === 0).length}
           </span>
         )}
         <span>
@@ -492,166 +582,210 @@ function Inventario({ sucursalId: propSucursalId, sucursalNombre: propSucursalNo
         </span>
       </div>
 
-      <table style={{
-        width: '100%',
-        borderCollapse: 'collapse',
+      <div style={{
+        overflowX: 'auto',
         backgroundColor: 'white',
         borderRadius: '8px',
-        overflow: 'hidden',
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
-        <thead>
-          <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
-            <th style={{ padding: '12px', textAlign: 'left' }}>ID</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Producto</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Categoría</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Stock</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Precio</th>
-            <th style={{ padding: '12px', textAlign: 'center' }}>Precio Mayor</th>
-            {esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar && (
-              <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {!Array.isArray(productos) || productos.length === 0 ? (
-            <tr>
-              <td colSpan={esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar ? 7 : 6} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
-                {sucursalId && sucursalId !== 3
-                  ? `No hay productos en ${sucursalNombre}.`
-                  : 'No hay productos en el inventario'}
-              </td>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#003b6f', color: 'white' }}>
+              <th style={{ padding: '10px', textAlign: 'left' }}>ID</th>
+              <th style={{ padding: '10px', textAlign: 'left' }}>Producto</th>
+              <th style={{ padding: '10px', textAlign: 'left' }}>Categoría</th>
+              {esPrincipal && esSubgerente && (
+                <th style={{ padding: '10px', textAlign: 'center' }}>🏷️ Área</th>
+              )}
+              <th style={{ padding: '10px', textAlign: 'center' }}>Stock</th>
+              <th style={{ padding: '10px', textAlign: 'center' }}>Precio</th>
+              {esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar && (
+                <th style={{ padding: '10px', textAlign: 'center' }}>Acciones</th>
+              )}
             </tr>
-          ) : (
-            productos.map((p) => {
-              const precioEsCero = (p.precio_venta || p.precio || 0) === 0
-              const stockEsCero = (p.stock || 0) === 0
-              const esEditable = puedeEditar && !esPrincipal
-              
-              return (
-                <tr key={p.id || Math.random()} style={{ 
-                  borderBottom: '1px solid #eee',
-                  backgroundColor: esPrincipal ? 'white' : (precioEsCero ? '#fff8e1' : 'white')
-                }}>
-                  <td style={{ padding: '12px' }}>{p.id}</td>
-                  <td style={{ padding: '12px' }}>{p.nombre || 'Sin nombre'}</td>
-                  <td style={{ padding: '12px' }}>{p.categoria || 'N/A'}</td>
-                  
-                  {/* 👇 STOCK EDITABLE */}
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    {esEditable ? (
-                      <input
-                        type="number"
-                        min="0"
-                        value={p.stock || 0}
-                        onChange={(e) => {
-                          const nuevoStock = parseInt(e.target.value) || 0
-                          if (nuevoStock >= 0) {
-                            actualizarStock(p.id, nuevoStock)
-                          }
-                        }}
-                        style={{
-                          width: '70px',
-                          padding: '4px 8px',
-                          border: '1px solid #ddd',
-                          borderRadius: '4px',
-                          textAlign: 'center',
-                          backgroundColor: stockEsCero ? '#fff3e0' : 'white'
-                        }}
-                      />
-                    ) : (
-                      <span style={{ 
-                        color: stockEsCero ? '#f44336' : '#333',
-                        fontWeight: stockEsCero ? 'bold' : 'normal'
-                      }}>
-                        {p.stock || 0}
-                      </span>
+          </thead>
+          <tbody>
+            {!Array.isArray(productos) || productos.length === 0 ? (
+              <tr>
+                <td colSpan={esPrincipal && esSubgerente ? 7 : 6} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                  {sucursalId && sucursalId !== 3
+                    ? `No hay productos en ${sucursalNombre}.`
+                    : 'No hay productos en el inventario'}
+                </td>
+              </tr>
+            ) : (
+              productos.map((p) => {
+                const precioEsCero = (p.precio_venta || p.precio || 0) === 0
+                const stockEsCero = (p.stock || 0) === 0
+                const esEditable = puedeEditar && !esPrincipal
+                const sinArea = !p.area_id
+                
+                return (
+                  <tr key={p.id || Math.random()} style={{ 
+                    borderBottom: '1px solid #eee',
+                    backgroundColor: esPrincipal ? 'white' : (precioEsCero ? '#fff8e1' : 'white')
+                  }}>
+                    <td style={{ padding: '10px' }}>{p.id}</td>
+                    <td style={{ padding: '10px' }}>{p.nombre || 'Sin nombre'}</td>
+                    <td style={{ padding: '10px' }}>{p.categoria || 'N/A'}</td>
+                    
+                    {/* 👇 COLUMNA DE ÁREA (SOLO EN PRINCIPAL Y PARA SUBGERENTE) */}
+                    {esPrincipal && esSubgerente && (
+                      <td style={{ padding: '10px', textAlign: 'center' }}>
+                        <select
+                          value={p.area_id || ''}
+                          onChange={(e) => {
+                            const valor = e.target.value
+                            const nuevoProductos = productos.map(prod => {
+                              if (prod.id === p.id) {
+                                return { ...prod, area_id: valor ? parseInt(valor) : null }
+                              }
+                              return prod
+                            })
+                            setProductos(nuevosProductos)
+                          }}
+                          onBlur={() => {
+                            const productoActual = productos.find(prod => prod.id === p.id)
+                            if (productoActual) {
+                              actualizarArea(p.id, p.area_id)
+                            }
+                          }}
+                          style={{
+                            padding: '6px 10px',
+                            border: '2px solid ' + (sinArea ? '#ff9800' : '#4CAF50'),
+                            borderRadius: '6px',
+                            backgroundColor: sinArea ? '#fff3e0' : 'white',
+                            fontSize: '0.85rem',
+                            minWidth: '140px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <option value="">📋 Sin área</option>
+                          {areas.map(a => (
+                            <option key={a.id} value={a.id}>
+                              {a.icono || '🏭'} {a.nombre}
+                            </option>
+                          ))}
+                        </select>
+                        {sinArea && (
+                          <span style={{ fontSize: '0.6rem', color: '#ff9800', display: 'block' }}>
+                            ⚠️ Asignar área
+                          </span>
+                        )}
+                      </td>
                     )}
-                    {stockEsCero && (
-                      <span style={{ fontSize: '0.6rem', color: '#ff9800', display: 'block' }}>
-                        ⚠️ Sin stock
-                      </span>
-                    )}
-                  </td>
 
-                  {/* 👇 PRECIO EDITABLE */}
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    {esEditable ? (
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={p.precio_venta || p.precio || 0}
-                        onChange={(e) => {
-                          const nuevoPrecio = parseFloat(e.target.value) || 0
-                          if (nuevoPrecio >= 0) {
-                            actualizarPrecio(p.id, nuevoPrecio)
-                          }
-                        }}
-                        style={{
-                          width: '120px',
-                          padding: '4px 8px',
-                          border: '1px solid #ddd',
-                          borderRadius: '4px',
-                          textAlign: 'center',
-                          backgroundColor: precioEsCero ? '#fff3e0' : 'white',
-                          fontWeight: precioEsCero ? 'bold' : 'normal',
-                          color: precioEsCero ? '#ff9800' : '#333'
-                        }}
-                      />
-                    ) : (
-                      <span style={{ color: '#666' }}>
-                        {formatearPrecio(p.precio || p.precio_venta || 0)}
-                      </span>
-                    )}
-                    {!esPrincipal && precioEsCero && (
-                      <span style={{ fontSize: '0.6rem', color: '#ff9800', display: 'block' }}>
-                        ⚠️ Configurar precio
-                      </span>
-                    )}
-                    {esPrincipal && (
-                      <span style={{ fontSize: '0.6rem', color: '#666', display: 'block' }}>
-                        Precio fijo
-                      </span>
-                    )}
-                  </td>
-
-                  {/* 👇 PRECIO MAYOR */}
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    {p.precio_mayor ? `RD$ ${Number(p.precio_mayor).toFixed(2)}` : 'N/A'}
-                  </td>
-
-                  {esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar && (
-                    <td style={{ padding: '12px', textAlign: 'center' }}>
-                      <button
-                        onClick={() => handleEliminarProducto(p.id)}
-                        style={{
-                          backgroundColor: '#f44336',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          padding: '4px 12px',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = '#d32f2f'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = '#f44336'}
-                      >
-                        🗑️ Eliminar
-                      </button>
+                    {/* 👇 STOCK EDITABLE */}
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                      {esEditable ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={p.stock || 0}
+                          onChange={(e) => {
+                            const nuevoStock = parseInt(e.target.value) || 0
+                            if (nuevoStock >= 0) {
+                              actualizarStock(p.id, nuevoStock)
+                            }
+                          }}
+                          style={{
+                            width: '70px',
+                            padding: '4px 8px',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            textAlign: 'center',
+                            backgroundColor: stockEsCero ? '#fff3e0' : 'white'
+                          }}
+                        />
+                      ) : (
+                        <span style={{ 
+                          color: stockEsCero ? '#f44336' : '#333',
+                          fontWeight: stockEsCero ? 'bold' : 'normal'
+                        }}>
+                          {p.stock || 0}
+                        </span>
+                      )}
+                      {stockEsCero && (
+                        <span style={{ fontSize: '0.6rem', color: '#ff9800', display: 'block' }}>
+                          ⚠️ Sin stock
+                        </span>
+                      )}
                     </td>
-                  )}
-                  {esSubgerente && sucursalId && sucursalId !== 3 && !puedeEditar && (
-                    <td style={{ padding: '12px', textAlign: 'center', color: '#999', fontSize: '0.8rem' }}>
-                      🔒 Solo lectura
+
+                    {/* 👇 PRECIO EDITABLE */}
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                      {esEditable ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={p.precio_venta || p.precio || 0}
+                          onChange={(e) => {
+                            const nuevoPrecio = parseFloat(e.target.value) || 0
+                            if (nuevoPrecio >= 0) {
+                              actualizarPrecio(p.id, nuevoPrecio)
+                            }
+                          }}
+                          style={{
+                            width: '120px',
+                            padding: '4px 8px',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            textAlign: 'center',
+                            backgroundColor: precioEsCero ? '#fff3e0' : 'white',
+                            fontWeight: precioEsCero ? 'bold' : 'normal',
+                            color: precioEsCero ? '#ff9800' : '#333'
+                          }}
+                        />
+                      ) : (
+                        <span style={{ color: '#666' }}>
+                          {formatearPrecio(p.precio || p.precio_venta || 0)}
+                        </span>
+                      )}
+                      {!esPrincipal && precioEsCero && (
+                        <span style={{ fontSize: '0.6rem', color: '#ff9800', display: 'block' }}>
+                          ⚠️ Configurar precio
+                        </span>
+                      )}
+                      {esPrincipal && (
+                        <span style={{ fontSize: '0.6rem', color: '#666', display: 'block' }}>
+                          Precio fijo
+                        </span>
+                      )}
                     </td>
-                  )}
-                </tr>
-              )
-            })
-          )}
-        </tbody>
-      </table>
+
+                    {esSubgerente && sucursalId && sucursalId !== 3 && puedeEditar && (
+                      <td style={{ padding: '10px', textAlign: 'center' }}>
+                        <button
+                          onClick={() => handleEliminarProducto(p.id)}
+                          style={{
+                            backgroundColor: '#f44336',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = '#d32f2f'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = '#f44336'}
+                        >
+                          🗑️ Eliminar
+                        </button>
+                      </td>
+                    )}
+                    {esSubgerente && sucursalId && sucursalId !== 3 && !puedeEditar && (
+                      <td style={{ padding: '10px', textAlign: 'center', color: '#999', fontSize: '0.8rem' }}>
+                        🔒 Solo lectura
+                      </td>
+                    )}
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
     </AdminLayout>
   )
 }

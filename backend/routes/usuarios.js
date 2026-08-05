@@ -7,20 +7,39 @@ const pool = require('../db');
 // ============================================
 router.get('/', async (req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT 
+        const { sucursal_id } = req.query;
+        
+        let query = `
+            SELECT 
                 u.id, 
                 u.nombre, 
                 u.correo, 
                 u.rol, 
                 u.sucursal_id,
+                u.area_id,
                 s.nombre as sucursal_nombre,
+                a.nombre as area_nombre,
+                a.icono as area_icono,
+                a.color as area_color,
                 u.resetear_password,
                 u.created_at
              FROM usuarios u
              LEFT JOIN sucursales s ON u.sucursal_id = s.id
-             ORDER BY u.nombre`
-        );
+             LEFT JOIN areas a ON u.area_id = a.id
+             WHERE 1=1
+        `;
+        let params = [];
+        let paramIndex = 1;
+
+        if (sucursal_id) {
+            query += ` AND u.sucursal_id = $${paramIndex}`;
+            params.push(sucursal_id);
+            paramIndex++;
+        }
+
+        query += ` ORDER BY u.nombre`;
+
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error) {
         console.error('❌ Error en GET /usuarios:', error.message);
@@ -45,11 +64,15 @@ router.get('/:id', async (req, res) => {
                 u.correo, 
                 u.rol, 
                 u.sucursal_id,
+                u.area_id,
                 s.nombre as sucursal_nombre,
+                a.nombre as area_nombre,
+                a.icono as area_icono,
                 u.resetear_password,
                 u.created_at
              FROM usuarios u
              LEFT JOIN sucursales s ON u.sucursal_id = s.id
+             LEFT JOIN areas a ON u.area_id = a.id
              WHERE u.id = $1`,
             [id]
         );
@@ -77,7 +100,7 @@ router.get('/:id', async (req, res) => {
 // ============================================
 router.post('/', async (req, res) => {
     try {
-        const { nombre, correo, password, rol, sucursal_id } = req.body;
+        const { nombre, correo, password, rol, sucursal_id, area_id } = req.body;
 
         // Validar que el correo no esté registrado
         const existe = await pool.query(
@@ -94,10 +117,10 @@ router.post('/', async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO usuarios 
-             (nombre, correo, password, rol, sucursal_id, resetear_password)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             RETURNING id, nombre, correo, rol, sucursal_id`,
-            [nombre, correo, password || '123456', rol || 'vendedor', sucursal_id || null, false]
+             (nombre, correo, password, rol, sucursal_id, area_id, resetear_password)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING id, nombre, correo, rol, sucursal_id, area_id`,
+            [nombre, correo, password || '123456', rol || 'vendedor', sucursal_id || null, area_id || null, false]
         );
 
         res.json({
@@ -120,7 +143,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre, correo, rol, sucursal_id, password } = req.body;
+        const { nombre, correo, rol, sucursal_id, area_id, password } = req.body;
 
         // Verificar que el usuario existe
         const existe = await pool.query(
@@ -141,10 +164,11 @@ router.put('/:id', async (req, res) => {
                 correo = $2, 
                 rol = $3, 
                 sucursal_id = $4,
+                area_id = $5,
                 updated_at = NOW()
         `;
-        let params = [nombre, correo, rol, sucursal_id || null];
-        let paramIndex = 5;
+        let params = [nombre, correo, rol, sucursal_id || null, area_id || null];
+        let paramIndex = 6;
 
         // Si se envió contraseña, actualizarla
         if (password && password.trim() !== '') {
@@ -153,20 +177,27 @@ router.put('/:id', async (req, res) => {
             paramIndex++;
         }
 
-        query += ` WHERE id = $${paramIndex} RETURNING id, nombre, correo, rol, sucursal_id`;
+        query += ` WHERE id = $${paramIndex} RETURNING id, nombre, correo, rol, sucursal_id, area_id`;
         params.push(id);
 
         const result = await pool.query(query, params);
 
-        // Obtener el nombre de la sucursal
+        // Obtener nombres de sucursal y área
         const sucursalResult = await pool.query(
             'SELECT nombre FROM sucursales WHERE id = $1',
             [result.rows[0].sucursal_id]
         );
 
+        const areaResult = await pool.query(
+            'SELECT nombre, icono FROM areas WHERE id = $1',
+            [result.rows[0].area_id]
+        );
+
         const usuarioResponse = {
             ...result.rows[0],
-            sucursal_nombre: sucursalResult.rows[0]?.nombre || null
+            sucursal_nombre: sucursalResult.rows[0]?.nombre || null,
+            area_nombre: areaResult.rows[0]?.nombre || null,
+            area_icono: areaResult.rows[0]?.icono || null
         };
 
         res.json({
@@ -190,7 +221,6 @@ router.put('/:id/resetear', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Verificar que el usuario existe
         const existe = await pool.query(
             'SELECT id FROM usuarios WHERE id = $1',
             [id]
@@ -228,7 +258,6 @@ router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Verificar que el usuario existe
         const existe = await pool.query(
             'SELECT id FROM usuarios WHERE id = $1',
             [id]
@@ -264,7 +293,6 @@ router.put('/:id/sucursal', async (req, res) => {
         const { id } = req.params;
         const { sucursal_id } = req.body;
 
-        // Verificar que el usuario existe
         const existe = await pool.query(
             'SELECT id FROM usuarios WHERE id = $1',
             [id]
@@ -277,7 +305,6 @@ router.put('/:id/sucursal', async (req, res) => {
             });
         }
 
-        // Verificar que la sucursal existe
         const sucursalExiste = await pool.query(
             'SELECT id, nombre FROM sucursales WHERE id = $1',
             [sucursal_id]
@@ -309,6 +336,21 @@ router.put('/:id/sucursal', async (req, res) => {
 });
 
 // ============================================
+// GET /usuarios/areas - Obtener todas las áreas
+// ============================================
+router.get('/areas', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT id, nombre, icono, color FROM areas ORDER BY nombre`
+        );
+        res.json(result.rows || []);
+    } catch (error) {
+        console.error('❌ Error en GET /usuarios/areas:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
 // POST /usuarios/asignar-masivos - Asignar sucursal a múltiples usuarios
 // ============================================
 router.post('/asignar-masivos', async (req, res) => {
@@ -322,7 +364,6 @@ router.post('/asignar-masivos', async (req, res) => {
             });
         }
 
-        // Verificar que la sucursal existe
         const sucursalExiste = await pool.query(
             'SELECT id, nombre FROM sucursales WHERE id = $1',
             [sucursal_id]
@@ -335,7 +376,6 @@ router.post('/asignar-masivos', async (req, res) => {
             });
         }
 
-        // Actualizar todos los usuarios
         const result = await pool.query(
             `UPDATE usuarios 
              SET sucursal_id = $1, updated_at = NOW() 

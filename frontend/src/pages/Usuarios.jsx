@@ -5,6 +5,7 @@ import API_URL from '../config'
 function Usuarios() {
   const [usuarios, setUsuarios] = useState([])
   const [sucursales, setSucursales] = useState([])
+  const [areas, setAreas] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editando, setEditando] = useState(null)
@@ -14,12 +15,17 @@ function Usuarios() {
     correo: '',
     password: '',
     rol: 'vendedor',
-    sucursal_id: ''
+    sucursal_id: '',
+    area_id: ''
   })
+
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+  const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
 
   useEffect(() => {
     cargarUsuarios()
     cargarSucursales()
+    cargarAreas()
   }, [])
 
   const cargarUsuarios = async () => {
@@ -44,6 +50,16 @@ function Usuarios() {
     }
   }
 
+  const cargarAreas = async () => {
+    try {
+      const response = await fetch(`${API_URL}/usuarios/areas`)
+      const data = await response.json()
+      setAreas(data)
+    } catch (error) {
+      console.error('Error cargando áreas:', error)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setCargando(true)
@@ -57,7 +73,8 @@ function Usuarios() {
         nombre: form.nombre,
         correo: form.correo,
         rol: form.rol,
-        sucursal_id: form.sucursal_id || null
+        sucursal_id: form.sucursal_id || null,
+        area_id: form.area_id || null
       }
 
       if (form.password) {
@@ -74,7 +91,7 @@ function Usuarios() {
 
       if (data.success) {
         setMensaje(editando ? '✅ Usuario actualizado correctamente' : '✅ Usuario creado correctamente')
-        setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal_id: '' })
+        setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal_id: '', area_id: '' })
         setMostrarForm(false)
         setEditando(null)
         cargarUsuarios()
@@ -135,10 +152,21 @@ function Usuarios() {
       correo: usuario.correo,
       password: '',
       rol: usuario.rol,
-      sucursal_id: usuario.sucursal_id || ''
+      sucursal_id: usuario.sucursal_id || '',
+      area_id: usuario.area_id || ''
     })
     setEditando(usuario.id)
     setMostrarForm(true)
+  }
+
+  const getAreaNombre = (areaId) => {
+    const area = areas.find(a => a.id === parseInt(areaId))
+    return area ? area.nombre : 'Sin área'
+  }
+
+  const getAreaIcono = (areaId) => {
+    const area = areas.find(a => a.id === parseInt(areaId))
+    return area ? area.icono : '🏭'
   }
 
   if (cargando) {
@@ -167,27 +195,29 @@ function Usuarios() {
         </div>
       )}
 
-      <button
-        onClick={() => {
-          setMostrarForm(!mostrarForm)
-          setEditando(null)
-          setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal_id: '' })
-        }}
-        style={{
-          marginBottom: '20px',
-          padding: '10px 20px',
-          backgroundColor: '#003b6f',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          fontSize: '1rem'
-        }}
-      >
-        {mostrarForm ? '✕ Cancelar' : '➕ Nuevo Usuario'}
-      </button>
+      {esAdmin && (
+        <button
+          onClick={() => {
+            setMostrarForm(!mostrarForm)
+            setEditando(null)
+            setForm({ nombre: '', correo: '', password: '', rol: 'vendedor', sucursal_id: '', area_id: '' })
+          }}
+          style={{
+            marginBottom: '20px',
+            padding: '10px 20px',
+            backgroundColor: '#003b6f',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '1rem'
+          }}
+        >
+          {mostrarForm ? '✕ Cancelar' : '➕ Nuevo Usuario'}
+        </button>
+      )}
 
-      {mostrarForm && (
+      {mostrarForm && esAdmin && (
         <form onSubmit={handleSubmit} style={{
           backgroundColor: '#f5f7fb',
           padding: '25px',
@@ -251,10 +281,12 @@ function Usuarios() {
                 <option value="chofer">🚚 Chofer</option>
                 <option value="subgerente">📊 Subgerente</option>
                 <option value="dueno">👑 Dueño</option>
+                <option value="admin">🛡️ Admin</option>
+                <option value="operario">🔧 Operario</option>
               </select>
             </div>
 
-            <div style={{ gridColumn: '1 / -1' }}>
+            <div>
               <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Sucursal</label>
               <select
                 value={form.sucursal_id}
@@ -268,6 +300,25 @@ function Usuarios() {
               </select>
               <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '5px' }}>
                 ⚠️ Si el usuario no tiene sucursal, no verá el menú completo
+              </p>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>🏷️ Área (solo para Supervisores)</label>
+              <select
+                value={form.area_id}
+                onChange={(e) => setForm({ ...form, area_id: e.target.value })}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px' }}
+              >
+                <option value="">Sin área</option>
+                {areas.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {a.icono || '🏭'} {a.nombre}
+                  </option>
+                ))}
+              </select>
+              <p style={{ fontSize: '0.75rem', color: '#ff9800', marginTop: '5px' }}>
+                ⚠️ Los supervisores deben tener un área asignada para ver sus productos
               </p>
             </div>
           </div>
@@ -308,6 +359,7 @@ function Usuarios() {
               <th style={{ padding: '12px', textAlign: 'left' }}>Nombre</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Correo</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Rol</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>🏷️ Área</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Sucursal</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
@@ -315,80 +367,115 @@ function Usuarios() {
           <tbody>
             {usuarios.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                   No hay usuarios registrados
                 </td>
               </tr>
             ) : (
-              usuarios.map((u) => (
-                <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px' }}>{u.id}</td>
-                  <td style={{ padding: '12px' }}>{u.nombre}</td>
-                  <td style={{ padding: '12px' }}>{u.correo}</td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <span style={{
-                      backgroundColor: u.rol === 'dueno' ? '#d32f2f' :
-                                     u.rol === 'subgerente' ? '#003b6f' :
-                                     u.rol === 'supervisor' ? '#ff9800' :
-                                     u.rol === 'chofer' ? '#4CAF50' : '#757575',
-                      color: 'white',
-                      padding: '2px 12px',
-                      borderRadius: '12px',
-                      fontSize: '0.8rem'
-                    }}>
-                      {u.rol}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    {u.sucursal_nombre || u.sucursal || (
-                      <span style={{ color: '#f44336', fontWeight: 'bold' }}>⚠️ Sin sucursal</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => handleEdit(u)}
-                      style={{
-                        backgroundColor: '#2196F3',
+              usuarios.map((u) => {
+                const esSupervisor = u.rol === 'supervisor'
+                return (
+                  <tr key={u.id} style={{ 
+                    borderBottom: '1px solid #eee',
+                    backgroundColor: esSupervisor && !u.area_id ? '#fff8e1' : 'white'
+                  }}>
+                    <td style={{ padding: '12px' }}>{u.id}</td>
+                    <td style={{ padding: '12px' }}>{u.nombre}</td>
+                    <td style={{ padding: '12px' }}>{u.correo}</td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      <span style={{
+                        backgroundColor: u.rol === 'dueno' ? '#d32f2f' :
+                                       u.rol === 'admin' ? '#6a1b9a' :
+                                       u.rol === 'subgerente' ? '#003b6f' :
+                                       u.rol === 'supervisor' ? '#ff9800' :
+                                       u.rol === 'chofer' ? '#4CAF50' :
+                                       u.rol === 'operario' ? '#795548' : '#757575',
                         color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '4px 10px',
-                        cursor: 'pointer',
-                        marginRight: '5px'
-                      }}
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => handleReset(u.id)}
-                      style={{
-                        backgroundColor: '#ff9800',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '4px 10px',
-                        cursor: 'pointer',
-                        marginRight: '5px'
-                      }}
-                    >
-                      🔑
-                    </button>
-                    <button
-                      onClick={() => handleDelete(u.id)}
-                      style={{
-                        backgroundColor: '#f44336',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '4px 10px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      🗑️
-                    </button>
-                  </td>
-                </tr>
-              ))
+                        padding: '2px 12px',
+                        borderRadius: '12px',
+                        fontSize: '0.8rem'
+                      }}>
+                        {u.rol}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {esSupervisor ? (
+                        u.area_id ? (
+                          <span style={{
+                            backgroundColor: '#e3f2fd',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '0.8rem',
+                            color: '#003b6f'
+                          }}>
+                            {getAreaIcono(u.area_id)} {getAreaNombre(u.area_id)}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#ff9800', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                            ⚠️ Sin área
+                          </span>
+                        )
+                      ) : (
+                        <span style={{ color: '#999', fontSize: '0.75rem' }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {u.sucursal_nombre || u.sucursal || (
+                        <span style={{ color: '#f44336', fontWeight: 'bold' }}>⚠️ Sin sucursal</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {esAdmin && (
+                        <>
+                          <button
+                            onClick={() => handleEdit(u)}
+                            style={{
+                              backgroundColor: '#2196F3',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 10px',
+                              cursor: 'pointer',
+                              marginRight: '5px'
+                            }}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleReset(u.id)}
+                            style={{
+                              backgroundColor: '#ff9800',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 10px',
+                              cursor: 'pointer',
+                              marginRight: '5px'
+                            }}
+                          >
+                            🔑
+                          </button>
+                          {u.id !== usuario.id && (
+                            <button
+                              onClick={() => handleDelete(u.id)}
+                              style={{
+                                backgroundColor: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '4px 10px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>

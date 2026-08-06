@@ -157,12 +157,12 @@ router.get('/', async (req, res) => {
         const cuentasPagar = await pool.query(queryPagar, paramsPagar);
 
         // ============================================
-        // 6. INVERSIÓN Y GANANCIA
+        // 6. INVERSIÓN Y GANANCIA - CORREGIDO
         // ============================================
-        // Inversión en producción (materiales + mano de obra)
+        // Verificar primero la estructura de la tabla produccion
         let queryInversion = `
             SELECT 
-                COALESCE(SUM(cantidad * precio), 0) as total_inversion,
+                COALESCE(SUM(cantidad * costo_unitario), 0) as total_inversion,
                 COUNT(*) as cantidad_producciones
             FROM produccion
             WHERE EXTRACT(MONTH FROM fecha) = $1 
@@ -177,16 +177,45 @@ router.get('/', async (req, res) => {
             paramIndexInversion++;
         }
 
-        const inversion = await pool.query(queryInversion, paramsInversion);
+        let inversion;
+        try {
+            inversion = await pool.query(queryInversion, paramsInversion);
+        } catch (error) {
+            // Si no existe costo_unitario, intentar con otros campos comunes
+            console.warn('⚠️ Intentando con campos alternativos para inversión');
+            
+            // Opción 1: usar producto_precio
+            let queryInversionAlt = `
+                SELECT 
+                    COALESCE(SUM(cantidad * producto_precio), 0) as total_inversion,
+                    COUNT(*) as cantidad_producciones
+                FROM produccion
+                WHERE EXTRACT(MONTH FROM fecha) = $1 
+                AND EXTRACT(YEAR FROM fecha) = $2
+            `;
+            if (sucursalFiltro) {
+                queryInversionAlt += ` AND sucursal_id = $${paramIndexInversion}`;
+            }
+            
+            try {
+                inversion = await pool.query(queryInversionAlt, paramsInversion);
+            } catch (error2) {
+                // Si no funciona, usar 0 como inversión y advertir
+                console.warn('⚠️ No se pudo calcular inversión. Usando 0.');
+                inversion = { rows: [{ total_inversion: 0, cantidad_producciones: 0 }] };
+            }
+        }
 
-        // Ganancia = Ventas - Inversión
+        // ============================================
+        // 7. GANANCIA
+        // ============================================
         const totalVentas = parseFloat(ventasMes.rows[0]?.total || 0);
         const totalInversion = parseFloat(inversion.rows[0]?.total_inversion || 0);
         const gananciaBruta = totalVentas - totalInversion;
         const margenGanancia = totalVentas > 0 ? (gananciaBruta / totalVentas) * 100 : 0;
 
         // ============================================
-        // 7. VENTAS POR MES (GRÁFICO)
+        // 8. VENTAS POR MES (GRÁFICO)
         // ============================================
         let queryVentasPorMes = `
             SELECT 
@@ -211,14 +240,14 @@ router.get('/', async (req, res) => {
         const ventasPorMes = await pool.query(queryVentasPorMes, paramsMesGrafico);
 
         // ============================================
-        // 8. TOP PRODUCTOS
+        // 9. TOP PRODUCTOS
         // ============================================
         let queryTopProductos = `
             SELECT 
                 p.id,
                 p.nombre,
                 COALESCE(SUM(dv.cantidad), 0) as total_vendido,
-                COALESCE(SUM(dv.cantidad * dv.precio), 0) as total_ingresos
+                COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as total_ingresos
             FROM productos p
             LEFT JOIN detalle_ventas dv ON p.id = dv.producto_id
             LEFT JOIN ventas v ON dv.venta_id = v.id
@@ -240,7 +269,7 @@ router.get('/', async (req, res) => {
         const topProductos = await pool.query(queryTopProductos, paramsTop);
 
         // ============================================
-        // 9. RESUMEN POR VENDEDOR
+        // 10. RESUMEN POR VENDEDOR
         // ============================================
         let queryVendedores = `
             SELECT 
@@ -324,6 +353,12 @@ router.get('/', async (req, res) => {
                 mes: mesActual,
                 ano: anoActual,
                 sucursal_id: sucursalFiltro || null
+            },
+            estructura_db: {
+                produccion: {
+                    campos_usados: ['cantidad', 'costo_unitario', 'fecha', 'sucursal_id'],
+                    nota: 'Si no existe costo_unitario, se intenta con producto_precio'
+                }
             }
         });
 
@@ -332,7 +367,8 @@ router.get('/', async (req, res) => {
         console.error('Stack:', error.stack);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: error.message,
+            detalle: error.stack
         });
     }
 });

@@ -3,112 +3,51 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /dashboard - Dashboard de última generación
+// GET /dashboard - Obtener datos completos del dashboard
 // ============================================
 router.get('/', async (req, res) => {
     try {
-        const { mes, ano, sucursal_id } = req.query;
+        const { mes, ano, sucursal_id, usuario_id } = req.query;
         
         const mesActual = mes || new Date().getMonth() + 1;
         const anoActual = ano || new Date().getFullYear();
         const sucursalFiltro = sucursal_id || null;
         
-        const hoy = new Date().toISOString().split('T')[0];
-        
         console.log('📊 Dashboard - Mes:', mesActual, 'Año:', anoActual, 'Sucursal:', sucursalFiltro);
 
         // ============================================
-        // 1. VENTAS DEL DÍA
+        // 1. RESUMEN FINANCIERO - VENTAS DEL MES
         // ============================================
-        let queryVentasDia = `
+        let queryVentas = `
             SELECT 
-                COUNT(*) as cantidad,
-                COALESCE(SUM(total), 0) as total,
-                COALESCE(SUM(CASE WHEN tipo_pago = 'Crédito' THEN total ELSE 0 END), 0) as credito,
-                COALESCE(SUM(CASE WHEN tipo_pago != 'Crédito' THEN total ELSE 0 END), 0) as contado
-            FROM ventas 
-            WHERE DATE(fecha) = $1
-            AND estado != 'cancelada'
-        `;
-        let paramsDia = [hoy];
-        let paramIndexDia = 2;
-
-        if (sucursalFiltro) {
-            queryVentasDia += ` AND sucursal_id = $${paramIndexDia}`;
-            paramsDia.push(sucursalFiltro);
-            paramIndexDia++;
-        }
-
-        const ventasDia = await pool.query(queryVentasDia, paramsDia);
-
-        // ============================================
-        // 2. VENTAS DEL MES
-        // ============================================
-        let queryVentasMes = `
-            SELECT 
-                COUNT(*) as cantidad,
-                COALESCE(SUM(total), 0) as total,
-                COALESCE(SUM(CASE WHEN tipo_pago = 'Crédito' THEN total ELSE 0 END), 0) as credito,
-                COALESCE(SUM(CASE WHEN tipo_pago != 'Crédito' THEN total ELSE 0 END), 0) as contado
+                COALESCE(SUM(total), 0) as total_ventas,
+                COUNT(*) as cantidad_ventas,
+                COALESCE(SUM(CASE WHEN tipo_pago = 'Crédito' THEN total ELSE 0 END), 0) as ventas_credito,
+                COALESCE(SUM(CASE WHEN tipo_pago != 'Crédito' THEN total ELSE 0 END), 0) as ventas_contado
             FROM ventas 
             WHERE EXTRACT(MONTH FROM fecha) = $1 
             AND EXTRACT(YEAR FROM fecha) = $2
             AND estado != 'cancelada'
         `;
-        let paramsMes = [mesActual, anoActual];
-        let paramIndexMes = 3;
+        let paramsVentas = [mesActual, anoActual];
+        let paramIndexVentas = 3;
 
         if (sucursalFiltro) {
-            queryVentasMes += ` AND sucursal_id = $${paramIndexMes}`;
-            paramsMes.push(sucursalFiltro);
-            paramIndexMes++;
+            queryVentas += ` AND sucursal_id = $${paramIndexVentas}`;
+            paramsVentas.push(sucursalFiltro);
+            paramIndexVentas++;
         }
 
-        const ventasMes = await pool.query(queryVentasMes, paramsMes);
+        const ventasMes = await pool.query(queryVentas, paramsVentas);
 
         // ============================================
-        // 3. VENTAS DEL AÑO
-        // ============================================
-        let queryVentasAno = `
-            SELECT 
-                COUNT(*) as cantidad,
-                COALESCE(SUM(total), 0) as total,
-                COALESCE(SUM(CASE WHEN tipo_pago = 'Crédito' THEN total ELSE 0 END), 0) as credito,
-                COALESCE(SUM(CASE WHEN tipo_pago != 'Crédito' THEN total ELSE 0 END), 0) as contado
-            FROM ventas 
-            WHERE EXTRACT(YEAR FROM fecha) = $1
-            AND estado != 'cancelada'
-        `;
-        let paramsAno = [anoActual];
-        let paramIndexAno = 2;
-
-        if (sucursalFiltro) {
-            queryVentasAno += ` AND sucursal_id = $${paramIndexAno}`;
-            paramsAno.push(sucursalFiltro);
-            paramIndexAno++;
-        }
-
-        const ventasAno = await pool.query(queryVentasAno, paramsAno);
-
-        // ============================================
-        // 4. CUENTAS POR COBRAR
+        // 2. CUENTAS POR COBRAR (usando creditos)
         // ============================================
         let queryCobrar = `
             SELECT 
                 COALESCE(SUM(saldo), 0) as total_pendiente,
                 COUNT(*) as cantidad,
-                COALESCE(SUM(CASE 
-                    WHEN estado = 'vencido' AND fecha_vencimiento < NOW() - INTERVAL '30 days' THEN saldo 
-                    ELSE 0 
-                END), 0) as vencido_30,
-                COALESCE(SUM(CASE 
-                    WHEN estado = 'vencido' AND fecha_vencimiento < NOW() - INTERVAL '60 days' THEN saldo 
-                    ELSE 0 
-                END), 0) as vencido_60,
-                COALESCE(SUM(CASE 
-                    WHEN estado = 'vencido' AND fecha_vencimiento < NOW() - INTERVAL '90 days' THEN saldo 
-                    ELSE 0 
-                END), 0) as vencido_90
+                COALESCE(SUM(CASE WHEN estado = 'vencido' THEN saldo ELSE 0 END), 0) as vencido
             FROM creditos 
             WHERE estado IN ('pendiente', 'vencido')
         `;
@@ -124,26 +63,14 @@ router.get('/', async (req, res) => {
         const cuentasCobrar = await pool.query(queryCobrar, paramsCobrar);
 
         // ============================================
-        // 5. CUENTAS POR PAGAR
+        // 3. CUENTAS POR PAGAR
         // ============================================
         let queryPagar = `
             SELECT 
                 COALESCE(SUM(monto), 0) as total_pendiente,
-                COUNT(*) as cantidad,
-                COALESCE(SUM(CASE 
-                    WHEN estado = 'vencido' AND fecha_vencimiento < NOW() - INTERVAL '30 days' THEN monto 
-                    ELSE 0 
-                END), 0) as vencido_30,
-                COALESCE(SUM(CASE 
-                    WHEN estado = 'vencido' AND fecha_vencimiento < NOW() - INTERVAL '60 days' THEN monto 
-                    ELSE 0 
-                END), 0) as vencido_60,
-                COALESCE(SUM(CASE 
-                    WHEN estado = 'vencido' AND fecha_vencimiento < NOW() - INTERVAL '90 days' THEN monto 
-                    ELSE 0 
-                END), 0) as vencido_90
+                COUNT(*) as cantidad
             FROM cuentas_por_pagar 
-            WHERE estado IN ('pendiente', 'vencido')
+            WHERE estado = 'pendiente'
         `;
         let paramsPagar = [];
         let paramIndexPagar = 1;
@@ -157,97 +84,120 @@ router.get('/', async (req, res) => {
         const cuentasPagar = await pool.query(queryPagar, paramsPagar);
 
         // ============================================
-        // 6. INVERSIÓN Y GANANCIA - CORREGIDO
+        // 4. OBJETIVOS DEL MES
         // ============================================
-        // Verificar primero la estructura de la tabla produccion
-        let queryInversion = `
+        let queryObjetivos = `
             SELECT 
-                COALESCE(SUM(cantidad * costo_unitario), 0) as total_inversion,
-                COUNT(*) as cantidad_producciones
-            FROM produccion
-            WHERE EXTRACT(MONTH FROM fecha) = $1 
-            AND EXTRACT(YEAR FROM fecha) = $2
+                COALESCE(meta_ventas, 0) as meta_total
+            FROM objetivos_mensuales 
+            WHERE mes = $1 AND ano = $2
         `;
-        let paramsInversion = [mesActual, anoActual];
-        let paramIndexInversion = 3;
+        let paramsObjetivos = [mesActual, anoActual];
+        let paramIndexObjetivos = 3;
 
         if (sucursalFiltro) {
-            queryInversion += ` AND sucursal_id = $${paramIndexInversion}`;
-            paramsInversion.push(sucursalFiltro);
-            paramIndexInversion++;
+            queryObjetivos += ` AND sucursal_id = $${paramIndexObjetivos}`;
+            paramsObjetivos.push(sucursalFiltro);
+            paramIndexObjetivos++;
         }
 
-        let inversion;
-        try {
-            inversion = await pool.query(queryInversion, paramsInversion);
-        } catch (error) {
-            // Si no existe costo_unitario, intentar con otros campos comunes
-            console.warn('⚠️ Intentando con campos alternativos para inversión');
-            
-            // Opción 1: usar producto_precio
-            let queryInversionAlt = `
-                SELECT 
-                    COALESCE(SUM(cantidad * producto_precio), 0) as total_inversion,
-                    COUNT(*) as cantidad_producciones
-                FROM produccion
-                WHERE EXTRACT(MONTH FROM fecha) = $1 
-                AND EXTRACT(YEAR FROM fecha) = $2
-            `;
-            if (sucursalFiltro) {
-                queryInversionAlt += ` AND sucursal_id = $${paramIndexInversion}`;
-            }
-            
-            try {
-                inversion = await pool.query(queryInversionAlt, paramsInversion);
-            } catch (error2) {
-                // Si no funciona, usar 0 como inversión y advertir
-                console.warn('⚠️ No se pudo calcular inversión. Usando 0.');
-                inversion = { rows: [{ total_inversion: 0, cantidad_producciones: 0 }] };
-            }
-        }
+        const objetivos = await pool.query(queryObjetivos, paramsObjetivos);
+        const metaTotal = objetivos.rows[0]?.meta_total || 0;
+        const ventasReales = ventasMes.rows[0]?.total_ventas || 0;
 
         // ============================================
-        // 7. GANANCIA
+        // 5. DESGLOSE POR VENDEDORES
         // ============================================
-        const totalVentas = parseFloat(ventasMes.rows[0]?.total || 0);
-        const totalInversion = parseFloat(inversion.rows[0]?.total_inversion || 0);
-        const gananciaBruta = totalVentas - totalInversion;
-        const margenGanancia = totalVentas > 0 ? (gananciaBruta / totalVentas) * 100 : 0;
-
-        // ============================================
-        // 8. VENTAS POR MES (GRÁFICO)
-        // ============================================
-        let queryVentasPorMes = `
+        let queryVendedores = `
             SELECT 
-                EXTRACT(MONTH FROM fecha) as mes,
-                COALESCE(SUM(total), 0) as total,
-                COUNT(*) as cantidad
-            FROM ventas
-            WHERE EXTRACT(YEAR FROM fecha) = $1
-            AND estado != 'cancelada'
+                u.id,
+                u.nombre,
+                u.rol,
+                u.sucursal_id,
+                s.nombre as sucursal_nombre,
+                COALESCE(SUM(v.total), 0) as total_ventas,
+                COUNT(v.id) as cantidad_ventas,
+                COALESCE(SUM(CASE WHEN v.tipo_pago = 'Crédito' THEN v.total ELSE 0 END), 0) as ventas_credito,
+                COALESCE(SUM(CASE WHEN v.tipo_pago != 'Crédito' THEN v.total ELSE 0 END), 0) as ventas_contado
+            FROM usuarios u
+            LEFT JOIN ventas v ON u.id = v.usuario_id 
+                AND EXTRACT(MONTH FROM v.fecha) = $1 
+                AND EXTRACT(YEAR FROM v.fecha) = $2
+                AND v.estado != 'cancelada'
+            LEFT JOIN sucursales s ON u.sucursal_id = s.id
+            WHERE u.rol IN ('vendedor', 'vendedora')
         `;
-        let paramsMesGrafico = [anoActual];
-        let paramIndexMesGrafico = 2;
+
+        let paramsVendedores = [mesActual, anoActual];
+        let paramIndexVendedores = 3;
 
         if (sucursalFiltro) {
-            queryVentasPorMes += ` AND sucursal_id = $${paramIndexMesGrafico}`;
-            paramsMesGrafico.push(sucursalFiltro);
-            paramIndexMesGrafico++;
+            queryVendedores += ` AND u.sucursal_id = $${paramIndexVendedores}`;
+            paramsVendedores.push(sucursalFiltro);
+            paramIndexVendedores++;
         }
 
-        queryVentasPorMes += ` GROUP BY EXTRACT(MONTH FROM fecha) ORDER BY mes`;
+        if (usuario_id) {
+            queryVendedores += ` AND u.id = $${paramIndexVendedores}`;
+            paramsVendedores.push(usuario_id);
+            paramIndexVendedores++;
+        }
 
-        const ventasPorMes = await pool.query(queryVentasPorMes, paramsMesGrafico);
+        queryVendedores += ` GROUP BY u.id, u.nombre, u.rol, u.sucursal_id, s.nombre ORDER BY total_ventas DESC`;
+
+        const vendedores = await pool.query(queryVendedores, paramsVendedores);
 
         // ============================================
-        // 9. TOP PRODUCTOS
+        // 6. DESGLOSE POR OPERARIOS
+        // ============================================
+        let queryOperarios = `
+            SELECT 
+                u.id,
+                u.nombre,
+                u.rol,
+                u.sucursal_id,
+                s.nombre as sucursal_nombre,
+                a.nombre as area_nombre,
+                COALESCE(SUM(p.cantidad), 0) as total_producido,
+                COUNT(p.id) as cantidad_producciones,
+                COUNT(DISTINCT p.producto_id) as productos_diferentes
+            FROM usuarios u
+            LEFT JOIN produccion p ON u.nombre = p.operario 
+                AND EXTRACT(MONTH FROM p.fecha) = $1 
+                AND EXTRACT(YEAR FROM p.fecha) = $2
+            LEFT JOIN sucursales s ON u.sucursal_id = s.id
+            LEFT JOIN areas a ON u.area_id = a.id
+            WHERE u.rol = 'operario'
+        `;
+
+        let paramsOperarios = [mesActual, anoActual];
+        let paramIndexOperarios = 3;
+
+        if (sucursalFiltro) {
+            queryOperarios += ` AND u.sucursal_id = $${paramIndexOperarios}`;
+            paramsOperarios.push(sucursalFiltro);
+            paramIndexOperarios++;
+        }
+
+        if (usuario_id) {
+            queryOperarios += ` AND u.id = $${paramIndexOperarios}`;
+            paramsOperarios.push(usuario_id);
+            paramIndexOperarios++;
+        }
+
+        queryOperarios += ` GROUP BY u.id, u.nombre, u.rol, u.sucursal_id, s.nombre, a.nombre ORDER BY total_producido DESC`;
+
+        const operarios = await pool.query(queryOperarios, paramsOperarios);
+
+        // ============================================
+        // 7. TOP PRODUCTOS DEL MES
         // ============================================
         let queryTopProductos = `
             SELECT 
                 p.id,
                 p.nombre,
                 COALESCE(SUM(dv.cantidad), 0) as total_vendido,
-                COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as total_ingresos
+                COUNT(DISTINCT dv.venta_id) as veces_vendido
             FROM productos p
             LEFT JOIN detalle_ventas dv ON p.id = dv.producto_id
             LEFT JOIN ventas v ON dv.venta_id = v.id
@@ -269,96 +219,67 @@ router.get('/', async (req, res) => {
         const topProductos = await pool.query(queryTopProductos, paramsTop);
 
         // ============================================
-        // 10. RESUMEN POR VENDEDOR
+        // 8. VENTAS POR DÍA (GRÁFICO)
         // ============================================
-        let queryVendedores = `
+        let queryVentasDia = `
             SELECT 
-                u.id,
-                u.nombre,
-                COALESCE(SUM(v.total), 0) as total_ventas,
-                COUNT(v.id) as cantidad_ventas
-            FROM usuarios u
-            LEFT JOIN ventas v ON u.id = v.usuario_id 
-                AND EXTRACT(MONTH FROM v.fecha) = $1 
-                AND EXTRACT(YEAR FROM v.fecha) = $2
-                AND v.estado != 'cancelada'
-            WHERE u.rol IN ('vendedor', 'vendedora')
+                EXTRACT(DAY FROM fecha) as dia,
+                COALESCE(SUM(total), 0) as total,
+                COUNT(*) as cantidad
+            FROM ventas
+            WHERE EXTRACT(MONTH FROM fecha) = $1 
+            AND EXTRACT(YEAR FROM fecha) = $2
+            AND estado != 'cancelada'
         `;
-        let paramsVendedores = [mesActual, anoActual];
-        let paramIndexVendedores = 3;
+        let paramsDia = [mesActual, anoActual];
+        let paramIndexDia = 3;
 
         if (sucursalFiltro) {
-            queryVendedores += ` AND u.sucursal_id = $${paramIndexVendedores}`;
-            paramsVendedores.push(sucursalFiltro);
-            paramIndexVendedores++;
+            queryVentasDia += ` AND sucursal_id = $${paramIndexDia}`;
+            paramsDia.push(sucursalFiltro);
+            paramIndexDia++;
         }
 
-        queryVendedores += ` GROUP BY u.id, u.nombre ORDER BY total_ventas DESC`;
+        queryVentasDia += ` GROUP BY EXTRACT(DAY FROM fecha) ORDER BY dia`;
 
-        const vendedores = await pool.query(queryVendedores, paramsVendedores);
+        const ventasPorDia = await pool.query(queryVentasDia, paramsDia);
 
         // ============================================
         // RESPUESTA COMPLETA
         // ============================================
         res.json({
             success: true,
-            fecha_actual: hoy,
             resumen: {
-                ventas_dia: {
-                    cantidad: parseInt(ventasDia.rows[0]?.cantidad || 0),
-                    total: parseFloat(ventasDia.rows[0]?.total || 0),
-                    credito: parseFloat(ventasDia.rows[0]?.credito || 0),
-                    contado: parseFloat(ventasDia.rows[0]?.contado || 0)
-                },
-                ventas_mes: {
-                    cantidad: parseInt(ventasMes.rows[0]?.cantidad || 0),
-                    total: parseFloat(ventasMes.rows[0]?.total || 0),
-                    credito: parseFloat(ventasMes.rows[0]?.credito || 0),
-                    contado: parseFloat(ventasMes.rows[0]?.contado || 0)
-                },
-                ventas_ano: {
-                    cantidad: parseInt(ventasAno.rows[0]?.cantidad || 0),
-                    total: parseFloat(ventasAno.rows[0]?.total || 0),
-                    credito: parseFloat(ventasAno.rows[0]?.credito || 0),
-                    contado: parseFloat(ventasAno.rows[0]?.contado || 0)
+                ventas: {
+                    total: parseFloat(ventasMes.rows[0]?.total_ventas || 0),
+                    cantidad: parseInt(ventasMes.rows[0]?.cantidad_ventas || 0),
+                    credito: parseFloat(ventasMes.rows[0]?.ventas_credito || 0),
+                    contado: parseFloat(ventasMes.rows[0]?.ventas_contado || 0)
                 },
                 cuentas_cobrar: {
                     total: parseFloat(cuentasCobrar.rows[0]?.total_pendiente || 0),
                     cantidad: parseInt(cuentasCobrar.rows[0]?.cantidad || 0),
-                    vencido_30: parseFloat(cuentasCobrar.rows[0]?.vencido_30 || 0),
-                    vencido_60: parseFloat(cuentasCobrar.rows[0]?.vencido_60 || 0),
-                    vencido_90: parseFloat(cuentasCobrar.rows[0]?.vencido_90 || 0)
+                    vencido: parseFloat(cuentasCobrar.rows[0]?.vencido || 0)
                 },
                 cuentas_pagar: {
                     total: parseFloat(cuentasPagar.rows[0]?.total_pendiente || 0),
-                    cantidad: parseInt(cuentasPagar.rows[0]?.cantidad || 0),
-                    vencido_30: parseFloat(cuentasPagar.rows[0]?.vencido_30 || 0),
-                    vencido_60: parseFloat(cuentasPagar.rows[0]?.vencido_60 || 0),
-                    vencido_90: parseFloat(cuentasPagar.rows[0]?.vencido_90 || 0)
+                    cantidad: parseInt(cuentasPagar.rows[0]?.cantidad || 0)
                 },
-                inversion: {
-                    total: parseFloat(inversion.rows[0]?.total_inversion || 0),
-                    cantidad_producciones: parseInt(inversion.rows[0]?.cantidad_producciones || 0)
-                },
-                ganancia: {
-                    bruta: gananciaBruta,
-                    margen: margenGanancia,
-                    ventas: totalVentas
+                objetivos: {
+                    meta: parseFloat(metaTotal),
+                    real: parseFloat(ventasReales),
+                    porcentaje: metaTotal > 0 ? Math.round((ventasReales / metaTotal) * 100) : 0
                 }
             },
-            ventas_por_mes: ventasPorMes.rows || [],
-            top_productos: topProductos.rows || [],
             vendedores: vendedores.rows || [],
+            operarios: operarios.rows || [],
+            top_productos: topProductos.rows || [],
+            ventas_por_dia: ventasPorDia.rows || [],
             filtros: {
                 mes: mesActual,
                 ano: anoActual,
-                sucursal_id: sucursalFiltro || null
-            },
-            estructura_db: {
-                produccion: {
-                    campos_usados: ['cantidad', 'costo_unitario', 'fecha', 'sucursal_id'],
-                    nota: 'Si no existe costo_unitario, se intenta con producto_precio'
-                }
+                sucursal_id: sucursalFiltro || null,
+                usuario_id: usuario_id || null
             }
         });
 
@@ -367,8 +288,85 @@ router.get('/', async (req, res) => {
         console.error('Stack:', error.stack);
         res.status(500).json({
             success: false,
-            error: error.message,
-            detalle: error.stack
+            error: error.message
+        });
+    }
+});
+
+// ============================================
+// GET /dashboard/usuarios - Obtener usuarios para filtros
+// ============================================
+router.get('/usuarios', async (req, res) => {
+    try {
+        const { sucursal_id } = req.query;
+        
+        let query = `
+            SELECT 
+                u.id,
+                u.nombre,
+                u.rol,
+                u.sucursal_id,
+                s.nombre as sucursal_nombre
+            FROM usuarios u
+            LEFT JOIN sucursales s ON u.sucursal_id = s.id
+            WHERE u.rol IN ('vendedor', 'vendedora', 'operario')
+        `;
+        let params = [];
+        let paramIndex = 1;
+        
+        if (sucursal_id) {
+            query += ` AND u.sucursal_id = $${paramIndex}`;
+            params.push(sucursal_id);
+            paramIndex++;
+        }
+        
+        query += ` ORDER BY u.nombre`;
+        
+        const result = await pool.query(query, params);
+        res.json(result.rows || []);
+        
+    } catch (error) {
+        console.error('❌ Error en GET /dashboard/usuarios:', error.message);
+        res.status(200).json([]);
+    }
+});
+
+// ============================================
+// POST /dashboard/objetivos - Guardar objetivos mensuales
+// ============================================
+router.post('/objetivos', async (req, res) => {
+    try {
+        const { mes, ano, meta_ventas, sucursal_id } = req.body;
+        
+        if (!mes || !ano || !meta_ventas) {
+            return res.status(400).json({
+                success: false,
+                error: 'Mes, año y meta son requeridos'
+            });
+        }
+        
+        const sucursalFinal = sucursal_id || 3;
+        
+        const result = await pool.query(
+            `INSERT INTO objetivos_mensuales (mes, ano, meta_ventas, sucursal_id)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (mes, ano, sucursal_id) 
+             DO UPDATE SET meta_ventas = EXCLUDED.meta_ventas, updated_at = NOW()
+             RETURNING *`,
+            [mes, ano, meta_ventas, sucursalFinal]
+        );
+        
+        res.json({
+            success: true,
+            message: '✅ Objetivo guardado correctamente',
+            objetivo: result.rows[0]
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en POST /dashboard/objetivos:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });

@@ -333,7 +333,7 @@ router.get('/codigo/:codigo', async (req, res) => {
 });
 
 // ============================================
-// GET /ventas/:id/reimprimir - Obtener datos para reimprimir
+// GET /ventas/:id/reimprimir - Obtener datos para reimprimir (CON DETECCIÓN DE SABANA)
 // ============================================
 router.get('/:id/reimprimir', async (req, res) => {
     try {
@@ -370,16 +370,32 @@ router.get('/:id/reimprimir', async (req, res) => {
             [id]
         );
 
+        // 👇 BUSCAR LA SUCURSAL CORRECTA
         const sucursalResult = await pool.query(
-            `SELECT nombre, direccion, telefono FROM sucursales WHERE id = $1`,
+            `SELECT id, nombre, direccion, telefono FROM sucursales WHERE id = $1`,
             [venta.sucursal_id || 3]
         );
+
+        const sucursal = sucursalResult.rows[0] || { 
+            id: 3, 
+            nombre: 'Sucursal Principal', 
+            direccion: '', 
+            telefono: '' 
+        };
+
+        // 👇 DETECTAR SI ES SABANA
+        const esSabana = sucursal.id === 2 || 
+                         (sucursal.nombre && sucursal.nombre.toLowerCase().includes('sabana'));
 
         res.json({
             success: true,
             venta: venta,
             detalles: detallesResult.rows || [],
-            sucursal: sucursalResult.rows[0] || { nombre: 'Sucursal Principal', direccion: '', telefono: '' }
+            sucursal: {
+                ...sucursal,
+                nombre_mostrar: esSabana ? 'Lizhomedecore' : 'AMAGO MUEBLES',
+                es_sabana: esSabana
+            }
         });
     } catch (error) {
         console.error('❌ Error en GET /ventas/:id/reimprimir:', error.message);
@@ -559,7 +575,6 @@ router.put('/:id', async (req, res) => {
             detalles
         } = req.body;
 
-        // Verificar que la venta existe
         const ventaExistente = await client.query(
             'SELECT * FROM ventas WHERE id = $1 AND estado != $2',
             [id, 'cancelada']
@@ -574,7 +589,6 @@ router.put('/:id', async (req, res) => {
 
         const venta = ventaExistente.rows[0];
 
-        // Verificar permisos (solo admin/subgerente)
         const usuario = await client.query(
             'SELECT rol, sucursal_id FROM usuarios WHERE id = $1',
             [usuario_id]
@@ -597,7 +611,6 @@ router.put('/:id', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Si cambió a domicilio, generar código de entrega
         let codigo = venta.codigo_entrega;
         if (tipo_entrega === 'domicilio' && venta.tipo_entrega !== 'domicilio') {
             let existe = true;
@@ -615,7 +628,6 @@ router.put('/:id', async (req, res) => {
                 [codigo, id]
             );
 
-            // Crear registro de entrega
             await client.query(
                 `INSERT INTO entregas (venta_id, direccion, estado, codigo, fecha_salida)
                  VALUES ($1, $2, 'pendiente', $3, NOW())`,
@@ -623,21 +635,18 @@ router.put('/:id', async (req, res) => {
             );
         }
 
-        // Si cambió de domicilio a retiro, eliminar código de entrega
         if (tipo_entrega === 'retiro' && venta.tipo_entrega === 'domicilio') {
             await client.query(
                 `UPDATE ventas SET codigo_entrega = NULL WHERE id = $1`,
                 [id]
             );
 
-            // Marcar como cancelada la entrega
             await client.query(
                 `UPDATE entregas SET estado = 'cancelada' WHERE venta_id = $1`,
                 [id]
             );
         }
 
-        // Actualizar la venta
         const result = await client.query(
             `UPDATE ventas 
              SET tipo_entrega = $1,
@@ -689,7 +698,6 @@ router.delete('/:id', async (req, res) => {
         const { id } = req.params;
         const { usuario_id } = req.body;
 
-        // Verificar que la venta existe
         const ventaExistente = await client.query(
             'SELECT * FROM ventas WHERE id = $1 AND estado != $2',
             [id, 'cancelada']
@@ -704,7 +712,6 @@ router.delete('/:id', async (req, res) => {
 
         const venta = ventaExistente.rows[0];
 
-        // Verificar permisos (solo admin/subgerente)
         const usuario = await client.query(
             'SELECT rol FROM usuarios WHERE id = $1',
             [usuario_id]
@@ -727,7 +734,6 @@ router.delete('/:id', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Si era venta a crédito, cancelar la cuenta por cobrar
         if (venta.tipo_venta === 'credito') {
             await client.query(
                 `UPDATE cuentas_por_cobrar 
@@ -737,13 +743,11 @@ router.delete('/:id', async (req, res) => {
             );
         }
 
-        // Si tenía entrega, cancelarla
         await client.query(
             `UPDATE entregas SET estado = 'cancelada' WHERE venta_id = $1`,
             [id]
         );
 
-        // Devolver stock
         const detalles = await client.query(
             'SELECT * FROM detalle_ventas WHERE venta_id = $1',
             [id]
@@ -763,7 +767,6 @@ router.delete('/:id', async (req, res) => {
             );
         }
 
-        // Marcar venta como cancelada (no se elimina físicamente)
         await client.query(
             `UPDATE ventas 
              SET estado = 'cancelada',

@@ -23,10 +23,11 @@ const Factura = forwardRef(({
 
   // 👇 DETECTAR SI ES SABANA PARA CAMBIAR EL NOMBRE
   const esSabana = sucursalId === 2 || 
-                   sucursalNombre?.toLowerCase().includes('sabana');
+                   (sucursalNombre && sucursalNombre.toLowerCase().includes('sabana'));
   
   const nombreEmpresa = esSabana ? 'Lizhomedecore' : 'AMAGO MUEBLES';
   const nombreCorto = esSabana ? 'LIZHOMEDECORE' : 'AMAGO';
+  const eslogan = esSabana ? 'Decoración · Diseño · Estilo' : 'Muebles · Cocinas · Closets';
 
   const tipoPagoTexto = tipoVenta === 'credito' ? 'Crédito' : 'Contado'
   const tipoEntregaTexto = tipoEntrega === 'domicilio' ? 'Entrega a domicilio' : 'Retiro en tienda'
@@ -84,7 +85,7 @@ const Factura = forwardRef(({
       {/* Encabezado */}
       <div style={styles.header}>
         <h1 style={styles.title}>🏭 {nombreEmpresa}</h1>
-        {!isPOS && <p style={{ margin: '5px 0', fontSize: '14px' }}>Muebles · Cocinas · Closets</p>}
+        {!isPOS && <p style={{ margin: '5px 0', fontSize: '14px' }}>{eslogan}</p>}
         <p style={styles.sucursalNombre}>{sucursalNombre}</p>
         <p style={{ margin: isPOS ? '2px 0' : '2px 0', fontSize: isPOS ? '8px' : '12px', color: '#555' }}>
           Tel: 809-555-0000 | Santo Domingo, R.D.

@@ -37,19 +37,12 @@ function POS() {
 
   const facturaRef = useRef()
 
-  // Colores predefinidos para categorías
-  const coloresCategorias = [
-    '#FF6B6B', '#4ECDC4', '#FFE66D', '#A8E6CF', '#FF9FF3',
-    '#54A0FF', '#5F27CD', '#FF9F43', '#00D2D3', '#1DD1A1',
-    '#F368E0', '#FF6B6B', '#2ED573', '#7BED9F', '#70A1FF'
-  ]
-
   useEffect(() => {
     cargarProductos()
     cargarVentasRecientes()
   }, [])
 
-  // 👇 NUEVO: Extraer categorías automáticamente de los productos
+  // Extraer categorías automáticamente de los productos
   useEffect(() => {
     if (productos.length > 0) {
       const categoriasUnicas = {}
@@ -57,7 +50,6 @@ function POS() {
         if (p.categoria && p.categoria.trim()) {
           const nombreCat = p.categoria.trim()
           if (!categoriasUnicas[nombreCat]) {
-            // Buscar un producto con esta categoría para obtener ícono
             const productoConIcono = productos.find(prod => prod.categoria === nombreCat)
             categoriasUnicas[nombreCat] = {
               nombre: nombreCat,
@@ -75,7 +67,6 @@ function POS() {
     }
   }, [productos])
 
-  // 👇 NUEVO: Asignar íconos por defecto según el nombre de la categoría
   const getIconoPorCategoria = (nombre) => {
     const iconos = {
       'credenza': '🪑',
@@ -102,7 +93,6 @@ function POS() {
     return '📁'
   }
 
-  // 👇 NUEVO: Asignar colores por defecto según el nombre de la categoría
   const getColorPorCategoria = (nombre) => {
     const colores = {
       'credenza': '#FF6B6B',
@@ -198,10 +188,17 @@ function POS() {
       const detalles = data.detalles;
       const sucursal = data.sucursal || { nombre: 'Sucursal Principal', direccion: '', telefono: '' };
 
+      // 👇 DETECTAR SI ES SABANA PARA EL TICKET
+      const esSabana = sucursal.id === 2 || 
+                       (sucursal.nombre && sucursal.nombre.toLowerCase().includes('sabana'));
+      
+      const nombreEmpresa = esSabana ? 'Lizhomedecore' : 'AMAGO ERP';
+      const nombreCorto = esSabana ? 'LIZHOMEDECORE' : 'AMAGO';
+
       let ticketHTML = `
         <div style="font-family: monospace; width: 300px; margin: 0 auto; padding: 20px; background: white;">
           <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px;">
-            <h2 style="margin: 0; font-size: 18px;">🏭 AMAGO ERP</h2>
+            <h2 style="margin: 0; font-size: 18px;">🏭 ${nombreEmpresa}</h2>
             <p style="margin: 2px 0; font-size: 12px;">${sucursal.nombre || 'Sucursal Principal'}</p>
             ${sucursal.direccion ? `<p style="margin: 2px 0; font-size: 11px;">${sucursal.direccion}</p>` : ''}
             ${sucursal.telefono ? `<p style="margin: 2px 0; font-size: 11px;">Tel: ${sucursal.telefono}</p>` : ''}
@@ -585,7 +582,6 @@ function POS() {
 
   const esSucursalNoPrincipal = esSucursal && !esSucursalPrincipal
 
-  // 👇 NUEVO: Productos filtrados por categoría
   const productosFiltrados = useMemo(() => {
     let filtrados = productos
     
@@ -683,32 +679,7 @@ function POS() {
             </div>
           </div>
 
-          {/* FACTURA OCULTA PARA IMPRIMIR */}
-<div style={{ 
-    position: 'fixed', 
-    left: '-9999px', 
-    top: 0,
-    width: '210mm',
-    backgroundColor: 'white',
-    padding: '20px',
-    zIndex: 9999
-}}>
-    <Factura
-        ref={facturaRef}
-        venta={{ id: ventaId }}
-        cliente={cliente}
-        carrito={carrito}
-        total={total}
-        tipoVenta={tipoPago === 'credito' ? 'credito' : 'contado'}
-        tipoEntrega={tipoEntrega}
-        codigoEntrega={codigoEntrega}
-        vendedor={usuario.nombre}
-        formato="A4"
-        sucursalNombre={usuario.sucursal || 'Sucursal Principal'}
-        sucursalId={usuario.sucursal_id || 3}
-    />
-</div>
-
+          {/* 👇 FACTURA OCULTA - CON SUCURSAL */}
           <div style={{ 
             position: 'fixed', 
             left: '-9999px', 
@@ -729,6 +700,8 @@ function POS() {
               codigoEntrega={codigoEntrega}
               vendedor={usuario.nombre}
               formato="A4"
+              sucursalNombre={usuario.sucursal || 'Sucursal Principal'}
+              sucursalId={usuario.sucursal_id || 3}
             />
           </div>
         </div>
@@ -740,7 +713,7 @@ function POS() {
     <AdminLayout>
       <h1>🛒 Punto de Venta</h1>
 
-      {/* 👇 BOTÓN PARA MOSTRAR/OCULTAR HISTORIAL DE VENTAS RECIENTES */}
+      {/* BOTÓN PARA MOSTRAR/OCULTAR HISTORIAL DE VENTAS RECIENTES */}
       <div style={{ marginBottom: '15px' }}>
         <button
           onClick={() => setMostrarHistorial(!mostrarHistorial)}
@@ -1057,9 +1030,7 @@ function POS() {
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* FILTRO POR CATEGORÍA - TARJETAS MODERNAS */}
-      {/* ========================================== */}
+      {/* FILTRO POR CATEGORÍA */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ 
           display: 'flex', 
@@ -1068,7 +1039,6 @@ function POS() {
           alignItems: 'center',
           marginBottom: '12px'
         }}>
-          {/* Botón "Todas" */}
           <button
             onClick={() => setCategoriaSeleccionada('')}
             style={{
@@ -1097,7 +1067,6 @@ function POS() {
             </span>
           </button>
 
-          {/* Categorías en tarjetas */}
           {categorias.map((cat) => {
             const isSelected = categoriaSeleccionada === cat.nombre
             return (
@@ -1138,7 +1107,6 @@ function POS() {
           })}
         </div>
 
-        {/* Buscador y contador */}
         <div style={{ 
           display: 'flex', 
           gap: '15px', 
@@ -1194,16 +1162,13 @@ function POS() {
         </div>
       </div>
 
-      {/* ========================================== */}
       {/* CONTENEDOR PRINCIPAL CON CARRITO FIJO */}
-      {/* ========================================== */}
       <div style={{ 
         display: 'flex', 
         gap: '20px', 
         alignItems: 'flex-start',
         position: 'relative'
       }}>
-        {/* LISTA DE PRODUCTOS - SCROLLABLE */}
         <div style={{ 
           flex: 2,
           maxHeight: '70vh',
@@ -1236,11 +1201,7 @@ function POS() {
                   backgroundColor: '#f9f9f9',
                   opacity: (producto.stock || 0) <= 0 ? 0.5 : 1,
                   transition: 'all 0.2s ease',
-                  cursor: 'pointer',
-                  ':hover': {
-                    transform: 'scale(1.02)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                  }
+                  cursor: 'pointer'
                 }}>
                   {producto.categoria && (
                     <span style={{
@@ -1295,7 +1256,6 @@ function POS() {
           )}
         </div>
 
-        {/* CARRITO - FIJO (STICKY) */}
         <div style={{ 
           flex: 1, 
           position: 'sticky', 

@@ -18,7 +18,6 @@ function Dashboard() {
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol)
-  const esSucursalPrincipal = usuario.sucursal_id === 3
   const sucursalId = usuario.sucursal_id || 3
 
   useEffect(() => {
@@ -107,6 +106,11 @@ function Dashboard() {
     return `RD$ ${Number(valor).toFixed(2)}`
   }
 
+  const getNombreMes = (mes) => {
+    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+    return meses[mes - 1] || mes
+  }
+
   if (cargando) {
     return (
       <AdminLayout>
@@ -144,13 +148,35 @@ function Dashboard() {
 
   const resumen = datos?.resumen || {}
   const vendedores = datos?.vendedores || []
-  const operarios = datos?.operarios || []
   const topProductos = datos?.top_productos || []
   const ventasPorDia = datos?.ventas_por_dia || []
+  const ventasPorMes = datos?.ventas_por_mes || []
+  
+  // Calcular el máximo para el gráfico
+  const maxVentasDia = Math.max(...ventasPorDia.map(d => d.total), 1)
+  const maxVentasMes = Math.max(...ventasPorMes.map(m => m.total), 1)
 
   return (
     <AdminLayout>
-      <h1>📊 Dashboard</h1>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '20px',
+        flexWrap: 'wrap',
+        gap: '10px'
+      }}>
+        <h1 style={{ margin: 0 }}>📊 Dashboard Financiero</h1>
+        <div style={{
+          backgroundColor: '#e3f2fd',
+          padding: '8px 16px',
+          borderRadius: '8px',
+          fontSize: '0.85rem',
+          color: '#003b6f'
+        }}>
+          📅 {getNombreMes(filtros.mes)} {filtros.ano}
+        </div>
+      </div>
 
       {/* FILTROS */}
       <div style={{
@@ -171,18 +197,9 @@ function Dashboard() {
             onChange={(e) => setFiltros({ ...filtros, mes: parseInt(e.target.value) })}
             style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
           >
-            <option value={1}>Enero</option>
-            <option value={2}>Febrero</option>
-            <option value={3}>Marzo</option>
-            <option value={4}>Abril</option>
-            <option value={5}>Mayo</option>
-            <option value={6}>Junio</option>
-            <option value={7}>Julio</option>
-            <option value={8}>Agosto</option>
-            <option value={9}>Septiembre</option>
-            <option value={10}>Octubre</option>
-            <option value={11}>Noviembre</option>
-            <option value={12}>Diciembre</option>
+            {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+              <option key={m} value={m}>{getNombreMes(m)}</option>
+            ))}
           </select>
         </div>
 
@@ -193,9 +210,9 @@ function Dashboard() {
             onChange={(e) => setFiltros({ ...filtros, ano: parseInt(e.target.value) })}
             style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
           >
-            <option value={2024}>2024</option>
-            <option value={2025}>2025</option>
-            <option value={2026}>2026</option>
+            {[2024, 2025, 2026, 2027].map(a => (
+              <option key={a} value={a}>{a}</option>
+            ))}
           </select>
         </div>
 
@@ -233,113 +250,289 @@ function Dashboard() {
       </div>
 
       {/* ========================================== */}
-      {/* TARJETAS DE RESUMEN */}
+      {/* TARJETAS DE RESUMEN - VENTAS */}
       {/* ========================================== */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '20px',
-        marginBottom: '25px'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '15px',
+        marginBottom: '20px'
       }}>
+        {/* Ventas del Día */}
         <div style={{
           backgroundColor: '#e3f2fd',
           padding: '20px',
           borderRadius: '12px',
           borderLeft: '4px solid #003b6f'
         }}>
-          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>💰 Ventas del Mes</p>
-          <h2 style={{ margin: '5px 0', color: '#003b6f' }}>{formatearPrecio(resumen.ventas?.total || 0)}</h2>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>📅 Ventas del Día</p>
+          <h2 style={{ margin: '5px 0', color: '#003b6f' }}>{formatearPrecio(resumen.ventas_dia?.total || 0)}</h2>
           <p style={{ margin: 0, fontSize: '0.75rem', color: '#666' }}>
-            {resumen.ventas?.cantidad || 0} ventas · {formatearPrecio(resumen.ventas?.contado || 0)} contado
+            {resumen.ventas_dia?.cantidad || 0} ventas · {formatearPrecio(resumen.ventas_dia?.contado || 0)} contado
           </p>
         </div>
 
-        <div style={{
-          backgroundColor: '#fff3e0',
-          padding: '20px',
-          borderRadius: '12px',
-          borderLeft: '4px solid #ff9800'
-        }}>
-          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>📋 Cuentas por Cobrar</p>
-          <h2 style={{ margin: '5px 0', color: '#e65100' }}>{formatearPrecio(resumen.cuentas_cobrar?.total || 0)}</h2>
-          <p style={{ margin: 0, fontSize: '0.75rem', color: '#666' }}>
-            {resumen.cuentas_cobrar?.cantidad || 0} pendientes · {formatearPrecio(resumen.cuentas_cobrar?.vencido || 0)} vencido
-          </p>
-        </div>
-
+        {/* Ventas del Mes */}
         <div style={{
           backgroundColor: '#e8f5e9',
           padding: '20px',
           borderRadius: '12px',
           borderLeft: '4px solid #4CAF50'
         }}>
-          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>📦 Cuentas por Pagar</p>
-          <h2 style={{ margin: '5px 0', color: '#1b5e20' }}>{formatearPrecio(resumen.cuentas_pagar?.total || 0)}</h2>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>📈 Ventas del Mes</p>
+          <h2 style={{ margin: '5px 0', color: '#1b5e20' }}>{formatearPrecio(resumen.ventas_mes?.total || 0)}</h2>
           <p style={{ margin: 0, fontSize: '0.75rem', color: '#666' }}>
-            {resumen.cuentas_pagar?.cantidad || 0} facturas pendientes
+            {resumen.ventas_mes?.cantidad || 0} ventas · {formatearPrecio(resumen.ventas_mes?.credito || 0)} crédito
+          </p>
+        </div>
+
+        {/* Ventas del Año */}
+        <div style={{
+          backgroundColor: '#fff3e0',
+          padding: '20px',
+          borderRadius: '12px',
+          borderLeft: '4px solid #ff9800'
+        }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>📊 Ventas del Año</p>
+          <h2 style={{ margin: '5px 0', color: '#e65100' }}>{formatearPrecio(resumen.ventas_ano?.total || 0)}</h2>
+          <p style={{ margin: 0, fontSize: '0.75rem', color: '#666' }}>
+            {resumen.ventas_ano?.cantidad || 0} ventas totales
+          </p>
+        </div>
+
+        {/* Ganancia Neta */}
+        <div style={{
+          backgroundColor: '#f3e5f5',
+          padding: '20px',
+          borderRadius: '12px',
+          borderLeft: '4px solid #9C27B0'
+        }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>💰 Ganancia Neta</p>
+          <h2 style={{ margin: '5px 0', color: '#4a148c' }}>
+            {formatearPrecio(resumen.ganancia?.neta || 0)}
+          </h2>
+          <p style={{ margin: 0, fontSize: '0.75rem', color: '#666' }}>
+            Margen: {resumen.ganancia?.margen_neto?.toFixed(1) || 0}%
+          </p>
+        </div>
+      </div>
+
+      {/* ========================================== */}
+      {/* CUENTAS POR COBRAR Y PAGAR */}
+      {/* ========================================== */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '20px',
+        marginBottom: '25px'
+      }}>
+        {/* Cuentas por Cobrar */}
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+        }}>
+          <h3 style={{ marginTop: 0, color: '#ff9800' }}>📋 Cuentas por Cobrar</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div>
+              <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>Total Pendiente</p>
+              <h3 style={{ margin: 0, color: '#e65100' }}>{formatearPrecio(resumen.cuentas_cobrar?.total || 0)}</h3>
+            </div>
+            <div>
+              <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>Cantidad</p>
+              <h3 style={{ margin: 0, color: '#003b6f' }}>{resumen.cuentas_cobrar?.cantidad || 0}</h3>
+            </div>
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{
+                backgroundColor: '#ffebee',
+                color: '#c62828',
+                padding: '2px 10px',
+                borderRadius: '12px',
+                fontSize: '0.75rem'
+              }}>
+                🔴 +30: {formatearPrecio(resumen.cuentas_cobrar?.vencido_30 || 0)}
+              </span>
+              <span style={{
+                backgroundColor: '#ffcdd2',
+                color: '#b71c1c',
+                padding: '2px 10px',
+                borderRadius: '12px',
+                fontSize: '0.75rem'
+              }}>
+                🔴 +60: {formatearPrecio(resumen.cuentas_cobrar?.vencido_60 || 0)}
+              </span>
+              <span style={{
+                backgroundColor: '#ef9a9a',
+                color: '#880e4f',
+                padding: '2px 10px',
+                borderRadius: '12px',
+                fontSize: '0.75rem'
+              }}>
+                🔴 +90: {formatearPrecio(resumen.cuentas_cobrar?.vencido_90 || 0)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Cuentas por Pagar */}
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+        }}>
+          <h3 style={{ marginTop: 0, color: '#f44336' }}>📦 Cuentas por Pagar</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div>
+              <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>Total Pendiente</p>
+              <h3 style={{ margin: 0, color: '#c62828' }}>{formatearPrecio(resumen.cuentas_pagar?.total || 0)}</h3>
+            </div>
+            <div>
+              <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>Cantidad</p>
+              <h3 style={{ margin: 0, color: '#003b6f' }}>{resumen.cuentas_pagar?.cantidad || 0}</h3>
+            </div>
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{
+                backgroundColor: '#ffebee',
+                color: '#c62828',
+                padding: '2px 10px',
+                borderRadius: '12px',
+                fontSize: '0.75rem'
+              }}>
+                🔴 +30: {formatearPrecio(resumen.cuentas_pagar?.vencido_30 || 0)}
+              </span>
+              <span style={{
+                backgroundColor: '#ffcdd2',
+                color: '#b71c1c',
+                padding: '2px 10px',
+                borderRadius: '12px',
+                fontSize: '0.75rem'
+              }}>
+                🔴 +60: {formatearPrecio(resumen.cuentas_pagar?.vencido_60 || 0)}
+              </span>
+              <span style={{
+                backgroundColor: '#ef9a9a',
+                color: '#880e4f',
+                padding: '2px 10px',
+                borderRadius: '12px',
+                fontSize: '0.75rem'
+              }}>
+                🔴 +90: {formatearPrecio(resumen.cuentas_pagar?.vencido_90 || 0)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================== */}
+      {/* INVERSIÓN Y GANANCIA */}
+      {/* ========================================== */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        gap: '15px',
+        marginBottom: '25px'
+      }}>
+        <div style={{
+          backgroundColor: '#e8f5e9',
+          padding: '15px',
+          borderRadius: '12px',
+          textAlign: 'center',
+          border: '1px solid #4CAF50'
+        }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>💰 Inversión en Producción</p>
+          <h2 style={{ margin: '5px 0', color: '#1b5e20' }}>{formatearPrecio(resumen.inversion?.total || 0)}</h2>
+          <p style={{ margin: 0, fontSize: '0.75rem', color: '#666' }}>
+            {resumen.inversion?.cantidad_producciones || 0} producciones · {resumen.inversion?.total_unidades || 0} unidades
+          </p>
+        </div>
+
+        <div style={{
+          backgroundColor: '#e3f2fd',
+          padding: '15px',
+          borderRadius: '12px',
+          textAlign: 'center',
+          border: '1px solid #003b6f'
+        }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>📈 Ventas del Mes</p>
+          <h2 style={{ margin: '5px 0', color: '#003b6f' }}>{formatearPrecio(resumen.ventas_mes?.total || 0)}</h2>
+          <p style={{ margin: 0, fontSize: '0.75rem', color: '#666' }}>
+            {resumen.ventas_mes?.cantidad || 0} ventas
           </p>
         </div>
 
         <div style={{
           backgroundColor: '#f3e5f5',
-          padding: '20px',
+          padding: '15px',
           borderRadius: '12px',
-          borderLeft: '4px solid #9C27B0'  // 👈 CORREGIDO
+          textAlign: 'center',
+          border: '1px solid #9C27B0'
         }}>
-          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>🎯 Objetivo del Mes</p>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.85rem' }}>🎯 Margen de Ganancia</p>
           <h2 style={{ margin: '5px 0', color: '#4a148c' }}>
-            {resumen.objetivos?.porcentaje || 0}%
+            {resumen.ganancia?.margen_bruto?.toFixed(1) || 0}%
           </h2>
           <p style={{ margin: 0, fontSize: '0.75rem', color: '#666' }}>
-            {formatearPrecio(resumen.objetivos?.real || 0)} de {formatearPrecio(resumen.objetivos?.meta || 0)}
+            Ganancia: {formatearPrecio(resumen.ganancia?.bruta || 0)}
           </p>
-          {esAdmin && (
-            <button
-              onClick={() => setMostrarMeta(!mostrarMeta)}
-              style={{
-                marginTop: '8px',
-                padding: '4px 12px',
-                backgroundColor: '#9C27B0',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.75rem'
-              }}
-            >
-              {mostrarMeta ? '✕ Cerrar' : '📝 Editar Meta'}
-            </button>
-          )}
-          {mostrarMeta && esAdmin && (
-            <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
-              <input
-                type="number"
-                step="0.01"
-                value={nuevaMeta}
-                onChange={(e) => setNuevaMeta(e.target.value)}
-                placeholder="Meta en RD$"
-                style={{
+        </div>
+      </div>
+
+      {/* ========================================== */}
+      {/* GRÁFICO DE VENTAS POR MES */}
+      {/* ========================================== */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '25px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+      }}>
+        <h3 style={{ marginTop: 0, color: '#003b6f' }}>📈 Ventas Mensuales {filtros.ano}</h3>
+        <div style={{
+          display: 'flex',
+          gap: '6px',
+          alignItems: 'flex-end',
+          height: '200px',
+          padding: '10px 0',
+          overflowX: 'auto'
+        }}>
+          {ventasPorMes.length === 0 ? (
+            <p style={{ color: '#999', padding: '20px' }}>No hay ventas registradas este año</p>
+          ) : (
+            ventasPorMes.map((mes) => {
+              const altura = Math.max((mes.total / (maxVentasMes || 1)) * 170, 10)
+              return (
+                <div key={mes.mes} style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
                   flex: 1,
-                  padding: '4px 8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '0.85rem'
-                }}
-              />
-              <button
-                onClick={guardarMeta}
-                style={{
-                  padding: '4px 12px',
-                  backgroundColor: '#4CAF50',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                Guardar
-              </button>
-            </div>
+                  minWidth: '40px'
+                }}>
+                  <div style={{
+                    width: '100%',
+                    height: `${altura}px`,
+                    backgroundColor: '#003b6f',
+                    borderRadius: '4px 4px 0 0',
+                    opacity: 0.7,
+                    minHeight: '5px',
+                    transition: 'height 0.3s ease'
+                  }} />
+                  <span style={{ fontSize: '0.6rem', color: '#666', marginTop: '4px' }}>
+                    {getNombreMes(mes.mes).substring(0, 3)}
+                  </span>
+                  <span style={{ fontSize: '0.5rem', color: '#999' }}>
+                    {formatearPrecio(mes.total)}
+                  </span>
+                </div>
+              )
+            })
           )}
         </div>
       </div>
@@ -354,7 +547,7 @@ function Dashboard() {
         marginBottom: '25px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
       }}>
-        <h3 style={{ marginTop: 0, color: '#003b6f' }}>📈 Ventas Diarias</h3>
+        <h3 style={{ marginTop: 0, color: '#003b6f' }}>📊 Ventas Diarias - {getNombreMes(filtros.mes)}</h3>
         <div style={{
           display: 'flex',
           gap: '4px',
@@ -367,21 +560,23 @@ function Dashboard() {
             <p style={{ color: '#999', padding: '20px' }}>No hay ventas registradas este mes</p>
           ) : (
             ventasPorDia.map((dia) => {
-              const altura = Math.max((dia.total / (resumen.ventas?.total || 1)) * 130, 10)
+              const altura = Math.max((dia.total / (maxVentasDia || 1)) * 130, 10)
               return (
                 <div key={dia.dia} style={{
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  flex: 1
+                  flex: 1,
+                  minWidth: '30px'
                 }}>
                   <div style={{
                     width: '100%',
                     height: `${altura}px`,
-                    backgroundColor: '#003b6f',
+                    backgroundColor: '#4CAF50',
                     borderRadius: '4px 4px 0 0',
                     opacity: 0.7,
-                    minHeight: '5px'
+                    minHeight: '5px',
+                    transition: 'height 0.3s ease'
                   }} />
                   <span style={{ fontSize: '0.6rem', color: '#666', marginTop: '4px' }}>
                     {dia.dia}
@@ -391,6 +586,53 @@ function Dashboard() {
             })
           )}
         </div>
+      </div>
+
+      {/* ========================================== */}
+      {/* TOP PRODUCTOS */}
+      {/* ========================================== */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '25px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+      }}>
+        <h3 style={{ marginTop: 0, color: '#003b6f' }}>🏆 Top 10 Productos Más Vendidos</h3>
+        {topProductos.length === 0 ? (
+          <p style={{ color: '#999', padding: '20px', textAlign: 'center' }}>No hay productos vendidos este mes</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f5f5f5' }}>
+                  <th style={{ padding: '10px', textAlign: 'left' }}>#</th>
+                  <th style={{ padding: '10px', textAlign: 'left' }}>Producto</th>
+                  <th style={{ padding: '10px', textAlign: 'right' }}>Unidades</th>
+                  <th style={{ padding: '10px', textAlign: 'center' }}>Veces Vendido</th>
+                  <th style={{ padding: '10px', textAlign: 'right' }}>Ingresos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topProductos.map((p, index) => (
+                  <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '10px', fontWeight: 'bold', color: index < 3 ? '#ff9800' : '#666' }}>
+                      #{index + 1}
+                    </td>
+                    <td style={{ padding: '10px' }}>{p.nombre}</td>
+                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold' }}>
+                      {p.total_vendido}
+                    </td>
+                    <td style={{ padding: '10px', textAlign: 'center' }}>{p.veces_vendido || 0}</td>
+                    <td style={{ padding: '10px', textAlign: 'right', color: '#003b6f' }}>
+                      {formatearPrecio(p.total_ingresos || 0)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ========================================== */}
@@ -412,6 +654,7 @@ function Dashboard() {
               <thead>
                 <tr style={{ backgroundColor: '#f5f5f5' }}>
                   <th style={{ padding: '10px', textAlign: 'left' }}>Vendedor</th>
+                  <th style={{ padding: '10px', textAlign: 'left' }}>Sucursal</th>
                   <th style={{ padding: '10px', textAlign: 'right' }}>Ventas</th>
                   <th style={{ padding: '10px', textAlign: 'center' }}>Cantidad</th>
                   <th style={{ padding: '10px', textAlign: 'right' }}>Contado</th>
@@ -423,7 +666,15 @@ function Dashboard() {
                   <tr key={v.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '10px' }}>
                       <strong>{v.nombre}</strong>
-                      <span style={{ fontSize: '0.7rem', color: '#999', marginLeft: '8px' }}>
+                    </td>
+                    <td style={{ padding: '10px' }}>
+                      <span style={{
+                        backgroundColor: '#e3f2fd',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.75rem',
+                        color: '#003b6f'
+                      }}>
                         {v.sucursal_nombre || 'Sin sucursal'}
                       </span>
                     </td>
@@ -437,107 +688,6 @@ function Dashboard() {
                     <td style={{ padding: '10px', textAlign: 'right', color: '#ff9800' }}>
                       {formatearPrecio(v.ventas_credito)}
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ========================================== */}
-      {/* DESGLOSE POR OPERARIOS */}
-      {/* ========================================== */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        padding: '20px',
-        marginBottom: '25px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-      }}>
-        <h3 style={{ marginTop: 0, color: '#003b6f' }}>🏭 Desglose por Operarios</h3>
-        {operarios.length === 0 ? (
-          <p style={{ color: '#999', padding: '20px', textAlign: 'center' }}>No hay operarios registrados</p>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f5f5f5' }}>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Operario</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Área</th>
-                  <th style={{ padding: '10px', textAlign: 'right' }}>Total Producido</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Registros</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Productos</th>
-                </tr>
-              </thead>
-              <tbody>
-                {operarios.map((o) => (
-                  <tr key={o.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '10px' }}>
-                      <strong>{o.nombre}</strong>
-                      <span style={{ fontSize: '0.7rem', color: '#999', marginLeft: '8px' }}>
-                        {o.sucursal_nombre || 'Sin sucursal'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <span style={{
-                        backgroundColor: '#e3f2fd',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        fontSize: '0.75rem',
-                        color: '#003b6f'
-                      }}>
-                        {o.area_nombre || 'Sin área'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#003b6f' }}>
-                      {o.total_producido} unidades
-                    </td>
-                    <td style={{ padding: '10px', textAlign: 'center' }}>{o.cantidad_producciones || 0}</td>
-                    <td style={{ padding: '10px', textAlign: 'center' }}>{o.productos_diferentes || 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ========================================== */}
-      {/* TOP PRODUCTOS */}
-      {/* ========================================== */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        padding: '20px',
-        marginBottom: '25px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-      }}>
-        <h3 style={{ marginTop: 0, color: '#003b6f' }}>🏆 Top Productos Más Vendidos</h3>
-        {topProductos.length === 0 ? (
-          <p style={{ color: '#999', padding: '20px', textAlign: 'center' }}>No hay productos vendidos este mes</p>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f5f5f5' }}>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>#</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Producto</th>
-                  <th style={{ padding: '10px', textAlign: 'right' }}>Cantidad Vendida</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Veces Vendido</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topProductos.map((p, index) => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '10px', fontWeight: 'bold', color: index < 3 ? '#ff9800' : '#666' }}>
-                      #{index + 1}
-                    </td>
-                    <td style={{ padding: '10px' }}>{p.nombre}</td>
-                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold' }}>
-                      {p.total_vendido} unidades
-                    </td>
-                    <td style={{ padding: '10px', textAlign: 'center' }}>{p.veces_vendido || 0}</td>
                   </tr>
                 ))}
               </tbody>

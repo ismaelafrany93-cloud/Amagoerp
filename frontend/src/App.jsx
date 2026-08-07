@@ -50,6 +50,7 @@ function App() {
         <Route path="/sucursales" element={<ProtectedRoute><Sucursales /></ProtectedRoute>} />
         <Route path="/transferencias" element={<ProtectedRoute><Transferencias /></ProtectedRoute>} />
         <Route path="/cambios" element={<ProtectedRoute><Cambios /></ProtectedRoute>} />
+        <Route path="/nomina" element={<ProtectedRoute><Nomina /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   )

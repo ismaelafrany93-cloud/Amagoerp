@@ -20,6 +20,8 @@ import Sucursales from './pages/Sucursales'
 import Transferencias from './pages/Transferencias'
 import NoEntregados from './pages/NoEntregados'
 import Cambios from './pages/Cambios'
+import Nomina from './pages/Nomina'
+
 
 function App() {
   return (

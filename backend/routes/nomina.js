@@ -3,60 +3,71 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /nomina/empleados - Listar empleados
+// GET /nomina/empleados - Listar empleados (VERSIÓN ROBUSTA)
 // ============================================
 router.get('/empleados', async (req, res) => {
     try {
         const { sucursal_id, activo } = req.query;
         
-        console.log('🔍 GET /nomina/empleados - Parámetros:', { sucursal_id, activo });
+        console.log('🔍 GET /nomina/empleados - Iniciando...');
+        console.log('📌 Parámetros recibidos:', { sucursal_id, activo });
         
-        let query = `
-            SELECT 
-                e.*,
-                u.email as usuario_email,
-                s.nombre as sucursal_nombre,
-                COALESCE(
-                    (SELECT SUM(total_neto) FROM nominas WHERE empleado_id = e.id AND estado = 'pagado'),
-                    0
-                ) as total_pagado
-            FROM empleados e
-            LEFT JOIN usuarios u ON e.usuario_id = u.id
-            LEFT JOIN sucursales s ON e.sucursal_id = s.id
-            WHERE 1=1
-        `;
+        // Consulta base
+        let query = 'SELECT * FROM empleados';
         let params = [];
+        let conditions = [];
         let paramCount = 1;
         
+        // Agregar condiciones
         if (sucursal_id) {
-            query += ` AND e.sucursal_id = $${paramCount}`;
+            conditions.push(`sucursal_id = $${paramCount}`);
             params.push(parseInt(sucursal_id));
             paramCount++;
         }
         
         if (activo !== undefined) {
-            query += ` AND e.activo = $${paramCount}`;
+            conditions.push(`activo = $${paramCount}`);
             params.push(activo === 'true');
             paramCount++;
         }
         
-        query += ` ORDER BY e.nombre`;
+        // Construir query final
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+        query += ' ORDER BY nombre';
         
         console.log('📝 Query:', query);
         console.log('📊 Params:', params);
         
+        // Ejecutar consulta
         const result = await pool.query(query, params);
         
         console.log(`✅ Encontrados ${result.rows.length} empleados`);
-        console.log('📋 Primer empleado:', result.rows.length > 0 ? result.rows[0] : 'Ninguno');
+        
+        if (result.rows.length > 0) {
+            console.log('📋 Primer empleado:', result.rows[0]);
+            console.log('📋 Todos los empleados:', result.rows);
+        } else {
+            console.log('⚠️ No se encontraron empleados');
+            
+            // Consulta de diagnóstico
+            const countResult = await pool.query('SELECT COUNT(*) FROM empleados');
+            console.log(`📊 Total de empleados en la tabla: ${countResult.rows[0].count}`);
+        }
         
         // Siempre devolver un array
         res.json(result.rows || []);
         
     } catch (error) {
-        console.error('❌ Error al listar empleados:', error);
-        // En caso de error, devolver un array vacío
-        res.json([]);
+        console.error('❌ Error en GET /nomina/empleados:', error);
+        console.error('❌ Stack:', error.stack);
+        
+        // En caso de error, devolver array vacío
+        res.status(500).json({ 
+            error: 'Error al listar empleados',
+            details: error.message
+        });
     }
 });
 
@@ -71,7 +82,29 @@ router.post('/empleados', async (req, res) => {
             salario_base, comision_porcentaje, bono_anual
         } = req.body;
         
-        console.log('📤 Creando empleado:', { nombre, cedula, cargo, sucursal_id });
+        console.log('📤 POST /nomina/empleados - Creando empleado:');
+        console.log('📌 Datos:', { nombre, cedula, cargo, sucursal_id, salario_base });
+        
+        // Validar campos obligatorios
+        if (!nombre || !cedula) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Nombre y cédula son requeridos' 
+            });
+        }
+        
+        // Verificar si la cédula ya existe
+        const existCheck = await pool.query(
+            'SELECT id FROM empleados WHERE cedula = $1',
+            [cedula]
+        );
+        
+        if (existCheck.rows.length > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Ya existe un empleado con esta cédula' 
+            });
+        }
         
         const result = await pool.query(
             `INSERT INTO empleados (
@@ -87,9 +120,9 @@ router.post('/empleados', async (req, res) => {
                 email || null, 
                 telefono || null, 
                 direccion || null,
-                cargo, 
-                sucursal_id, 
-                fecha_contratacion, 
+                cargo || 'vendedor', 
+                sucursal_id || 3, 
+                fecha_contratacion || new Date().toISOString().split('T')[0], 
                 tipo_salario || 'fijo',
                 salario_base || 0, 
                 comision_porcentaje || 0, 
@@ -97,25 +130,37 @@ router.post('/empleados', async (req, res) => {
             ]
         );
         
-        console.log('✅ Empleado creado:', result.rows[0]);
+        console.log('✅ Empleado creado exitosamente:', result.rows[0]);
         
-        res.json({ success: true, empleado: result.rows[0] });
+        res.json({ 
+            success: true, 
+            empleado: result.rows[0] 
+        });
         
     } catch (error) {
-        console.error('❌ Error al crear empleado:', error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en POST /nomina/empleados:', error);
+        console.error('❌ Stack:', error.stack);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
     }
 });
 
 // ============================================
-// GET /nomina/calcular - Calcular nómina de un empleado
+// GET /nomina/calcular - Calcular nómina
 // ============================================
 router.get('/calcular', async (req, res) => {
     try {
         const { empleado_id, mes, ano } = req.query;
         
+        console.log('🔍 GET /nomina/calcular:', { empleado_id, mes, ano });
+        
         if (!empleado_id || !mes || !ano) {
-            return res.status(400).json({ error: 'Faltan parámetros' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Faltan parámetros: empleado_id, mes, ano' 
+            });
         }
         
         // Obtener datos del empleado
@@ -125,19 +170,24 @@ router.get('/calcular', async (req, res) => {
         );
         
         if (empleadoResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Empleado no encontrado' });
+            return res.status(404).json({ 
+                success: false,
+                error: 'Empleado no encontrado' 
+            });
         }
         
         const empleado = empleadoResult.rows[0];
+        console.log('📋 Empleado encontrado:', empleado.nombre);
         
         // Obtener configuración
         const configResult = await pool.query(
             `SELECT * FROM configuracion_nomina 
              WHERE sucursal_id = $1 AND ano = $2`,
-            [empleado.sucursal_id, ano]
+            [empleado.sucursal_id || 3, ano]
         );
         
         const config = configResult.rows[0] || {};
+        console.log('📋 Configuración:', config);
         
         // Calcular salario base
         let salarioBase = parseFloat(empleado.salario_base) || 0;
@@ -158,25 +208,25 @@ router.get('/calcular', async (req, res) => {
             const totalVentas = parseFloat(ventasResult.rows[0]?.total_ventas || 0);
             const porcentajeComision = parseFloat(empleado.comision_porcentaje || 0);
             comisiones = totalVentas * (porcentajeComision / 100);
+            console.log(`📊 Comisiones: ${comisiones} (${porcentajeComision}% de ${totalVentas})`);
         }
         
-        // Calcular bonos y otros ingresos
+        // Calcular bonos
         const bonoAnual = parseFloat(empleado.bono_anual || 0);
         const bonoMensual = bonoAnual / 12;
         
         // Total ingresos
         const totalIngresos = salarioBase + comisiones + bonoMensual;
         
-        // Calcular deducciones (TSS)
+        // Deducciones
         const tssEmpleado = parseFloat(config.tss_porcentaje_empleado || 2.87);
         const seguroSocial = totalIngresos * (tssEmpleado / 100);
         
-        // INFOTEP
         const infotepPorcentaje = parseFloat(config.infotep_porcentaje || 1.0);
         const infotep = totalIngresos * (infotepPorcentaje / 100);
         
-        // ISR (Simplificado)
-        const isrExento = parseFloat(config.isr_exento || 416220.00) / 12; // Mensual
+        // ISR
+        const isrExento = parseFloat(config.isr_exento || 416220.00) / 12;
         let isr = 0;
         const ingresoAnual = totalIngresos * 12;
         if (ingresoAnual > isrExento) {
@@ -184,7 +234,7 @@ router.get('/calcular', async (req, res) => {
             isr = excedente * (parseFloat(config.isr_exceso_porcentaje || 25) / 100) / 12;
         }
         
-        // Prestamos
+        // Préstamos
         let prestamoMensual = 0;
         const prestamosResult = await pool.query(
             `SELECT COALESCE(SUM(cuota_mensual), 0) as total_prestamos
@@ -194,14 +244,12 @@ router.get('/calcular', async (req, res) => {
         );
         prestamoMensual = parseFloat(prestamosResult.rows[0]?.total_prestamos || 0);
         
-        // Total deducciones
+        // Totales
         const totalDeducciones = seguroSocial + infotep + isr + prestamoMensual;
-        
-        // Totales finales
         const totalBruto = totalIngresos;
         const totalNeto = totalBruto - totalDeducciones;
         
-        res.json({
+        const response = {
             success: true,
             empleado: {
                 id: empleado.id,
@@ -232,10 +280,88 @@ router.get('/calcular', async (req, res) => {
                 infotep: infotepPorcentaje,
                 isr_exento: isrExento
             }
-        });
+        };
+        
+        console.log('✅ Cálculo completado:', response.totales);
+        res.json(response);
         
     } catch (error) {
-        console.error('❌ Error al calcular nómina:', error);
+        console.error('❌ Error en GET /nomina/calcular:', error);
+        console.error('❌ Stack:', error.stack);
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
+    }
+});
+
+// ============================================
+// GET /nomina/listar - Listar nóminas
+// ============================================
+router.get('/listar', async (req, res) => {
+    try {
+        const { mes, ano, sucursal_id, empleado_id, estado } = req.query;
+        
+        console.log('🔍 GET /nomina/listar:', { mes, ano, sucursal_id, empleado_id, estado });
+        
+        let query = `
+            SELECT 
+                n.*,
+                e.nombre as empleado_nombre,
+                e.cargo,
+                e.cedula,
+                s.nombre as sucursal_nombre
+            FROM nominas n
+            JOIN empleados e ON n.empleado_id = e.id
+            LEFT JOIN sucursales s ON e.sucursal_id = s.id
+            WHERE 1=1
+        `;
+        let params = [];
+        let paramCount = 1;
+        
+        if (mes) {
+            query += ` AND n.mes = $${paramCount}`;
+            params.push(parseInt(mes));
+            paramCount++;
+        }
+        
+        if (ano) {
+            query += ` AND n.ano = $${paramCount}`;
+            params.push(parseInt(ano));
+            paramCount++;
+        }
+        
+        if (sucursal_id) {
+            query += ` AND e.sucursal_id = $${paramCount}`;
+            params.push(parseInt(sucursal_id));
+            paramCount++;
+        }
+        
+        if (empleado_id) {
+            query += ` AND n.empleado_id = $${paramCount}`;
+            params.push(parseInt(empleado_id));
+            paramCount++;
+        }
+        
+        if (estado) {
+            query += ` AND n.estado = $${paramCount}`;
+            params.push(estado);
+            paramCount++;
+        }
+        
+        query += ` ORDER BY n.ano DESC, n.mes DESC, e.nombre`;
+        
+        console.log('📝 Query:', query);
+        console.log('📊 Params:', params);
+        
+        const result = await pool.query(query, params);
+        console.log(`✅ Encontradas ${result.rows.length} nóminas`);
+        
+        res.json(result.rows || []);
+        
+    } catch (error) {
+        console.error('❌ Error en GET /nomina/listar:', error);
+        console.error('❌ Stack:', error.stack);
         res.status(500).json({ error: error.message });
     }
 });
@@ -247,8 +373,13 @@ router.post('/generar', async (req, res) => {
     try {
         const { empleado_id, mes, ano, fecha_pago } = req.body;
         
+        console.log('📤 POST /nomina/generar:', { empleado_id, mes, ano });
+        
         if (!empleado_id || !mes || !ano) {
-            return res.status(400).json({ error: 'Faltan parámetros' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Faltan parámetros: empleado_id, mes, ano' 
+            });
         }
         
         // Verificar si ya existe
@@ -258,7 +389,10 @@ router.post('/generar', async (req, res) => {
         );
         
         if (existente.rows.length > 0) {
-            return res.status(400).json({ error: 'Nómina ya existe para este período' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Nómina ya existe para este período' 
+            });
         }
         
         // Obtener datos del empleado
@@ -268,7 +402,10 @@ router.post('/generar', async (req, res) => {
         );
         
         if (empleadoResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Empleado no encontrado' });
+            return res.status(404).json({ 
+                success: false,
+                error: 'Empleado no encontrado' 
+            });
         }
         
         const empleado = empleadoResult.rows[0];
@@ -277,7 +414,7 @@ router.post('/generar', async (req, res) => {
         const configResult = await pool.query(
             `SELECT * FROM configuracion_nomina 
              WHERE sucursal_id = $1 AND ano = $2`,
-            [empleado.sucursal_id, ano]
+            [empleado.sucursal_id || 3, ano]
         );
         
         const config = configResult.rows[0] || {};
@@ -363,14 +500,16 @@ router.post('/generar', async (req, res) => {
                 empleado_id, mes, ano,
                 ano, mes, fecha_pago || null,
                 salarioBase, comisiones, bonoMensual,
-                0, 0, // horas extras, otros ingresos
+                0, 0,
                 totalIngresos,
                 isr, seguroSocial, infotep, prestamoMensual,
-                0, 0, // adelantos, otras deducciones
+                0, 0,
                 totalDeducciones,
                 totalBruto, totalNeto
             ]
         );
+        
+        console.log('✅ Nómina generada:', result.rows[0]);
         
         res.json({
             success: true,
@@ -383,81 +522,24 @@ router.post('/generar', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Error al generar nómina:', error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en POST /nomina/generar:', error);
+        console.error('❌ Stack:', error.stack);
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
 // ============================================
-// GET /nomina/listar - Listar nóminas
-// ============================================
-router.get('/listar', async (req, res) => {
-    try {
-        const { mes, ano, sucursal_id, empleado_id, estado } = req.query;
-        
-        let query = `
-            SELECT 
-                n.*,
-                e.nombre as empleado_nombre,
-                e.cargo,
-                e.cedula,
-                s.nombre as sucursal_nombre
-            FROM nominas n
-            JOIN empleados e ON n.empleado_id = e.id
-            LEFT JOIN sucursales s ON e.sucursal_id = s.id
-            WHERE 1=1
-        `;
-        let params = [];
-        let paramCount = 1;
-        
-        if (mes) {
-            query += ` AND n.mes = $${paramCount}`;
-            params.push(mes);
-            paramCount++;
-        }
-        
-        if (ano) {
-            query += ` AND n.ano = $${paramCount}`;
-            params.push(ano);
-            paramCount++;
-        }
-        
-        if (sucursal_id) {
-            query += ` AND e.sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
-            paramCount++;
-        }
-        
-        if (empleado_id) {
-            query += ` AND n.empleado_id = $${paramCount}`;
-            params.push(empleado_id);
-            paramCount++;
-        }
-        
-        if (estado) {
-            query += ` AND n.estado = $${paramCount}`;
-            params.push(estado);
-            paramCount++;
-        }
-        
-        query += ` ORDER BY n.ano DESC, n.mes DESC, e.nombre`;
-        
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-        
-    } catch (error) {
-        console.error('❌ Error al listar nóminas:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// ============================================
-// PUT /nomina/pagar/:id - Marcar nómina como pagada
+// PUT /nomina/pagar/:id - Pagar nómina
 // ============================================
 router.put('/pagar/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { metodo_pago, referencia_pago, fecha_pago } = req.body;
+        
+        console.log('📤 PUT /nomina/pagar:', { id, metodo_pago, referencia_pago });
         
         const result = await pool.query(
             `UPDATE nominas 
@@ -468,12 +550,17 @@ router.put('/pagar/:id', async (req, res) => {
                  updated_at = NOW()
              WHERE id = $4
              RETURNING *`,
-            [metodo_pago, referencia_pago, fecha_pago, id]
+            [metodo_pago || 'efectivo', referencia_pago, fecha_pago, id]
         );
         
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Nómina no encontrada' });
+            return res.status(404).json({ 
+                success: false,
+                error: 'Nómina no encontrada' 
+            });
         }
+        
+        console.log('✅ Nómina pagada:', result.rows[0]);
         
         res.json({
             success: true,
@@ -481,8 +568,12 @@ router.put('/pagar/:id', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Error al pagar nómina:', error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en PUT /nomina/pagar:', error);
+        console.error('❌ Stack:', error.stack);
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
@@ -493,8 +584,13 @@ router.get('/resumen', async (req, res) => {
     try {
         const { mes, ano, sucursal_id } = req.query;
         
+        console.log('🔍 GET /nomina/resumen:', { mes, ano, sucursal_id });
+        
         if (!mes || !ano) {
-            return res.status(400).json({ error: 'Mes y año son requeridos' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Mes y año son requeridos' 
+            });
         }
         
         let query = `
@@ -513,36 +609,47 @@ router.get('/resumen', async (req, res) => {
             JOIN empleados e ON n.empleado_id = e.id
             WHERE n.mes = $1 AND n.ano = $2
         `;
-        let params = [mes, ano];
+        let params = [parseInt(mes), parseInt(ano)];
         let paramCount = 3;
         
         if (sucursal_id) {
             query += ` AND e.sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
+            params.push(parseInt(sucursal_id));
             paramCount++;
         }
         
+        console.log('📝 Query:', query);
+        console.log('📊 Params:', params);
+        
         const result = await pool.query(query, params);
+        
+        const resumen = result.rows[0] || {
+            total_empleados: 0,
+            total_bruto: 0,
+            total_neto: 0,
+            total_deducciones: 0,
+            total_isr: 0,
+            total_seguro_social: 0,
+            total_infotep: 0,
+            total_prestamos: 0,
+            pagados: 0,
+            pendientes: 0
+        };
+        
+        console.log('✅ Resumen:', resumen);
         
         res.json({
             success: true,
-            resumen: result.rows[0] || {
-                total_empleados: 0,
-                total_bruto: 0,
-                total_neto: 0,
-                total_deducciones: 0,
-                total_isr: 0,
-                total_seguro_social: 0,
-                total_infotep: 0,
-                total_prestamos: 0,
-                pagados: 0,
-                pendientes: 0
-            }
+            resumen: resumen
         });
         
     } catch (error) {
-        console.error('❌ Error al obtener resumen:', error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en GET /nomina/resumen:', error);
+        console.error('❌ Stack:', error.stack);
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
@@ -553,29 +660,34 @@ router.get('/config', async (req, res) => {
     try {
         const { sucursal_id, ano } = req.query;
         
-        let query = `
-            SELECT * FROM configuracion_nomina
-            WHERE sucursal_id = $1 AND ano = $2
-        `;
-        let params = [sucursal_id || 3, ano || new Date().getFullYear()];
+        console.log('🔍 GET /nomina/config:', { sucursal_id, ano });
         
-        const result = await pool.query(query, params);
+        const sucursalFinal = parseInt(sucursal_id) || 3;
+        const anoFinal = parseInt(ano) || new Date().getFullYear();
+        
+        let result = await pool.query(
+            `SELECT * FROM configuracion_nomina
+             WHERE sucursal_id = $1 AND ano = $2`,
+            [sucursalFinal, anoFinal]
+        );
         
         if (result.rows.length === 0) {
-            // Crear configuración por defecto
-            const insert = await pool.query(
+            console.log('⚠️ Configuración no encontrada, creando por defecto...');
+            
+            result = await pool.query(
                 `INSERT INTO configuracion_nomina (sucursal_id, ano)
                  VALUES ($1, $2)
                  RETURNING *`,
-                params
+                [sucursalFinal, anoFinal]
             );
-            res.json(insert.rows[0]);
-        } else {
-            res.json(result.rows[0]);
         }
         
+        console.log('✅ Configuración:', result.rows[0]);
+        res.json(result.rows[0]);
+        
     } catch (error) {
-        console.error('❌ Error al obtener configuración:', error);
+        console.error('❌ Error en GET /nomina/config:', error);
+        console.error('❌ Stack:', error.stack);
         res.status(500).json({ error: error.message });
     }
 });
@@ -595,6 +707,8 @@ router.put('/config', async (req, res) => {
             salario_minimo
         } = req.body;
         
+        console.log('📤 PUT /nomina/config:', { sucursal_id, ano });
+        
         const result = await pool.query(
             `UPDATE configuracion_nomina 
              SET tss_porcentaje_empleado = $1,
@@ -607,16 +721,18 @@ router.put('/config', async (req, res) => {
              WHERE sucursal_id = $7 AND ano = $8
              RETURNING *`,
             [
-                tss_porcentaje_empleado,
-                tss_porcentaje_empleador,
-                isr_exento,
-                isr_exceso_porcentaje,
-                infotep_porcentaje,
-                salario_minimo,
-                sucursal_id,
-                ano
+                tss_porcentaje_empleado || 2.87,
+                tss_porcentaje_empleador || 7.09,
+                isr_exento || 416220.00,
+                isr_exceso_porcentaje || 25,
+                infotep_porcentaje || 1.0,
+                salario_minimo || 21000.00,
+                parseInt(sucursal_id) || 3,
+                parseInt(ano) || new Date().getFullYear()
             ]
         );
+        
+        console.log('✅ Configuración actualizada:', result.rows[0]);
         
         res.json({
             success: true,
@@ -624,7 +740,8 @@ router.put('/config', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Error al actualizar configuración:', error);
+        console.error('❌ Error en PUT /nomina/config:', error);
+        console.error('❌ Stack:', error.stack);
         res.status(500).json({ error: error.message });
     }
 });

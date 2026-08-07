@@ -109,7 +109,212 @@ function Nomina() {
     return emojis[estado] || '❓'
   }
 
-  // Guardar nuevo empleado
+  // ============================================
+  // ELIMINAR EMPLEADO
+  // ============================================
+  const eliminarEmpleado = async (empleadoId, nombre) => {
+    if (!window.confirm(`¿Estás seguro de eliminar a "${nombre}"?\n\nEsta acción no se puede deshacer.`)) return
+    
+    try {
+      const response = await fetch(`${API_URL}/nomina/empleados/${empleadoId}`, {
+        method: 'DELETE'
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        setMensaje(`✅ ${data.message}`)
+        cargarDatos()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        setError('❌ Error: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setError('❌ Error al eliminar empleado')
+    }
+  }
+
+  // ============================================
+  // GENERAR NÓMINA QUINCENAL
+  // ============================================
+  const generarNominaQuincenal = async (empleadoId, quincena) => {
+    if (!window.confirm(`¿Generar nómina quincenal (${quincena === 1 ? '1ra' : '2da'} quincena) para este empleado?`)) return
+    
+    try {
+      const response = await fetch(`${API_URL}/nomina/generar-quincenal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          empleado_id: empleadoId,
+          mes: filtroMes,
+          ano: filtroAno,
+          quincena: quincena
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        setMensaje(`✅ Nómina quincenal (${quincena === 1 ? '1ra' : '2da'} quincena) generada correctamente`)
+        cargarDatos()
+        setTimeout(() => setMensaje(''), 3000)
+      } else {
+        setError('❌ Error: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setError('❌ Error al generar nómina quincenal')
+    }
+  }
+
+  // ============================================
+  // IMPRIMIR NÓMINA
+  // ============================================
+  const imprimirNomina = async (nominaId) => {
+    try {
+      const response = await fetch(`${API_URL}/nomina/imprimir/${nominaId}`)
+      const data = await response.json()
+      
+      if (data.success) {
+        const nomina = data.nomina
+        
+        const contenido = `
+=========================================
+         COMPROBANTE DE NÓMINA
+=========================================
+
+Empresa: AMAGO ERP
+Fecha: ${nomina.fecha}
+Sucursal: ${nomina.sucursal}
+
+-----------------------------------------
+        DATOS DEL EMPLEADO
+-----------------------------------------
+Nombre: ${nomina.empleado}
+Cédula: ${nomina.cedula}
+Cargo: ${nomina.cargo}
+Período: ${nomina.periodo}
+Tipo: ${nomina.tipo === 'quincenal' ? `Quincenal (${nomina.quincena === 1 ? '1ra' : '2da'} quincena)` : 'Mensual'}
+
+-----------------------------------------
+           INGRESOS
+-----------------------------------------
+Salario Base:     RD$ ${nomina.salario_base.toFixed(2)}
+Comisiones:       RD$ ${nomina.comisiones.toFixed(2)}
+Bonos:            RD$ ${nomina.bonos.toFixed(2)}
+-----------------------------------------
+TOTAL INGRESOS:   RD$ ${nomina.total_ingresos.toFixed(2)}
+
+-----------------------------------------
+         DEDUCCIONES
+-----------------------------------------
+ISR:              RD$ ${nomina.isr.toFixed(2)}
+Seguro Social:    RD$ ${nomina.seguro_social.toFixed(2)}
+INFOTEP:          RD$ ${nomina.infotep.toFixed(2)}
+Préstamos:        RD$ ${nomina.prestamos.toFixed(2)}
+-----------------------------------------
+TOTAL DEDUCCIONES: RD$ ${nomina.total_deducciones.toFixed(2)}
+
+=========================================
+ TOTAL NETO A PAGAR: RD$ ${nomina.total_neto.toFixed(2)}
+=========================================
+
+Estado: ${nomina.estado.toUpperCase()}
+Fecha Pago: ${nomina.fecha_pago || 'Pendiente'}
+
+-----------------------------------------
+Firma Empleado: ____________________
+Firma Empresa:  ____________________
+=========================================`
+        
+        const ventana = window.open('', '_blank', 'width=700,height=900')
+        ventana.document.write('<pre>' + contenido + '</pre>')
+        ventana.document.write(`
+          <style>
+            pre { 
+              font-family: 'Courier New', monospace; 
+              font-size: 13px; 
+              padding: 30px; 
+              background: white;
+              border: 1px solid #ddd;
+              border-radius: 8px;
+              max-width: 800px;
+              margin: 20px auto;
+              line-height: 1.6;
+            }
+            @media print {
+              body { margin: 0; padding: 0; }
+              pre { border: none; margin: 0; }
+            }
+          </style>
+        `)
+        ventana.document.close()
+        ventana.focus()
+        ventana.print()
+      } else {
+        setError('❌ Error al obtener datos para imprimir')
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setError('❌ Error al imprimir nómina')
+    }
+  }
+
+  // ============================================
+  // EXPORTAR A CSV
+  // ============================================
+  const exportarCSV = async () => {
+    try {
+      const response = await fetch(
+        `${API_URL}/nomina/listar?mes=${filtroMes}&ano=${filtroAno}&sucursal_id=${sucursalId}`
+      )
+      const data = await response.json()
+      
+      if (!Array.isArray(data) || data.length === 0) {
+        setError('No hay datos para exportar')
+        return
+      }
+      
+      const headers = ['Empleado', 'Cédula', 'Cargo', 'Salario Base', 'Comisiones', 'Bonos', 'Total Bruto', 'Deducciones', 'Total Neto', 'Estado']
+      const rows = data.map(n => [
+        n.empleado_nombre || '',
+        n.cedula || '',
+        n.cargo || '',
+        n.salario_base || 0,
+        n.comisiones || 0,
+        n.bonos || 0,
+        n.total_bruto || 0,
+        n.total_deducciones || 0,
+        n.total_neto || 0,
+        n.estado || ''
+      ])
+      
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.join(','))
+      ].join('\n')
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `nominas_${filtroMes}_${filtroAno}.csv`
+      link.click()
+      URL.revokeObjectURL(link.href)
+      
+      setMensaje('✅ Archivo CSV exportado correctamente')
+      setTimeout(() => setMensaje(''), 3000)
+      
+    } catch (error) {
+      console.error('Error:', error)
+      setError('❌ Error al exportar CSV')
+    }
+  }
+
+  // ============================================
+  // FUNCIONES EXISTENTES
+  // ============================================
+  
   const guardarEmpleado = async () => {
     if (!nuevoEmpleado.nombre || !nuevoEmpleado.cedula) {
       setError('⚠️ Nombre y cédula son requeridos')
@@ -154,7 +359,6 @@ function Nomina() {
     }
   }
 
-  // Calcular nómina de un empleado
   const calcularNomina = async (empleadoId) => {
     try {
       const response = await fetch(
@@ -168,9 +372,8 @@ function Nomina() {
     }
   }
 
-  // Generar nómina
   const generarNomina = async (empleadoId) => {
-    if (!window.confirm('¿Generar nómina para este empleado?')) return
+    if (!window.confirm('¿Generar nómina mensual para este empleado?')) return
 
     try {
       const response = await fetch(`${API_URL}/nomina/generar`, {
@@ -186,7 +389,7 @@ function Nomina() {
       const data = await response.json()
       
       if (data.success) {
-        setMensaje('✅ Nómina generada correctamente')
+        setMensaje('✅ Nómina mensual generada correctamente')
         cargarDatos()
         setTimeout(() => setMensaje(''), 3000)
       } else {
@@ -198,7 +401,6 @@ function Nomina() {
     }
   }
 
-  // Pagar nómina
   const pagarNomina = async (nominaId) => {
     if (!window.confirm('¿Marcar esta nómina como pagada?')) return
 
@@ -227,7 +429,6 @@ function Nomina() {
     }
   }
 
-  // Obtener nómina de un empleado
   const getNominaEmpleado = (empleadoId) => {
     return nominas.find(n => n.empleado_id === empleadoId)
   }
@@ -425,6 +626,21 @@ function Nomina() {
         >
           🔄 Actualizar
         </button>
+
+        {/* Botón Exportar CSV */}
+        <button
+          onClick={exportarCSV}
+          style={{
+            padding: '8px 20px',
+            backgroundColor: '#4CAF50',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer'
+          }}
+        >
+          📥 Exportar CSV
+        </button>
       </div>
 
       {/* FORMULARIO NUEVO EMPLEADO */}
@@ -597,7 +813,7 @@ function Nomina() {
             borderRadius: '12px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
             textAlign: 'center',
-            borderTop: '4px solid #FF9800' 
+            borderTop: '4px solid #FF9800'
           }}>
             <p style={{ margin: 0, color: '#666', fontSize: '0.8rem' }}>Estado</p>
             <h2 style={{ margin: '5px 0', color: resumen.pendientes > 0 ? '#e65100' : '#4CAF50' }}>
@@ -723,41 +939,82 @@ function Nomina() {
                       )}
                     </td>
                     <td style={{ padding: '12px 15px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        {/* Botón Generar Mensual */}
                         {!nomina && esAdmin && (
                           <button
                             onClick={() => generarNomina(emp.id)}
                             style={{
-                              padding: '4px 12px',
+                              padding: '4px 8px',
                               backgroundColor: '#FF9800',
                               color: 'white',
                               border: 'none',
-                              borderRadius: '6px',
+                              borderRadius: '4px',
                               cursor: 'pointer',
-                              fontSize: '0.75rem'
+                              fontSize: '0.65rem'
                             }}
-                            title="Generar nómina"
+                            title="Generar nómina mensual"
                           >
-                            📄 Generar
+                            📄 Mensual
                           </button>
                         )}
+                        
+                        {/* Botones Generar Quincenal */}
+                        {!nomina && esAdmin && (
+                          <>
+                            <button
+                              onClick={() => generarNominaQuincenal(emp.id, 1)}
+                              style={{
+                                padding: '4px 8px',
+                                backgroundColor: '#2196F3',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.65rem'
+                              }}
+                              title="Generar 1ra quincena"
+                            >
+                              📄 Q1
+                            </button>
+                            <button
+                              onClick={() => generarNominaQuincenal(emp.id, 2)}
+                              style={{
+                                padding: '4px 8px',
+                                backgroundColor: '#2196F3',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.65rem'
+                              }}
+                              title="Generar 2da quincena"
+                            >
+                              📄 Q2
+                            </button>
+                          </>
+                        )}
+                        
+                        {/* Botón Pagar */}
                         {nomina && nomina.estado === 'pendiente' && esAdmin && (
                           <button
                             onClick={() => pagarNomina(nomina.id)}
                             style={{
-                              padding: '4px 12px',
+                              padding: '4px 8px',
                               backgroundColor: '#4CAF50',
                               color: 'white',
                               border: 'none',
-                              borderRadius: '6px',
+                              borderRadius: '4px',
                               cursor: 'pointer',
-                              fontSize: '0.75rem'
+                              fontSize: '0.65rem'
                             }}
                             title="Pagar nómina"
                           >
                             💰 Pagar
                           </button>
                         )}
+                        
+                        {/* Botón Ver */}
                         <button
                           onClick={async () => {
                             const data = await calcularNomina(emp.id)
@@ -775,18 +1032,56 @@ function Nomina() {
                             }
                           }}
                           style={{
-                            padding: '4px 12px',
+                            padding: '4px 8px',
                             backgroundColor: '#003b6f',
                             color: 'white',
                             border: 'none',
-                            borderRadius: '6px',
+                            borderRadius: '4px',
                             cursor: 'pointer',
-                            fontSize: '0.75rem'
+                            fontSize: '0.65rem'
                           }}
                           title="Ver detalle"
                         >
                           📊 Ver
                         </button>
+                        
+                        {/* Botón Imprimir */}
+                        {nomina && (
+                          <button
+                            onClick={() => imprimirNomina(nomina.id)}
+                            style={{
+                              padding: '4px 8px',
+                              backgroundColor: '#9C27B0',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.65rem'
+                            }}
+                            title="Imprimir nómina"
+                          >
+                            🖨️ Imprimir
+                          </button>
+                        )}
+                        
+                        {/* Botón Eliminar (solo si no tiene nóminas) */}
+                        {esAdmin && !nomina && (
+                          <button
+                            onClick={() => eliminarEmpleado(emp.id, emp.nombre)}
+                            style={{
+                              padding: '4px 8px',
+                              backgroundColor: '#f44336',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.65rem'
+                            }}
+                            title="Eliminar empleado"
+                          >
+                            🗑️
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

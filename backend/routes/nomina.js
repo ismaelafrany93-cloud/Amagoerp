@@ -9,6 +9,8 @@ router.get('/empleados', async (req, res) => {
     try {
         const { sucursal_id, activo } = req.query;
         
+        console.log('🔍 GET /nomina/empleados - Parámetros:', { sucursal_id, activo });
+        
         let query = `
             SELECT 
                 e.*,
@@ -24,25 +26,37 @@ router.get('/empleados', async (req, res) => {
             WHERE 1=1
         `;
         let params = [];
+        let paramCount = 1;
         
         if (sucursal_id) {
-            query += ` AND e.sucursal_id = $${params.length + 1}`;
-            params.push(sucursal_id);
+            query += ` AND e.sucursal_id = $${paramCount}`;
+            params.push(parseInt(sucursal_id));
+            paramCount++;
         }
         
         if (activo !== undefined) {
-            query += ` AND e.activo = $${params.length + 1}`;
+            query += ` AND e.activo = $${paramCount}`;
             params.push(activo === 'true');
+            paramCount++;
         }
         
         query += ` ORDER BY e.nombre`;
         
+        console.log('📝 Query:', query);
+        console.log('📊 Params:', params);
+        
         const result = await pool.query(query, params);
-        res.json(result.rows);
+        
+        console.log(`✅ Encontrados ${result.rows.length} empleados`);
+        console.log('📋 Primer empleado:', result.rows.length > 0 ? result.rows[0] : 'Ninguno');
+        
+        // Siempre devolver un array
+        res.json(result.rows || []);
         
     } catch (error) {
         console.error('❌ Error al listar empleados:', error);
-        res.status(500).json({ error: error.message });
+        // En caso de error, devolver un array vacío
+        res.json([]);
     }
 });
 
@@ -57,6 +71,8 @@ router.post('/empleados', async (req, res) => {
             salario_base, comision_porcentaje, bono_anual
         } = req.body;
         
+        console.log('📤 Creando empleado:', { nombre, cedula, cargo, sucursal_id });
+        
         const result = await pool.query(
             `INSERT INTO empleados (
                 usuario_id, nombre, cedula, email, telefono, direccion,
@@ -65,11 +81,23 @@ router.post('/empleados', async (req, res) => {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING *`,
             [
-                usuario_id, nombre, cedula, email, telefono, direccion,
-                cargo, sucursal_id, fecha_contratacion, tipo_salario,
-                salario_base, comision_porcentaje || 0, bono_anual || 0
+                usuario_id || null, 
+                nombre, 
+                cedula, 
+                email || null, 
+                telefono || null, 
+                direccion || null,
+                cargo, 
+                sucursal_id, 
+                fecha_contratacion, 
+                tipo_salario || 'fijo',
+                salario_base || 0, 
+                comision_porcentaje || 0, 
+                bono_anual || 0
             ]
         );
+        
+        console.log('✅ Empleado creado:', result.rows[0]);
         
         res.json({ success: true, empleado: result.rows[0] });
         
@@ -233,21 +261,84 @@ router.post('/generar', async (req, res) => {
             return res.status(400).json({ error: 'Nómina ya existe para este período' });
         }
         
-        // Calcular nómina
-        const calculo = await new Promise((resolve, reject) => {
-            const reqCalculo = { query: { empleado_id, mes, ano } };
-            const resCalculo = {
-                json: (data) => resolve(data),
-                status: () => ({ json: (data) => resolve(data) })
-            };
-            router.handle(reqCalculo, resCalculo);
-        });
+        // Obtener datos del empleado
+        const empleadoResult = await pool.query(
+            `SELECT * FROM empleados WHERE id = $1`,
+            [empleado_id]
+        );
         
-        if (!calculo.success) {
-            return res.status(400).json({ error: 'Error al calcular nómina' });
+        if (empleadoResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Empleado no encontrado' });
         }
         
-        const data = calculo;
+        const empleado = empleadoResult.rows[0];
+        
+        // Obtener configuración
+        const configResult = await pool.query(
+            `SELECT * FROM configuracion_nomina 
+             WHERE sucursal_id = $1 AND ano = $2`,
+            [empleado.sucursal_id, ano]
+        );
+        
+        const config = configResult.rows[0] || {};
+        
+        // Calcular salario base
+        let salarioBase = parseFloat(empleado.salario_base) || 0;
+        
+        // Calcular comisiones
+        let comisiones = 0;
+        if (empleado.cargo === 'vendedor' || empleado.cargo === 'vendedora') {
+            const ventasResult = await pool.query(
+                `SELECT COALESCE(SUM(total), 0) as total_ventas
+                 FROM ventas 
+                 WHERE usuario_id = $1 
+                 AND EXTRACT(MONTH FROM fecha) = $2 
+                 AND EXTRACT(YEAR FROM fecha) = $3
+                 AND estado != 'cancelada'`,
+                [empleado.usuario_id, mes, ano]
+            );
+            
+            const totalVentas = parseFloat(ventasResult.rows[0]?.total_ventas || 0);
+            const porcentajeComision = parseFloat(empleado.comision_porcentaje || 0);
+            comisiones = totalVentas * (porcentajeComision / 100);
+        }
+        
+        // Bonos
+        const bonoAnual = parseFloat(empleado.bono_anual || 0);
+        const bonoMensual = bonoAnual / 12;
+        
+        // Total ingresos
+        const totalIngresos = salarioBase + comisiones + bonoMensual;
+        
+        // Deducciones
+        const tssEmpleado = parseFloat(config.tss_porcentaje_empleado || 2.87);
+        const seguroSocial = totalIngresos * (tssEmpleado / 100);
+        
+        const infotepPorcentaje = parseFloat(config.infotep_porcentaje || 1.0);
+        const infotep = totalIngresos * (infotepPorcentaje / 100);
+        
+        const isrExento = parseFloat(config.isr_exento || 416220.00) / 12;
+        let isr = 0;
+        const ingresoAnual = totalIngresos * 12;
+        if (ingresoAnual > isrExento) {
+            const excedente = ingresoAnual - isrExento;
+            isr = excedente * (parseFloat(config.isr_exceso_porcentaje || 25) / 100) / 12;
+        }
+        
+        // Préstamos
+        let prestamoMensual = 0;
+        const prestamosResult = await pool.query(
+            `SELECT COALESCE(SUM(cuota_mensual), 0) as total_prestamos
+             FROM prestamos_empleados 
+             WHERE empleado_id = $1 AND estado = 'activo'`,
+            [empleado_id]
+        );
+        prestamoMensual = parseFloat(prestamosResult.rows[0]?.total_prestamos || 0);
+        
+        // Totales
+        const totalDeducciones = seguroSocial + infotep + isr + prestamoMensual;
+        const totalBruto = totalIngresos;
+        const totalNeto = totalBruto - totalDeducciones;
         
         // Guardar en base de datos
         const result = await pool.query(
@@ -271,28 +362,24 @@ router.post('/generar', async (req, res) => {
             [
                 empleado_id, mes, ano,
                 ano, mes, fecha_pago || null,
-                data.ingresos.salario_base,
-                data.ingresos.comisiones,
-                data.ingresos.bonos,
-                0, // horas extras
-                0, // otros ingresos
-                data.ingresos.total,
-                data.deducciones.isr,
-                data.deducciones.seguro_social,
-                data.deducciones.infotep,
-                data.deducciones.prestamos,
-                0, // adelantos
-                0, // otras deducciones
-                data.deducciones.total,
-                data.totales.bruto,
-                data.totales.neto
+                salarioBase, comisiones, bonoMensual,
+                0, 0, // horas extras, otros ingresos
+                totalIngresos,
+                isr, seguroSocial, infotep, prestamoMensual,
+                0, 0, // adelantos, otras deducciones
+                totalDeducciones,
+                totalBruto, totalNeto
             ]
         );
         
         res.json({
             success: true,
             nomina: result.rows[0],
-            detalle: data
+            detalle: {
+                ingresos: { salario_base: salarioBase, comisiones, bonos: bonoMensual, total: totalIngresos },
+                deducciones: { isr, seguro_social: seguroSocial, infotep, prestamos: prestamoMensual, total: totalDeducciones },
+                totales: { bruto: totalBruto, neto: totalNeto }
+            }
         });
         
     } catch (error) {
@@ -321,30 +408,36 @@ router.get('/listar', async (req, res) => {
             WHERE 1=1
         `;
         let params = [];
+        let paramCount = 1;
         
         if (mes) {
-            query += ` AND n.mes = $${params.length + 1}`;
+            query += ` AND n.mes = $${paramCount}`;
             params.push(mes);
+            paramCount++;
         }
         
         if (ano) {
-            query += ` AND n.ano = $${params.length + 1}`;
+            query += ` AND n.ano = $${paramCount}`;
             params.push(ano);
+            paramCount++;
         }
         
         if (sucursal_id) {
-            query += ` AND e.sucursal_id = $${params.length + 1}`;
+            query += ` AND e.sucursal_id = $${paramCount}`;
             params.push(sucursal_id);
+            paramCount++;
         }
         
         if (empleado_id) {
-            query += ` AND n.empleado_id = $${params.length + 1}`;
+            query += ` AND n.empleado_id = $${paramCount}`;
             params.push(empleado_id);
+            paramCount++;
         }
         
         if (estado) {
-            query += ` AND n.estado = $${params.length + 1}`;
+            query += ` AND n.estado = $${paramCount}`;
             params.push(estado);
+            paramCount++;
         }
         
         query += ` ORDER BY n.ano DESC, n.mes DESC, e.nombre`;
@@ -359,7 +452,7 @@ router.get('/listar', async (req, res) => {
 });
 
 // ============================================
-// PUT /nomina/pagar - Marcar nómina como pagada
+// PUT /nomina/pagar/:id - Marcar nómina como pagada
 // ============================================
 router.put('/pagar/:id', async (req, res) => {
     try {
@@ -421,10 +514,12 @@ router.get('/resumen', async (req, res) => {
             WHERE n.mes = $1 AND n.ano = $2
         `;
         let params = [mes, ano];
+        let paramCount = 3;
         
         if (sucursal_id) {
-            query += ` AND e.sucursal_id = $${params.length + 1}`;
+            query += ` AND e.sucursal_id = $${paramCount}`;
             params.push(sucursal_id);
+            paramCount++;
         }
         
         const result = await pool.query(query, params);

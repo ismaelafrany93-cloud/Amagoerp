@@ -117,6 +117,10 @@ function Sidebar() {
         {esSubgerente && (
           <>
             <Link to="/dashboard" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/dashboard' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Dashboard</span>}</Link>
+            
+            {/* 👇 NÓMINA - SOLO PARA DUEÑO Y SUBGERENTE */}
+            <Link to="/nomina" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/nomina' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Nómina</span>}</Link>
+            
             <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🛒 {!colapsado && <span>Ventas</span>}</Link>
             <Link to="/productos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/productos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Productos</span>}</Link>
             <Link to="/inventario" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario General</span>}</Link>
@@ -130,13 +134,8 @@ function Sidebar() {
             <Link to="/no-entregados" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/no-entregados' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📋 {!colapsado && <span>No Entregados</span>}</Link>
             <Link to="/creditos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Créditos</span>}</Link>
             <Link to="/reportes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/reportes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📈 {!colapsado && <span>Reportes</span>}</Link>
-            
-            {/* 👇 HISTORIAL - Subgerente ve TODO */}
             <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📜 {!colapsado && <span>Historial</span>}</Link>
-            
-            {/* 👇 CAMBIOS - Subgerente */}
             <Link to="/cambios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/cambios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔄 {!colapsado && <span>Cambios</span>}</Link>
-            
             <Link to="/usuarios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/usuarios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👥 {!colapsado && <span>Usuarios</span>}</Link>
             <Link to="/sucursales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/sucursales' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏢 {!colapsado && <span>Sucursales</span>}</Link>
             <Link to="/transferencias" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Transferencias</span>}</Link>
@@ -163,11 +162,7 @@ function Sidebar() {
 
             <Link to="/clientes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👤 {!colapsado && <span>Clientes</span>}</Link>
             <Link to="/creditos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Créditos</span>}</Link>
-
-            {/* 👇 HISTORIAL - Vendedores ven sus propias ventas */}
             <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📜 {!colapsado && <span>Historial</span>}</Link>
-
-            {/* 👇 CAMBIOS - AHORA TAMBIÉN PARA VENDEDORES */}
             <Link to="/cambios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/cambios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔄 {!colapsado && <span>Cambios</span>}</Link>
 
             {esVendedorPrincipal && (

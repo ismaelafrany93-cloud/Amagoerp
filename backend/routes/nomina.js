@@ -746,4 +746,399 @@ router.put('/config', async (req, res) => {
     }
 });
 
+// ============================================
+// DELETE /nomina/empleados/:id - Eliminar empleado
+// ============================================
+router.delete('/empleados/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log('🗑️ DELETE /nomina/empleados:', { id });
+        
+        // Verificar si existe
+        const existCheck = await pool.query(
+            'SELECT * FROM empleados WHERE id = $1',
+            [id]
+        );
+        
+        if (existCheck.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Empleado no encontrado' 
+            });
+        }
+        
+        // Verificar si tiene nóminas asociadas
+        const nominaCheck = await pool.query(
+            'SELECT COUNT(*) FROM nominas WHERE empleado_id = $1',
+            [id]
+        );
+        
+        if (parseInt(nominaCheck.rows[0].count) > 0) {
+            // Si tiene nóminas, solo desactivar en lugar de eliminar
+            const result = await pool.query(
+                'UPDATE empleados SET activo = false, updated_at = NOW() WHERE id = $1 RETURNING *',
+                [id]
+            );
+            
+            console.log('✅ Empleado desactivado (tenía nóminas):', result.rows[0]);
+            
+            return res.json({
+                success: true,
+                message: 'Empleado desactivado (tenía nóminas asociadas)',
+                empleado: result.rows[0]
+            });
+        }
+        
+        // Si no tiene nóminas, eliminar completamente
+        const result = await pool.query(
+            'DELETE FROM empleados WHERE id = $1 RETURNING *',
+            [id]
+        );
+        
+        console.log('✅ Empleado eliminado:', result.rows[0]);
+        
+        res.json({
+            success: true,
+            message: 'Empleado eliminado correctamente',
+            empleado: result.rows[0]
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en DELETE /nomina/empleados:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// ============================================
+// POST /nomina/generar-quincenal - Generar nómina quincenal
+// ============================================
+router.post('/generar-quincenal', async (req, res) => {
+    try {
+        const { empleado_id, mes, ano, quincena, fecha_pago } = req.body;
+        
+        console.log('📤 POST /nomina/generar-quincenal:', { empleado_id, mes, ano, quincena });
+        
+        if (!empleado_id || !mes || !ano || !quincena) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Faltan parámetros: empleado_id, mes, ano, quincena' 
+            });
+        }
+        
+        // Verificar si ya existe
+        const existente = await pool.query(
+            `SELECT id FROM nominas 
+             WHERE empleado_id = $1 AND mes = $2 AND ano = $3 AND quincena = $4`,
+            [empleado_id, mes, ano, quincena]
+        );
+        
+        if (existente.rows.length > 0) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Nómina quincenal ya existe para este período' 
+            });
+        }
+        
+        // Obtener datos del empleado
+        const empleadoResult = await pool.query(
+            `SELECT * FROM empleados WHERE id = $1`,
+            [empleado_id]
+        );
+        
+        if (empleadoResult.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Empleado no encontrado' 
+            });
+        }
+        
+        const empleado = empleadoResult.rows[0];
+        
+        // Obtener configuración
+        const configResult = await pool.query(
+            `SELECT * FROM configuracion_nomina 
+             WHERE sucursal_id = $1 AND ano = $2`,
+            [empleado.sucursal_id || 3, ano]
+        );
+        
+        const config = configResult.rows[0] || {};
+        
+        // Calcular salario base (mitad para quincena)
+        let salarioBase = parseFloat(empleado.salario_base) || 0;
+        const salarioQuincenal = salarioBase / 2;
+        
+        // Calcular comisiones (mitad para quincena)
+        let comisiones = 0;
+        if (empleado.cargo === 'vendedor' || empleado.cargo === 'vendedora') {
+            const fechaInicio = quincena === 1 
+                ? `${ano}-${mes.toString().padStart(2, '0')}-01`
+                : `${ano}-${mes.toString().padStart(2, '0')}-16`;
+            
+            const fechaFin = quincena === 1
+                ? `${ano}-${mes.toString().padStart(2, '0')}-15`
+                : `${ano}-${mes.toString().padStart(2, '0')}-${new Date(ano, mes, 0).getDate()}`;
+            
+            const ventasResult = await pool.query(
+                `SELECT COALESCE(SUM(total), 0) as total_ventas
+                 FROM ventas 
+                 WHERE usuario_id = $1 
+                 AND fecha >= $2 
+                 AND fecha <= $3
+                 AND estado != 'cancelada'`,
+                [empleado.usuario_id, fechaInicio, fechaFin]
+            );
+            
+            const totalVentas = parseFloat(ventasResult.rows[0]?.total_ventas || 0);
+            const porcentajeComision = parseFloat(empleado.comision_porcentaje || 0);
+            comisiones = totalVentas * (porcentajeComision / 100);
+        }
+        
+        // Bonos (mitad para quincena)
+        const bonoAnual = parseFloat(empleado.bono_anual || 0);
+        const bonoMensual = bonoAnual / 24; // 24 quincenas al año
+        
+        // Total ingresos
+        const totalIngresos = salarioQuincenal + comisiones + bonoMensual;
+        
+        // Deducciones (mitad para quincena)
+        const tssEmpleado = parseFloat(config.tss_porcentaje_empleado || 2.87);
+        const seguroSocial = totalIngresos * (tssEmpleado / 100);
+        
+        const infotepPorcentaje = parseFloat(config.infotep_porcentaje || 1.0);
+        const infotep = totalIngresos * (infotepPorcentaje / 100);
+        
+        // ISR (mitad)
+        const isrExento = parseFloat(config.isr_exento || 416220.00) / 24;
+        let isr = 0;
+        const ingresoAnual = totalIngresos * 24;
+        if (ingresoAnual > isrExento) {
+            const excedente = ingresoAnual - isrExento;
+            isr = excedente * (parseFloat(config.isr_exceso_porcentaje || 25) / 100) / 24;
+        }
+        
+        // Préstamos (mitad)
+        let prestamoMensual = 0;
+        const prestamosResult = await pool.query(
+            `SELECT COALESCE(SUM(cuota_mensual), 0) as total_prestamos
+             FROM prestamos_empleados 
+             WHERE empleado_id = $1 AND estado = 'activo'`,
+            [empleado_id]
+        );
+        prestamoMensual = parseFloat(prestamosResult.rows[0]?.total_prestamos || 0) / 2;
+        
+        // Totales
+        const totalDeducciones = seguroSocial + infotep + isr + prestamoMensual;
+        const totalBruto = totalIngresos;
+        const totalNeto = totalBruto - totalDeducciones;
+        
+        // Guardar en base de datos
+        const result = await pool.query(
+            `INSERT INTO nominas (
+                empleado_id, mes, ano, quincena, fecha_inicio, fecha_fin, fecha_pago,
+                salario_base, comisiones, bonos, horas_extras, otros_ingresos,
+                total_ingresos, isr, seguro_social, infotep, prestamos,
+                adelantos, otras_deducciones, total_deducciones,
+                total_bruto, total_neto, estado, tipo_nomina
+            ) VALUES (
+                $1, $2, $3, $4,
+                DATE($5 || '-' || $6 || '-' || $7),
+                DATE($5 || '-' || $6 || '-' || $8),
+                $9,
+                $10, $11, $12, $13, $14,
+                $15, $16, $17, $18, $19,
+                $20, $21, $22,
+                $23, $24,
+                'pendiente',
+                'quincenal'
+            ) RETURNING *`,
+            [
+                empleado_id, mes, ano, quincena,
+                ano, mes.toString().padStart(2, '0'), quincena === 1 ? '01' : '16',
+                quincena === 1 ? '15' : new Date(ano, mes, 0).getDate().toString().padStart(2, '0'),
+                fecha_pago || null,
+                salarioQuincenal, comisiones, bonoMensual,
+                0, 0,
+                totalIngresos,
+                isr, seguroSocial, infotep, prestamoMensual,
+                0, 0,
+                totalDeducciones,
+                totalBruto, totalNeto
+            ]
+        );
+        
+        console.log('✅ Nómina quincenal generada:', result.rows[0]);
+        
+        res.json({
+            success: true,
+            nomina: result.rows[0],
+            detalle: {
+                tipo: 'quincenal',
+                quincena: quincena,
+                ingresos: { 
+                    salario_base: salarioQuincenal, 
+                    comisiones, 
+                    bonos: bonoMensual, 
+                    total: totalIngresos 
+                },
+                deducciones: { 
+                    isr, 
+                    seguro_social: seguroSocial, 
+                    infotep, 
+                    prestamos: prestamoMensual, 
+                    total: totalDeducciones 
+                },
+                totales: { 
+                    bruto: totalBruto, 
+                    neto: totalNeto 
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en POST /nomina/generar-quincenal:', error);
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
+    }
+});
+
+// ============================================
+// GET /nomina/imprimir/:id - Imprimir/Exportar nómina
+// ============================================
+router.get('/imprimir/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log('🖨️ GET /nomina/imprimir:', { id });
+        
+        const result = await pool.query(
+            `SELECT 
+                n.*,
+                e.nombre as empleado_nombre,
+                e.cedula,
+                e.cargo,
+                e.direccion,
+                s.nombre as sucursal_nombre,
+                s.direccion as sucursal_direccion
+            FROM nominas n
+            JOIN empleados e ON n.empleado_id = e.id
+            LEFT JOIN sucursales s ON e.sucursal_id = s.id
+            WHERE n.id = $1`,
+            [id]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Nómina no encontrada' 
+            });
+        }
+        
+        const nomina = result.rows[0];
+        
+        // Formatear datos para impresión
+        const data = {
+            id: nomina.id,
+            fecha: new Date().toLocaleDateString('es-ES'),
+            empleado: nomina.empleado_nombre,
+            cedula: nomina.cedula,
+            cargo: nomina.cargo,
+            sucursal: nomina.sucursal_nombre || 'Principal',
+            periodo: `${nomina.mes}/${nomina.ano}`,
+            tipo: nomina.tipo_nomina || 'mensual',
+            quincena: nomina.quincena || null,
+            salario_base: nomina.salario_base,
+            comisiones: nomina.comisiones,
+            bonos: nomina.bonos,
+            total_ingresos: nomina.total_ingresos,
+            isr: nomina.isr,
+            seguro_social: nomina.seguro_social,
+            infotep: nomina.infotep,
+            prestamos: nomina.prestamos,
+            total_deducciones: nomina.total_deducciones,
+            total_bruto: nomina.total_bruto,
+            total_neto: nomina.total_neto,
+            estado: nomina.estado,
+            fecha_pago: nomina.fecha_pago
+        };
+        
+        res.json({
+            success: true,
+            nomina: data
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en GET /nomina/imprimir:', error);
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
+    }
+});
+
+// ============================================
+// POST /nomina/imprimir-lote - Imprimir lote de nóminas
+// ============================================
+router.post('/imprimir-lote', async (req, res) => {
+    try {
+        const { mes, ano, sucursal_id } = req.body;
+        
+        console.log('🖨️ POST /nomina/imprimir-lote:', { mes, ano, sucursal_id });
+        
+        let query = `
+            SELECT 
+                n.*,
+                e.nombre as empleado_nombre,
+                e.cedula,
+                e.cargo,
+                s.nombre as sucursal_nombre
+            FROM nominas n
+            JOIN empleados e ON n.empleado_id = e.id
+            LEFT JOIN sucursales s ON e.sucursal_id = s.id
+            WHERE n.mes = $1 AND n.ano = $2
+        `;
+        let params = [mes, ano];
+        let paramCount = 3;
+        
+        if (sucursal_id) {
+            query += ` AND e.sucursal_id = $${paramCount}`;
+            params.push(sucursal_id);
+            paramCount++;
+        }
+        
+        query += ` ORDER BY e.nombre`;
+        
+        const result = await pool.query(query, params);
+        
+        const nominas = result.rows.map(n => ({
+            id: n.id,
+            empleado: n.empleado_nombre,
+            cedula: n.cedula,
+            cargo: n.cargo,
+            sucursal: n.sucursal_nombre || 'Principal',
+            total_bruto: n.total_bruto,
+            total_neto: n.total_neto,
+            estado: n.estado
+        }));
+        
+        res.json({
+            success: true,
+            total_nominas: nominas.length,
+            nominas: nominas
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en POST /nomina/imprimir-lote:', error);
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
+    }
+});
+
 module.exports = router;

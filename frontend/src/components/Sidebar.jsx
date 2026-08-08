@@ -39,8 +39,9 @@ function Sidebar() {
     }
   }
 
-  const tieneAcceso = (rolesPermitidos) => {
-    return rolesPermitidos.includes(rol)
+  // Función para manejar clic en enlace - colapsa el sidebar
+  const handleLinkClick = () => {
+    setColapsado(true)
   }
 
   const sidebarWidth = colapsado ? '60px' : '220px'
@@ -62,9 +63,12 @@ function Sidebar() {
         display: 'flex',
         flexDirection: 'column',
         overflowY: 'auto',
-        transition: 'width 0.3s ease'
+        overflowX: 'hidden',
+        transition: 'width 0.3s ease, transform 0.3s ease',
+        boxShadow: '2px 0 10px rgba(0,0,0,0.2)'
       }}
     >
+      {/* BOTÓN TOGGLE - Siempre visible */}
       <div style={{
         display: 'flex',
         justifyContent: colapsado ? 'center' : 'space-between',
@@ -80,27 +84,49 @@ function Sidebar() {
             border: 'none',
             color: 'white',
             fontSize: '24px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            padding: '5px',
+            borderRadius: '4px',
+            transition: 'background 0.2s',
+            hover: { backgroundColor: 'rgba(255,255,255,0.1)' }
           }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          title={colapsado ? 'Expandir menú' : 'Colapsar menú'}
         >
           ☰
         </button>
         {!colapsado && <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>AMAGO</span>}
       </div>
 
+      {/* INFO USUARIO - Solo visible cuando está expandido */}
       {!colapsado && (
-        <div style={{ marginBottom: '15px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px', flexShrink: 0 }}>
-          <p style={{ margin: 0, fontSize: '0.85rem' }}>{usuario?.nombre || 'Usuario'}</p>
-          <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6 }}>Rol: {rol}</p>
+        <div style={{ 
+          marginBottom: '15px', 
+          borderBottom: '1px solid rgba(255,255,255,0.08)', 
+          paddingBottom: '10px', 
+          flexShrink: 0 
+        }}>
+          <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 'bold' }}>
+            {usuario?.nombre || 'Usuario'}
+          </p>
+          <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6 }}>
+            Rol: {rol}
+          </p>
           {sucursalNombre && (
-            <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6 }}>🏢 {sucursalNombre}</p>
+            <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6 }}>
+              🏢 {sucursalNombre}
+            </p>
           )}
           {!sucursalNombre && esVendedor && (
-            <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6, color: '#ff8a80' }}>⚠️ Sin sucursal asignada</p>
+            <p style={{ margin: '2px 0 0 0', fontSize: '0.65rem', opacity: 0.6, color: '#ff8a80' }}>
+              ⚠️ Sin sucursal asignada
+            </p>
           )}
         </div>
       )}
 
+      {/* MENÚ DE NAVEGACIÓN */}
       <nav style={{ 
         display: 'flex', 
         flexDirection: 'column', 
@@ -116,60 +142,724 @@ function Sidebar() {
         {/* ========================================== */}
         {esSubgerente && (
           <>
-            <Link to="/dashboard" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/dashboard' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Dashboard</span>}</Link>
+            <Link 
+              to="/dashboard" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/dashboard' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Dashboard' : ''}
+            >
+              <span>📊</span>
+              {!colapsado && <span>Dashboard</span>}
+            </Link>
             
-            {/* 👇 NÓMINA - SOLO PARA DUEÑO Y SUBGERENTE */}
-            <Link to="/nomina" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/nomina' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Nómina</span>}</Link>
+            <Link 
+              to="/empleados" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/empleados' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Empleados' : ''}
+            >
+              <span>👥</span>
+              {!colapsado && <span>Empleados</span>}
+            </Link>
             
-            <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🛒 {!colapsado && <span>Ventas</span>}</Link>
-            <Link to="/productos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/productos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Productos</span>}</Link>
-            <Link to="/inventario" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario General</span>}</Link>
-            <Link to="/inventario-bani" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏢 {!colapsado && <span>Inventario Baní</span>}</Link>
-            <Link to="/inventario-sabana" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏢 {!colapsado && <span>Inventario Sabana</span>}</Link>
-            <Link to="/clientes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👤 {!colapsado && <span>Clientes</span>}</Link>
-            <Link to="/produccion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/produccion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏭 {!colapsado && <span>Producción</span>}</Link>
-            <Link to="/materiales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/materiales' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔧 {!colapsado && <span>Materiales</span>}</Link>
-            <Link to="/recetas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/recetas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📋 {!colapsado && <span>Recetas</span>}</Link>
-            <Link to="/entregas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🚚 {!colapsado && <span>Entregas</span>}</Link>
-            <Link to="/no-entregados" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/no-entregados' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📋 {!colapsado && <span>No Entregados</span>}</Link>
-            <Link to="/creditos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Créditos</span>}</Link>
-            <Link to="/reportes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/reportes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📈 {!colapsado && <span>Reportes</span>}</Link>
-            <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📜 {!colapsado && <span>Historial</span>}</Link>
-            <Link to="/cambios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/cambios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔄 {!colapsado && <span>Cambios</span>}</Link>
-            <Link to="/usuarios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/usuarios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👥 {!colapsado && <span>Usuarios</span>}</Link>
-            <Link to="/sucursales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/sucursales' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏢 {!colapsado && <span>Sucursales</span>}</Link>
-            <Link to="/transferencias" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Transferencias</span>}</Link>
-            <Link to="/configuracion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>⚙️ {!colapsado && <span>Configuración</span>}</Link>
+            <Link 
+              to="/nomina" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/nomina' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Nómina' : ''}
+            >
+              <span>💰</span>
+              {!colapsado && <span>Nómina</span>}
+            </Link>
+            
+            <Link 
+              to="/ventas" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Ventas' : ''}
+            >
+              <span>🛒</span>
+              {!colapsado && <span>Ventas</span>}
+            </Link>
+            
+            <Link 
+              to="/productos" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/productos' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Productos' : ''}
+            >
+              <span>📦</span>
+              {!colapsado && <span>Productos</span>}
+            </Link>
+            
+            <Link 
+              to="/inventario" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Inventario General' : ''}
+            >
+              <span>📊</span>
+              {!colapsado && <span>Inventario General</span>}
+            </Link>
+            
+            <Link 
+              to="/inventario-bani" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Inventario Baní' : ''}
+            >
+              <span>🏢</span>
+              {!colapsado && <span>Inventario Baní</span>}
+            </Link>
+            
+            <Link 
+              to="/inventario-sabana" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Inventario Sabana' : ''}
+            >
+              <span>🏢</span>
+              {!colapsado && <span>Inventario Sabana</span>}
+            </Link>
+            
+            <Link 
+              to="/clientes" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Clientes' : ''}
+            >
+              <span>👤</span>
+              {!colapsado && <span>Clientes</span>}
+            </Link>
+            
+            <Link 
+              to="/produccion" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/produccion' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Producción' : ''}
+            >
+              <span>🏭</span>
+              {!colapsado && <span>Producción</span>}
+            </Link>
+            
+            <Link 
+              to="/materiales" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/materiales' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Materiales' : ''}
+            >
+              <span>🔧</span>
+              {!colapsado && <span>Materiales</span>}
+            </Link>
+            
+            <Link 
+              to="/recetas" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/recetas' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Recetas' : ''}
+            >
+              <span>📋</span>
+              {!colapsado && <span>Recetas</span>}
+            </Link>
+            
+            <Link 
+              to="/entregas" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Entregas' : ''}
+            >
+              <span>🚚</span>
+              {!colapsado && <span>Entregas</span>}
+            </Link>
+            
+            <Link 
+              to="/no-entregados" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/no-entregados' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'No Entregados' : ''}
+            >
+              <span>📋</span>
+              {!colapsado && <span>No Entregados</span>}
+            </Link>
+            
+            <Link 
+              to="/creditos" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Créditos' : ''}
+            >
+              <span>💰</span>
+              {!colapsado && <span>Créditos</span>}
+            </Link>
+            
+            <Link 
+              to="/reportes" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/reportes' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Reportes' : ''}
+            >
+              <span>📈</span>
+              {!colapsado && <span>Reportes</span>}
+            </Link>
+            
+            <Link 
+              to="/historial" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Historial' : ''}
+            >
+              <span>📜</span>
+              {!colapsado && <span>Historial</span>}
+            </Link>
+            
+            <Link 
+              to="/cambios" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/cambios' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Cambios' : ''}
+            >
+              <span>🔄</span>
+              {!colapsado && <span>Cambios</span>}
+            </Link>
+            
+            <Link 
+              to="/usuarios" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/usuarios' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Usuarios' : ''}
+            >
+              <span>👥</span>
+              {!colapsado && <span>Usuarios</span>}
+            </Link>
+            
+            <Link 
+              to="/sucursales" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/sucursales' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Sucursales' : ''}
+            >
+              <span>🏢</span>
+              {!colapsado && <span>Sucursales</span>}
+            </Link>
+            
+            <Link 
+              to="/transferencias" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Transferencias' : ''}
+            >
+              <span>📦</span>
+              {!colapsado && <span>Transferencias</span>}
+            </Link>
+            
+            <Link 
+              to="/configuracion" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Configuración' : ''}
+            >
+              <span>⚙️</span>
+              {!colapsado && <span>Configuración</span>}
+            </Link>
           </>
         )}
 
         {/* ========================================== */}
-        {/* MENÚ PARA VENDEDOR - CON CAMBIOS AGREGADO */}
+        {/* MENÚ PARA VENDEDOR */}
         {/* ========================================== */}
         {esVendedor && (
           <>
-            <Link to="/ventas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🛒 {!colapsado && <span>Ventas</span>}</Link>
+            <Link 
+              to="/ventas" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Ventas' : ''}
+            >
+              <span>🛒</span>
+              {!colapsado && <span>Ventas</span>}
+            </Link>
 
             {esVendedorPrincipal && (
-              <Link to="/inventario" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario</span>}</Link>
+              <Link 
+                to="/inventario" 
+                onClick={handleLinkClick}
+                style={{ 
+                  color: 'white', 
+                  textDecoration: 'none', 
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  justifyContent: colapsado ? 'center' : 'flex-start',
+                  backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap'
+                }}
+                title={colapsado ? 'Inventario' : ''}
+              >
+                <span>📊</span>
+                {!colapsado && <span>Inventario</span>}
+              </Link>
             )}
+            
             {esSucursalBani && (
-              <Link to="/inventario-bani" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario Baní</span>}</Link>
+              <Link 
+                to="/inventario-bani" 
+                onClick={handleLinkClick}
+                style={{ 
+                  color: 'white', 
+                  textDecoration: 'none', 
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  justifyContent: colapsado ? 'center' : 'flex-start',
+                  backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap'
+                }}
+                title={colapsado ? 'Inventario Baní' : ''}
+              >
+                <span>📊</span>
+                {!colapsado && <span>Inventario Baní</span>}
+              </Link>
             )}
+            
             {esSucursalSabana && (
-              <Link to="/inventario-sabana" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📊 {!colapsado && <span>Inventario Sabana</span>}</Link>
+              <Link 
+                to="/inventario-sabana" 
+                onClick={handleLinkClick}
+                style={{ 
+                  color: 'white', 
+                  textDecoration: 'none', 
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  justifyContent: colapsado ? 'center' : 'flex-start',
+                  backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap'
+                }}
+                title={colapsado ? 'Inventario Sabana' : ''}
+              >
+                <span>📊</span>
+                {!colapsado && <span>Inventario Sabana</span>}
+              </Link>
             )}
 
-            <Link to="/clientes" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>👤 {!colapsado && <span>Clientes</span>}</Link>
-            <Link to="/creditos" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>💰 {!colapsado && <span>Créditos</span>}</Link>
-            <Link to="/historial" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📜 {!colapsado && <span>Historial</span>}</Link>
-            <Link to="/cambios" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/cambios' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔄 {!colapsado && <span>Cambios</span>}</Link>
+            <Link 
+              to="/clientes" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Clientes' : ''}
+            >
+              <span>👤</span>
+              {!colapsado && <span>Clientes</span>}
+            </Link>
+            
+            <Link 
+              to="/creditos" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Créditos' : ''}
+            >
+              <span>💰</span>
+              {!colapsado && <span>Créditos</span>}
+            </Link>
+            
+            <Link 
+              to="/historial" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Historial' : ''}
+            >
+              <span>📜</span>
+              {!colapsado && <span>Historial</span>}
+            </Link>
+            
+            <Link 
+              to="/cambios" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/cambios' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Cambios' : ''}
+            >
+              <span>🔄</span>
+              {!colapsado && <span>Cambios</span>}
+            </Link>
 
             {esVendedorPrincipal && (
-              <Link to="/transferencias" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📦 {!colapsado && <span>Transferencias</span>}</Link>
+              <Link 
+                to="/transferencias" 
+                onClick={handleLinkClick}
+                style={{ 
+                  color: 'white', 
+                  textDecoration: 'none', 
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  justifyContent: colapsado ? 'center' : 'flex-start',
+                  backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap'
+                }}
+                title={colapsado ? 'Transferencias' : ''}
+              >
+                <span>📦</span>
+                {!colapsado && <span>Transferencias</span>}
+              </Link>
             )}
 
-            <Link to="/configuracion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>⚙️ {!colapsado && <span>Configuración</span>}</Link>
+            <Link 
+              to="/configuracion" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Configuración' : ''}
+            >
+              <span>⚙️</span>
+              {!colapsado && <span>Configuración</span>}
+            </Link>
           </>
         )}
 
@@ -178,8 +868,49 @@ function Sidebar() {
         {/* ========================================== */}
         {esChofer && (
           <>
-            <Link to="/entregas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🚚 {!colapsado && <span>Entregas</span>}</Link>
-            <Link to="/configuracion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>⚙️ {!colapsado && <span>Configuración</span>}</Link>
+            <Link 
+              to="/entregas" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Entregas' : ''}
+            >
+              <span>🚚</span>
+              {!colapsado && <span>Entregas</span>}
+            </Link>
+            
+            <Link 
+              to="/configuracion" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Configuración' : ''}
+            >
+              <span>⚙️</span>
+              {!colapsado && <span>Configuración</span>}
+            </Link>
           </>
         )}
 
@@ -188,14 +919,98 @@ function Sidebar() {
         {/* ========================================== */}
         {esSupervisor && (
           <>
-            <Link to="/produccion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/produccion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🏭 {!colapsado && <span>Producción</span>}</Link>
-            <Link to="/materiales" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/materiales' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>🔧 {!colapsado && <span>Materiales</span>}</Link>
-            <Link to="/recetas" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/recetas' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>📋 {!colapsado && <span>Recetas</span>}</Link>
-            <Link to="/configuracion" style={{ color: 'white', textDecoration: 'none', padding: '8px 12px', borderRadius: '6px', display: 'block', textAlign: colapsado ? 'center' : 'left', backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent' }}>⚙️ {!colapsado && <span>Configuración</span>}</Link>
+            <Link 
+              to="/produccion" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/produccion' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Producción' : ''}
+            >
+              <span>🏭</span>
+              {!colapsado && <span>Producción</span>}
+            </Link>
+            
+            <Link 
+              to="/materiales" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/materiales' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Materiales' : ''}
+            >
+              <span>🔧</span>
+              {!colapsado && <span>Materiales</span>}
+            </Link>
+            
+            <Link 
+              to="/recetas" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/recetas' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Recetas' : ''}
+            >
+              <span>📋</span>
+              {!colapsado && <span>Recetas</span>}
+            </Link>
+            
+            <Link 
+              to="/configuracion" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              title={colapsado ? 'Configuración' : ''}
+            >
+              <span>⚙️</span>
+              {!colapsado && <span>Configuración</span>}
+            </Link>
           </>
         )}
       </nav>
 
+      {/* BOTÓN CERRAR SESIÓN */}
       <button
         onClick={cerrarSesion}
         style={{
@@ -211,8 +1026,12 @@ function Sidebar() {
           display: 'flex',
           justifyContent: colapsado ? 'center' : 'flex-start',
           gap: colapsado ? 0 : '8px',
-          alignItems: 'center'
+          alignItems: 'center',
+          transition: 'all 0.2s ease'
         }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(244, 67, 54, 0.3)'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(244, 67, 54, 0.15)'}
+        title={colapsado ? 'Cerrar sesión' : ''}
       >
         🚪 {!colapsado && <span>Cerrar sesión</span>}
       </button>

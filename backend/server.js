@@ -43,6 +43,8 @@ app.use('/dashboard', require('./routes/dashboard'));
 app.use('/transferencias', require('./routes/transferencias'));
 app.use('/cambios', require('./routes/cambios')); // 👈 NUEVA RUTA DE CAMBIOS
 app.use('/nomina', require('./routes/nomina'));
+app.use('/empleados', require('./routes/empleados'));
+
 
 // ============================================
 // TEST ROUTE

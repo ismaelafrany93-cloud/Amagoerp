@@ -1,63 +1,69 @@
 import { useState, useEffect } from 'react'
 
 function Empleados() {
-  const [empleados, setEmpleados] = useState([])
-  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null)
+  const [usuarios, setUsuarios] = useState([])
+  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null)
   const [actividad, setActividad] = useState([])
+  const [estadisticas, setEstadisticas] = useState(null)
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [mensaje, setMensaje] = useState('')
-  const [tipoVista, setTipoVista] = useState('dia') // dia, semana, mes
+  const [tipoVista, setTipoVista] = useState('dia')
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0])
   const [semanaSeleccionada, setSemanaSeleccionada] = useState(1)
   const [mesSeleccionado, setMesSeleccionado] = useState(new Date().getMonth() + 1)
   const [anoSeleccionado, setAnoSeleccionado] = useState(new Date().getFullYear())
-  const [filtroCargo, setFiltroCargo] = useState('todos')
+  const [filtroRol, setFiltroRol] = useState('todos')
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const sucursalId = usuario?.sucursal_id || 3
   const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario?.rol)
 
-  // Cargar empleados al inicio
+  // Cargar usuarios al inicio
   useEffect(() => {
     if (esAdmin) {
-      cargarEmpleados()
+      cargarUsuarios()
     }
   }, [])
 
-  // Cargar actividad cuando cambia el empleado o la fecha
+  // Cargar actividad cuando cambia el usuario o la fecha
   useEffect(() => {
-    if (empleadoSeleccionado) {
+    if (usuarioSeleccionado) {
       cargarActividad()
+      cargarEstadisticas()
     }
-  }, [empleadoSeleccionado, tipoVista, fechaSeleccionada, semanaSeleccionada, mesSeleccionado, anoSeleccionado])
+  }, [usuarioSeleccionado, tipoVista, fechaSeleccionada, semanaSeleccionada, mesSeleccionado, anoSeleccionado])
 
-  const cargarEmpleados = async () => {
+  const cargarUsuarios = async () => {
     setCargando(true)
     try {
-      const response = await fetch(`${API_URL}/nomina/empleados?sucursal_id=${sucursalId}`)
+      const response = await fetch(`${API_URL}/usuarios?sucursal_id=${sucursalId}`)
       const data = await response.json()
-      setEmpleados(Array.isArray(data) ? data : [])
+      setUsuarios(Array.isArray(data) ? data : [])
       
-      // Seleccionar el primer empleado por defecto
       if (data.length > 0) {
-        setEmpleadoSeleccionado(data[0])
+        setUsuarioSeleccionado(data[0])
       }
     } catch (error) {
-      console.error('Error cargando empleados:', error)
-      setError('Error al cargar empleados')
+      console.error('Error cargando usuarios:', error)
+      setError('Error al cargar usuarios')
     } finally {
       setCargando(false)
     }
   }
 
+  // ============================================
+  // FUNCIÓN CARGAR ACTIVIDAD - CORREGIDA
+  // ============================================
   const cargarActividad = async () => {
-    if (!empleadoSeleccionado) return
+    if (!usuarioSeleccionado) return
     
     setCargando(true)
+    setError('')
     try {
-      let url = `${API_URL}/empleados/actividad/${empleadoSeleccionado.id}?tipo=${tipoVista}`
+      // ✅ CORREGIDO: usar la ruta correcta actividad-usuario
+      let url = `${API_URL}/empleados/actividad-usuario/${usuarioSeleccionado.id}?tipo=${tipoVista}`
       
       if (tipoVista === 'dia') {
         url += `&fecha=${fechaSeleccionada}`
@@ -67,14 +73,41 @@ function Empleados() {
         url += `&mes=${mesSeleccionado}&ano=${anoSeleccionado}`
       }
       
+      console.log('📡 URL de actividad:', url) // 👈 Log para depurar
+      
       const response = await fetch(url)
+      
+      // Verificar si la respuesta es OK
+      if (!response.ok) {
+        const text = await response.text()
+        console.error('❌ Respuesta error:', text)
+        throw new Error(`Error ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
+      console.log('📊 Datos de actividad:', data) // 👈 Log para depurar
+      
       setActividad(data.success ? data.data : [])
     } catch (error) {
-      console.error('Error cargando actividad:', error)
-      setError('Error al cargar actividad')
+      console.error('❌ Error cargando actividad:', error)
+      setError('Error al cargar actividad: ' + error.message)
     } finally {
       setCargando(false)
+    }
+  }
+
+  const cargarEstadisticas = async () => {
+    if (!usuarioSeleccionado) return
+    
+    try {
+      const url = `${API_URL}/empleados/estadisticas/${usuarioSeleccionado.id}?mes=${mesSeleccionado}&ano=${anoSeleccionado}`
+      console.log('📡 URL de estadísticas:', url)
+      
+      const response = await fetch(url)
+      const data = await response.json()
+      setEstadisticas(data.success ? data.estadisticas : null)
+    } catch (error) {
+      console.error('Error cargando estadísticas:', error)
     }
   }
 
@@ -83,6 +116,44 @@ function Empleados() {
     return meses[mes - 1] || mes
   }
 
+  const getRolEmoji = (rol) => {
+    const emojis = {
+      'vendedor': '🛒',
+      'vendedora': '🛒',
+      'operario': '🔧',
+      'administrativo': '📋',
+      'gerente': '👔',
+      'admin': '🛡️',
+      'dueño': '👑',
+      'subgerente': '📊',
+      'chofer': '🚚',
+      'supervisor': '📋'
+    }
+    return emojis[rol] || '👤'
+  }
+
+  const getRolColor = (rol) => {
+    const colores = {
+      'vendedor': '#4CAF50',
+      'vendedora': '#4CAF50',
+      'operario': '#2196F3',
+      'administrativo': '#FF9800',
+      'gerente': '#9C27B0',
+      'admin': '#f44336',
+      'dueño': '#f44336',
+      'subgerente': '#003b6f',
+      'chofer': '#795548',
+      'supervisor': '#607D8B'
+    }
+    return colores[rol] || '#666'
+  }
+
+  // Filtrar usuarios por rol
+  const usuariosFiltrados = filtroRol === 'todos' 
+    ? usuarios 
+    : usuarios.filter(u => u.rol === filtroRol)
+
+  // Obtener días de la semana
   const getDiasSemana = (semana, mes, ano) => {
     const dias = []
     const primerDia = new Date(ano, mes - 1, 1)
@@ -95,34 +166,6 @@ function Empleados() {
     return dias
   }
 
-  const getCargoEmoji = (cargo) => {
-    const emojis = {
-      'vendedor': '🛒',
-      'vendedora': '🛒',
-      'operario': '🔧',
-      'administrativo': '📋',
-      'gerente': '👔'
-    }
-    return emojis[cargo] || '👤'
-  }
-
-  const getCargoColor = (cargo) => {
-    const colores = {
-      'vendedor': '#4CAF50',
-      'vendedora': '#4CAF50',
-      'operario': '#2196F3',
-      'administrativo': '#FF9800',
-      'gerente': '#9C27B0'
-    }
-    return colores[cargo] || '#666'
-  }
-
-  // Filtrar empleados por cargo
-  const empleadosFiltrados = filtroCargo === 'todos' 
-    ? empleados 
-    : empleados.filter(e => e.cargo === filtroCargo)
-
-  // Obtener días de la semana
   const diasSemana = getDiasSemana(semanaSeleccionada, mesSeleccionado, anoSeleccionado)
 
   if (!esAdmin) {
@@ -152,7 +195,7 @@ function Empleados() {
         <div>
           <h1 style={{ margin: 0, fontSize: '1.8rem' }}>👥 Gestión de Empleados</h1>
           <p style={{ margin: '5px 0 0 0', opacity: 0.8, fontSize: '0.9rem' }}>
-            {empleados.length} empleados · {empleadoSeleccionado?.nombre || 'Sin seleccionar'}
+            {usuarios.length} empleados · {usuarioSeleccionado?.nombre || 'Sin seleccionar'}
           </p>
         </div>
         <div style={{
@@ -219,16 +262,16 @@ function Empleados() {
           gap: '15px',
           alignItems: 'center'
         }}>
-          {/* Seleccionar Empleado */}
+          {/* Seleccionar Usuario */}
           <div>
             <label style={{ fontWeight: '500', color: '#555', display: 'block', marginBottom: '4px' }}>
-              👤 Empleado
+              👤 Usuario
             </label>
             <select
-              value={empleadoSeleccionado?.id || ''}
+              value={usuarioSeleccionado?.id || ''}
               onChange={(e) => {
-                const emp = empleados.find(em => em.id === parseInt(e.target.value))
-                setEmpleadoSeleccionado(emp)
+                const user = usuarios.find(u => u.id === parseInt(e.target.value))
+                setUsuarioSeleccionado(user)
               }}
               style={{
                 width: '100%',
@@ -238,22 +281,22 @@ function Empleados() {
                 fontSize: '0.95rem'
               }}
             >
-              {empleadosFiltrados.map(emp => (
-                <option key={emp.id} value={emp.id}>
-                  {getCargoEmoji(emp.cargo)} {emp.nombre} - {emp.cargo}
+              {usuariosFiltrados.map(user => (
+                <option key={user.id} value={user.id}>
+                  {getRolEmoji(user.rol)} {user.nombre} - {user.rol}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Filtrar por Cargo */}
+          {/* Filtrar por Rol */}
           <div>
             <label style={{ fontWeight: '500', color: '#555', display: 'block', marginBottom: '4px' }}>
-              📋 Filtrar por Cargo
+              📋 Filtrar por Rol
             </label>
             <select
-              value={filtroCargo}
-              onChange={(e) => setFiltroCargo(e.target.value)}
+              value={filtroRol}
+              onChange={(e) => setFiltroRol(e.target.value)}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -262,11 +305,14 @@ function Empleados() {
                 fontSize: '0.95rem'
               }}
             >
-              <option value="todos">Todos los cargos</option>
+              <option value="todos">Todos los roles</option>
               <option value="vendedor">🛒 Vendedores</option>
               <option value="operario">🔧 Operarios</option>
               <option value="administrativo">📋 Administrativos</option>
               <option value="gerente">👔 Gerentes</option>
+              <option value="subgerente">📊 Subgerentes</option>
+              <option value="chofer">🚚 Choferes</option>
+              <option value="supervisor">📋 Supervisores</option>
             </select>
           </div>
 
@@ -459,8 +505,8 @@ function Empleados() {
         </div>
       </div>
 
-      {/* INFORMACIÓN DEL EMPLEADO SELECCIONADO */}
-      {empleadoSeleccionado && (
+      {/* INFORMACIÓN DEL USUARIO SELECCIONADO */}
+      {usuarioSeleccionado && (
         <div style={{
           backgroundColor: 'white',
           borderRadius: '12px',
@@ -474,10 +520,10 @@ function Empleados() {
         }}>
           <div>
             <h2 style={{ margin: 0, color: '#003b6f' }}>
-              {getCargoEmoji(empleadoSeleccionado.cargo)} {empleadoSeleccionado.nombre}
+              {getRolEmoji(usuarioSeleccionado.rol)} {usuarioSeleccionado.nombre}
             </h2>
             <p style={{ margin: '5px 0 0 0', color: '#666' }}>
-              {empleadoSeleccionado.cargo.toUpperCase()} · 📧 {empleadoSeleccionado.email || 'Sin email'}
+              {usuarioSeleccionado.rol.toUpperCase()} · 📧 {usuarioSeleccionado.email || 'Sin email'}
             </p>
           </div>
           <div style={{
@@ -492,8 +538,8 @@ function Empleados() {
               borderRadius: '8px',
               textAlign: 'center'
             }}>
-              <div style={{ fontSize: '0.7rem', color: '#666' }}>Cédula</div>
-              <div style={{ fontWeight: 'bold' }}>{empleadoSeleccionado.cedula}</div>
+              <div style={{ fontSize: '0.7rem', color: '#666' }}>ID</div>
+              <div style={{ fontWeight: 'bold' }}>#{usuarioSeleccionado.id}</div>
             </div>
             <div style={{
               backgroundColor: '#e8f5e9',
@@ -501,24 +547,22 @@ function Empleados() {
               borderRadius: '8px',
               textAlign: 'center'
             }}>
-              <div style={{ fontSize: '0.7rem', color: '#666' }}>Salario Base</div>
+              <div style={{ fontSize: '0.7rem', color: '#666' }}>Sucursal</div>
               <div style={{ fontWeight: 'bold', color: '#1b5e20' }}>
-                RD$ {Number(empleadoSeleccionado.salario_base).toFixed(2)}
+                {usuarioSeleccionado.sucursal_nombre || 'Principal'}
               </div>
             </div>
-            {empleadoSeleccionado.comision_porcentaje > 0 && (
-              <div style={{
-                backgroundColor: '#fff3e0',
-                padding: '8px 16px',
-                borderRadius: '8px',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '0.7rem', color: '#666' }}>Comisión</div>
-                <div style={{ fontWeight: 'bold', color: '#e65100' }}>
-                  {empleadoSeleccionado.comision_porcentaje}%
-                </div>
+            <div style={{
+              backgroundColor: '#fff3e0',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '0.7rem', color: '#666' }}>Rol</div>
+              <div style={{ fontWeight: 'bold', color: '#e65100' }}>
+                {usuarioSeleccionado.rol}
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
@@ -540,7 +584,7 @@ function Empleados() {
           gap: '10px'
         }}>
           <h3 style={{ margin: 0, color: '#003b6f' }}>
-            📊 Actividad {empleadoSeleccionado && `de ${empleadoSeleccionado.nombre}`}
+            📊 Actividad {usuarioSeleccionado && `de ${usuarioSeleccionado.nombre}`}
           </h3>
           <span style={{
             backgroundColor: '#e3f2fd',
@@ -581,10 +625,9 @@ function Empleados() {
             color: '#999'
           }}>
             <p style={{ fontSize: '1.2rem' }}>📭 No hay actividad registrada</p>
-            <p>El empleado no tiene registros en este período</p>
+            <p>El usuario no tiene registros en este período</p>
           </div>
         ) : (
-          /* VISTA TIPO EXCEL */
           <div style={{ overflowX: 'auto' }}>
             <table style={{
               width: '100%',
@@ -633,6 +676,63 @@ function Empleados() {
         )}
       </div>
 
+      {/* ESTADÍSTICAS */}
+      {estadisticas && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '15px',
+          marginTop: '20px'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '18px',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            textAlign: 'center',
+            borderTop: '4px solid #003b6f'
+          }}>
+            <p style={{ margin: 0, color: '#666', fontSize: '0.8rem' }}>Total Registros</p>
+            <h2 style={{ margin: '5px 0', color: '#003b6f' }}>{estadisticas.total_registros || 0}</h2>
+          </div>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '18px',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            textAlign: 'center',
+            borderTop: '4px solid #4CAF50'
+          }}>
+            <p style={{ margin: 0, color: '#666', fontSize: '0.8rem' }}>Total Ventas</p>
+            <h2 style={{ margin: '5px 0', color: '#1b5e20' }}>{estadisticas.total_ventas || 0}</h2>
+          </div>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '18px',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            textAlign: 'center',
+            borderTop: '4px solid #FF9800'
+          }}>
+            <p style={{ margin: 0, color: '#666', fontSize: '0.8rem' }}>Total Producción</p>
+            <h2 style={{ margin: '5px 0', color: '#e65100' }}>{estadisticas.total_produccion || 0}</h2>
+          </div>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '18px',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            textAlign: 'center',
+            borderTop: '4px solid #9C27B0'
+          }}>
+            <p style={{ margin: 0, color: '#666', fontSize: '0.8rem' }}>Total Monto</p>
+            <h2 style={{ margin: '5px 0', color: '#4a148c' }}>
+              RD$ {Number(estadisticas.total_monto || 0).toFixed(2)}
+            </h2>
+          </div>
+        </div>
+      )}
+
       {/* PIE DE PÁGINA */}
       <div style={{
         marginTop: '30px',
@@ -644,7 +744,7 @@ function Empleados() {
         fontSize: '0.8rem'
       }}>
         <p style={{ margin: 0 }}>
-          © {new Date().getFullYear()} Sistema de Gestión · {empleados.length} empleados · 
+          © {new Date().getFullYear()} Sistema de Gestión · {usuarios.length} usuarios · 
           Vista: {tipoVista === 'dia' ? 'Diaria' : tipoVista === 'semana' ? 'Semanal' : 'Mensual'}
         </p>
       </div>

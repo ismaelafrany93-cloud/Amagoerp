@@ -21,6 +21,7 @@ import Transferencias from './pages/Transferencias'
 import NoEntregados from './pages/NoEntregados'
 import Cambios from './pages/Cambios'
 import Nomina from './pages/Nomina'
+import Empleados from './pages/Empleados'
 
 
 function App() {
@@ -53,6 +54,7 @@ function App() {
         <Route path="/transferencias" element={<ProtectedRoute><Transferencias /></ProtectedRoute>} />
         <Route path="/cambios" element={<ProtectedRoute><Cambios /></ProtectedRoute>} />
         <Route path="/nomina" element={<ProtectedRoute><Nomina /></ProtectedRoute>} />
+        <Route path="/empleados" element={<ProtectedRoute><Empleados /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   )

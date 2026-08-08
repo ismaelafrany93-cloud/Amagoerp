@@ -3,54 +3,135 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /empleados/actividad/:id - Obtener actividad del empleado
+// GET /empleados/actividad-usuario/:id - Actividad de un usuario por ID
 // ============================================
-router.get('/actividad/:id', async (req, res) => {
+router.get('/actividad-usuario/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { tipo, fecha, semana, mes, ano } = req.query;
         
-        console.log('🔍 GET /empleados/actividad:', { id, tipo, fecha, semana, mes, ano });
+        console.log('🔍 GET /empleados/actividad-usuario:', { id, tipo, fecha, semana, mes, ano });
         
-        // Obtener datos del empleado
-        const empleadoResult = await pool.query(
-            'SELECT * FROM empleados WHERE id = $1',
+        // Obtener datos del usuario
+        const usuarioResult = await pool.query(
+            `SELECT u.*, s.nombre as sucursal_nombre 
+             FROM usuarios u
+             LEFT JOIN sucursales s ON u.sucursal_id = s.id
+             WHERE u.id = $1`,
             [id]
         );
         
-        if (empleadoResult.rows.length === 0) {
+        if (usuarioResult.rows.length === 0) {
             return res.status(404).json({ 
                 success: false, 
-                error: 'Empleado no encontrado' 
+                error: 'Usuario no encontrado' 
             });
         }
         
-        const empleado = empleadoResult.rows[0];
+        const usuario = usuarioResult.rows[0];
         let data = [];
         
-        // Según el cargo, mostrar diferentes actividades
-        if (empleado.cargo === 'vendedor' || empleado.cargo === 'vendedora') {
-            data = await getActividadVendedor(id, empleado.usuario_id, tipo, fecha, semana, mes, ano);
-        } else if (empleado.cargo === 'operario') {
-            data = await getActividadOperario(id, tipo, fecha, semana, mes, ano);
-        } else if (empleado.cargo === 'administrativo') {
-            data = await getActividadAdministrativo(id, tipo, fecha, semana, mes, ano);
+        // Según el rol, mostrar diferentes actividades
+        if (['vendedor', 'vendedora'].includes(usuario.rol)) {
+            data = await getActividadVendedor(usuario.id, tipo, fecha, semana, mes, ano);
+        } else if (usuario.rol === 'operario') {
+            data = await getActividadOperario(usuario.nombre, tipo, fecha, semana, mes, ano);
+        } else if (['administrativo', 'gerente', 'subgerente'].includes(usuario.rol)) {
+            data = await getActividadAdministrativo(usuario.id, tipo, fecha, semana, mes, ano);
         } else {
-            data = await getActividadGeneral(id, tipo, fecha, semana, mes, ano);
+            data = await getActividadGeneral(usuario.id, tipo, fecha, semana, mes, ano);
         }
         
         res.json({
             success: true,
             data: data,
-            empleado: {
-                id: empleado.id,
-                nombre: empleado.nombre,
-                cargo: empleado.cargo
+            usuario: {
+                id: usuario.id,
+                nombre: usuario.nombre,
+                rol: usuario.rol,
+                sucursal: usuario.sucursal_nombre
             }
         });
         
     } catch (error) {
-        console.error('❌ Error en GET /empleados/actividad:', error);
+        console.error('❌ Error en GET /empleados/actividad-usuario:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// ============================================
+// GET /empleados/estadisticas/:id - Estadísticas del usuario
+// ============================================
+router.get('/estadisticas/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { mes, ano } = req.query;
+        
+        const mesActual = mes || new Date().getMonth() + 1;
+        const anoActual = ano || new Date().getFullYear();
+        
+        const usuarioResult = await pool.query(
+            'SELECT * FROM usuarios WHERE id = $1',
+            [id]
+        );
+        
+        if (usuarioResult.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Usuario no encontrado' 
+            });
+        }
+        
+        const usuario = usuarioResult.rows[0];
+        let estadisticas = {
+            total_registros: 0,
+            total_ventas: 0,
+            total_produccion: 0,
+            total_monto: 0
+        };
+        
+        if (['vendedor', 'vendedora'].includes(usuario.rol)) {
+            const ventasResult = await pool.query(
+                `SELECT 
+                    COUNT(*) as total_ventas,
+                    COALESCE(SUM(total), 0) as total_monto
+                FROM ventas 
+                WHERE usuario_id = $1 
+                AND EXTRACT(MONTH FROM fecha) = $2 
+                AND EXTRACT(YEAR FROM fecha) = $3
+                AND estado != 'cancelada'`,
+                [usuario.id, mesActual, anoActual]
+            );
+            
+            estadisticas.total_ventas = parseInt(ventasResult.rows[0]?.total_ventas || 0);
+            estadisticas.total_monto = parseFloat(ventasResult.rows[0]?.total_monto || 0);
+            estadisticas.total_registros = estadisticas.total_ventas;
+        } else if (usuario.rol === 'operario') {
+            const produccionResult = await pool.query(
+                `SELECT 
+                    COUNT(*) as total_produccion,
+                    COALESCE(SUM(cantidad), 0) as total_unidades
+                FROM produccion 
+                WHERE operario = $1 
+                AND EXTRACT(MONTH FROM fecha) = $2 
+                AND EXTRACT(YEAR FROM fecha) = $3`,
+                [usuario.nombre, mesActual, anoActual]
+            );
+            
+            estadisticas.total_produccion = parseInt(produccionResult.rows[0]?.total_produccion || 0);
+            estadisticas.total_registros = estadisticas.total_produccion;
+        }
+        
+        res.json({
+            success: true,
+            estadisticas: estadisticas
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en GET /empleados/estadisticas:', error);
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -61,7 +142,7 @@ router.get('/actividad/:id', async (req, res) => {
 // ============================================
 // FUNCIÓN: Actividad para Vendedores
 // ============================================
-async function getActividadVendedor(empleadoId, usuarioId, tipo, fecha, semana, mes, ano) {
+async function getActividadVendedor(usuarioId, tipo, fecha, semana, mes, ano) {
     let query = `
         SELECT 
             v.id as venta_id,
@@ -109,7 +190,7 @@ async function getActividadVendedor(empleadoId, usuarioId, tipo, fecha, semana, 
 // ============================================
 // FUNCIÓN: Actividad para Operarios
 // ============================================
-async function getActividadOperario(empleadoId, tipo, fecha, semana, mes, ano) {
+async function getActividadOperario(operarioNombre, tipo, fecha, semana, mes, ano) {
     let query = `
         SELECT 
             p.id as produccion_id,
@@ -120,9 +201,9 @@ async function getActividadOperario(empleadoId, tipo, fecha, semana, mes, ano) {
             p.observaciones
         FROM produccion p
         JOIN productos prod ON p.producto_id = prod.id
-        WHERE p.operario = (SELECT nombre FROM empleados WHERE id = $1)
+        WHERE p.operario = $1
     `;
-    let params = [empleadoId];
+    let params = [operarioNombre];
     let paramCount = 2;
     
     if (tipo === 'dia' && fecha) {
@@ -152,15 +233,23 @@ async function getActividadOperario(empleadoId, tipo, fecha, semana, mes, ano) {
 // ============================================
 // FUNCIÓN: Actividad para Administrativos
 // ============================================
-async function getActividadAdministrativo(empleadoId, tipo, fecha, semana, mes, ano) {
-    // Por ahora, actividad general
-    return getActividadGeneral(empleadoId, tipo, fecha, semana, mes, ano);
+async function getActividadAdministrativo(usuarioId, tipo, fecha, semana, mes, ano) {
+    let query = `
+        SELECT 
+            'Actividad administrativa' as actividad,
+            NOW() as fecha,
+            'Registro general' as detalle
+        WHERE 1=0
+    `;
+    // Por ahora, retornar vacío para administrativos
+    const result = await pool.query(query);
+    return result.rows;
 }
 
 // ============================================
 // FUNCIÓN: Actividad General
 // ============================================
-async function getActividadGeneral(empleadoId, tipo, fecha, semana, mes, ano) {
+async function getActividadGeneral(usuarioId, tipo, fecha, semana, mes, ano) {
     let query = `
         SELECT 
             'Registro general' as actividad,
@@ -168,7 +257,6 @@ async function getActividadGeneral(empleadoId, tipo, fecha, semana, mes, ano) {
             'Sin detalles' as detalle
         WHERE 1=0
     `;
-    
     const result = await pool.query(query);
     return result.rows;
 }
@@ -178,38 +266,38 @@ async function getActividadGeneral(empleadoId, tipo, fecha, semana, mes, ano) {
 // ============================================
 router.get('/lista', async (req, res) => {
     try {
-        const { sucursal_id, cargo, activo } = req.query;
+        const { sucursal_id, rol, activo } = req.query;
         
         let query = `
             SELECT 
-                e.*,
+                u.*,
                 s.nombre as sucursal_nombre
-            FROM empleados e
-            LEFT JOIN sucursales s ON e.sucursal_id = s.id
+            FROM usuarios u
+            LEFT JOIN sucursales s ON u.sucursal_id = s.id
             WHERE 1=1
         `;
         let params = [];
         let paramCount = 1;
         
         if (sucursal_id) {
-            query += ` AND e.sucursal_id = $${paramCount}`;
+            query += ` AND u.sucursal_id = $${paramCount}`;
             params.push(sucursal_id);
             paramCount++;
         }
         
-        if (cargo && cargo !== 'todos') {
-            query += ` AND e.cargo = $${paramCount}`;
-            params.push(cargo);
+        if (rol && rol !== 'todos') {
+            query += ` AND u.rol = $${paramCount}`;
+            params.push(rol);
             paramCount++;
         }
         
         if (activo !== undefined) {
-            query += ` AND e.activo = $${paramCount}`;
+            query += ` AND u.activo = $${paramCount}`;
             params.push(activo === 'true');
             paramCount++;
         }
         
-        query += ` ORDER BY e.nombre`;
+        query += ` ORDER BY u.nombre`;
         
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -231,21 +319,19 @@ router.get('/stats/:id', async (req, res) => {
         const mesActual = mes || new Date().getMonth() + 1;
         const anoActual = ano || new Date().getFullYear();
         
-        // Obtener datos del empleado
-        const empleadoResult = await pool.query(
-            'SELECT * FROM empleados WHERE id = $1',
+        const usuarioResult = await pool.query(
+            'SELECT * FROM usuarios WHERE id = $1',
             [id]
         );
         
-        if (empleadoResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Empleado no encontrado' });
+        if (usuarioResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
         }
         
-        const empleado = empleadoResult.rows[0];
+        const usuario = usuarioResult.rows[0];
         let stats = {};
         
-        if (empleado.cargo === 'vendedor' || empleado.cargo === 'vendedora') {
-            // Ventas del mes
+        if (['vendedor', 'vendedora'].includes(usuario.rol)) {
             const ventasResult = await pool.query(
                 `SELECT 
                     COUNT(*) as total_ventas,
@@ -257,16 +343,15 @@ router.get('/stats/:id', async (req, res) => {
                 AND EXTRACT(MONTH FROM fecha) = $2 
                 AND EXTRACT(YEAR FROM fecha) = $3
                 AND estado != 'cancelada'`,
-                [empleado.usuario_id, mesActual, anoActual]
+                [usuario.id, mesActual, anoActual]
             );
             
             stats = ventasResult.rows[0] || {};
             stats.mes = mesActual;
             stats.ano = anoActual;
-            stats.cargo = empleado.cargo;
-            stats.nombre = empleado.nombre;
-        } else if (empleado.cargo === 'operario') {
-            // Producción del mes
+            stats.rol = usuario.rol;
+            stats.nombre = usuario.nombre;
+        } else if (usuario.rol === 'operario') {
             const produccionResult = await pool.query(
                 `SELECT 
                     COUNT(*) as total_producciones,
@@ -275,14 +360,14 @@ router.get('/stats/:id', async (req, res) => {
                 WHERE operario = $1 
                 AND EXTRACT(MONTH FROM fecha) = $2 
                 AND EXTRACT(YEAR FROM fecha) = $3`,
-                [empleado.nombre, mesActual, anoActual]
+                [usuario.nombre, mesActual, anoActual]
             );
             
             stats = produccionResult.rows[0] || {};
             stats.mes = mesActual;
             stats.ano = anoActual;
-            stats.cargo = empleado.cargo;
-            stats.nombre = empleado.nombre;
+            stats.rol = usuario.rol;
+            stats.nombre = usuario.nombre;
         }
         
         res.json({

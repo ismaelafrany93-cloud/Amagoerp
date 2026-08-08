@@ -309,6 +309,16 @@ router.get('/lista', async (req, res) => {
 });
 
 // ============================================
+// GET /empleados/actividad/:id - Actividad de un empleado (alias)
+// ============================================
+router.get('/actividad/:id', async (req, res) => {
+    // Redirigir a la ruta correcta
+    req.params.id = req.params.id;
+    req.query = req.query;
+    return router.handle(req, res);
+});
+
+// ============================================
 // GET /empleados/stats/:id - Estadísticas del empleado
 // ============================================
 router.get('/stats/:id', async (req, res) => {

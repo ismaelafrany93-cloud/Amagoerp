@@ -44,6 +44,11 @@ function Sidebar() {
     setColapsado(true)
   }
 
+  // Función para alternar el sidebar (expandir/colapsar)
+  const toggleSidebar = () => {
+    setColapsado(!colapsado)
+  }
+
   const sidebarWidth = colapsado ? '60px' : '220px'
 
   return (
@@ -64,7 +69,7 @@ function Sidebar() {
         flexDirection: 'column',
         overflowY: 'auto',
         overflowX: 'hidden',
-        transition: 'width 0.3s ease, transform 0.3s ease',
+        transition: 'width 0.3s ease',
         boxShadow: '2px 0 10px rgba(0,0,0,0.2)'
       }}
     >
@@ -78,17 +83,16 @@ function Sidebar() {
         paddingBottom: '12px'
       }}>
         <button
-          onClick={() => setColapsado(!colapsado)}
+          onClick={toggleSidebar}
           style={{
             background: 'none',
             border: 'none',
             color: 'white',
             fontSize: '24px',
             cursor: 'pointer',
-            padding: '5px',
+            padding: '5px 8px',
             borderRadius: '4px',
-            transition: 'background 0.2s',
-            hover: { backgroundColor: 'rgba(255,255,255,0.1)' }
+            transition: 'background 0.2s'
           }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -156,7 +160,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/dashboard' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Dashboard' : ''}
             >
@@ -178,7 +183,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/empleados' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Empleados' : ''}
             >
@@ -200,7 +206,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/nomina' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Nómina' : ''}
             >
@@ -222,7 +229,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Ventas' : ''}
             >
@@ -244,7 +252,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/productos' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Productos' : ''}
             >
@@ -266,12 +275,13 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
-              title={colapsado ? 'Inventario General' : ''}
+              title={colapsado ? 'Inventario' : ''}
             >
               <span>📊</span>
-              {!colapsado && <span>Inventario General</span>}
+              {!colapsado && <span>Inventario</span>}
             </Link>
             
             <Link 
@@ -288,7 +298,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Inventario Baní' : ''}
             >
@@ -310,7 +321,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Inventario Sabana' : ''}
             >
@@ -332,7 +344,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Clientes' : ''}
             >
@@ -354,7 +367,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/produccion' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Producción' : ''}
             >
@@ -376,7 +390,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/materiales' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Materiales' : ''}
             >
@@ -398,7 +413,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/recetas' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Recetas' : ''}
             >
@@ -420,7 +436,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Entregas' : ''}
             >
@@ -442,7 +459,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/no-entregados' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'No Entregados' : ''}
             >
@@ -464,7 +482,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Créditos' : ''}
             >
@@ -486,7 +505,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/reportes' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Reportes' : ''}
             >
@@ -508,7 +528,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Historial' : ''}
             >
@@ -530,7 +551,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/cambios' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Cambios' : ''}
             >
@@ -552,7 +574,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/usuarios' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Usuarios' : ''}
             >
@@ -574,7 +597,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/sucursales' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Sucursales' : ''}
             >
@@ -596,7 +620,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Transferencias' : ''}
             >
@@ -618,7 +643,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Configuración' : ''}
             >
@@ -647,7 +673,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/ventas' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Ventas' : ''}
             >
@@ -670,7 +697,8 @@ function Sidebar() {
                   justifyContent: colapsado ? 'center' : 'flex-start',
                   backgroundColor: location.pathname === '/inventario' ? 'rgba(255,255,255,0.15)' : 'transparent',
                   transition: 'all 0.2s ease',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  fontSize: colapsado ? '1.2rem' : '0.9rem'
                 }}
                 title={colapsado ? 'Inventario' : ''}
               >
@@ -694,7 +722,8 @@ function Sidebar() {
                   justifyContent: colapsado ? 'center' : 'flex-start',
                   backgroundColor: location.pathname === '/inventario-bani' ? 'rgba(255,255,255,0.15)' : 'transparent',
                   transition: 'all 0.2s ease',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  fontSize: colapsado ? '1.2rem' : '0.9rem'
                 }}
                 title={colapsado ? 'Inventario Baní' : ''}
               >
@@ -718,7 +747,8 @@ function Sidebar() {
                   justifyContent: colapsado ? 'center' : 'flex-start',
                   backgroundColor: location.pathname === '/inventario-sabana' ? 'rgba(255,255,255,0.15)' : 'transparent',
                   transition: 'all 0.2s ease',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  fontSize: colapsado ? '1.2rem' : '0.9rem'
                 }}
                 title={colapsado ? 'Inventario Sabana' : ''}
               >
@@ -741,7 +771,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/clientes' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Clientes' : ''}
             >
@@ -763,7 +794,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/creditos' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Créditos' : ''}
             >
@@ -785,7 +817,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/historial' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Historial' : ''}
             >
@@ -807,7 +840,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/cambios' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Cambios' : ''}
             >
@@ -830,7 +864,8 @@ function Sidebar() {
                   justifyContent: colapsado ? 'center' : 'flex-start',
                   backgroundColor: location.pathname === '/transferencias' ? 'rgba(255,255,255,0.15)' : 'transparent',
                   transition: 'all 0.2s ease',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  fontSize: colapsado ? '1.2rem' : '0.9rem'
                 }}
                 title={colapsado ? 'Transferencias' : ''}
               >
@@ -853,7 +888,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Configuración' : ''}
             >
@@ -882,7 +918,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Entregas' : ''}
             >
@@ -904,7 +941,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Configuración' : ''}
             >
@@ -933,7 +971,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/produccion' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Producción' : ''}
             >
@@ -955,7 +994,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/materiales' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Materiales' : ''}
             >
@@ -977,7 +1017,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/recetas' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Recetas' : ''}
             >
@@ -999,7 +1040,8 @@ function Sidebar() {
                 justifyContent: colapsado ? 'center' : 'flex-start',
                 backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent',
                 transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
               }}
               title={colapsado ? 'Configuración' : ''}
             >

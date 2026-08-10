@@ -12,7 +12,6 @@ router.get('/actividad-usuario/:id', async (req, res) => {
         
         console.log('🔍 GET /empleados/actividad-usuario:', { id, tipo, fecha, semana, mes, ano });
         
-        // Obtener datos del usuario
         const usuarioResult = await pool.query(
             `SELECT u.*, s.nombre as sucursal_nombre 
              FROM usuarios u
@@ -31,11 +30,11 @@ router.get('/actividad-usuario/:id', async (req, res) => {
         const usuario = usuarioResult.rows[0];
         let data = [];
         
-        // Según el rol, mostrar diferentes actividades
         if (['vendedor', 'vendedora'].includes(usuario.rol)) {
             data = await getActividadVendedor(usuario.id, tipo, fecha, semana, mes, ano);
         } else if (usuario.rol === 'operario') {
-            data = await getActividadOperario(usuario.nombre, tipo, fecha, semana, mes, ano);
+            // PASAR EL ID DEL USUARIO
+            data = await getActividadOperario(usuario.id, tipo, fecha, semana, mes, ano);
         } else if (['administrativo', 'gerente', 'subgerente'].includes(usuario.rol)) {
             data = await getActividadAdministrativo(usuario.id, tipo, fecha, semana, mes, ano);
         } else {
@@ -188,9 +187,25 @@ async function getActividadVendedor(usuarioId, tipo, fecha, semana, mes, ano) {
 }
 
 // ============================================
-// FUNCIÓN: Actividad para Operarios
+// FUNCIÓN: Actividad para Operarios (VERSIÓN CORREGIDA)
 // ============================================
-async function getActividadOperario(operarioNombre, tipo, fecha, semana, mes, ano) {
+async function getActividadOperario(usuarioId, tipo, fecha, semana, mes, ano) {
+    console.log('🔧 getActividadOperario - usuarioId:', usuarioId, 'tipo:', tipo);
+    
+    // Primero obtener el nombre del operario
+    const usuarioResult = await pool.query(
+        'SELECT nombre FROM usuarios WHERE id = $1',
+        [usuarioId]
+    );
+    
+    if (usuarioResult.rows.length === 0) {
+        console.log('❌ Usuario no encontrado');
+        return [];
+    }
+    
+    const operarioNombre = usuarioResult.rows[0].nombre;
+    console.log('🔍 Buscando producción para operario:', operarioNombre);
+    
     let query = `
         SELECT 
             p.id as produccion_id,
@@ -198,7 +213,7 @@ async function getActividadOperario(operarioNombre, tipo, fecha, semana, mes, an
             p.producto_id,
             prod.nombre as producto_nombre,
             p.cantidad,
-            p.observaciones
+            TO_CHAR(p.fecha, 'DD/MM/YYYY') as fecha_formateada
         FROM produccion p
         JOIN productos prod ON p.producto_id = prod.id
         WHERE p.operario = $1
@@ -226,7 +241,16 @@ async function getActividadOperario(operarioNombre, tipo, fecha, semana, mes, an
     
     query += ` ORDER BY p.fecha DESC`;
     
+    console.log('📝 Query:', query);
+    console.log('📊 Params:', params);
+    
     const result = await pool.query(query, params);
+    
+    console.log(`✅ Encontrados ${result.rows.length} registros de producción`);
+    if (result.rows.length > 0) {
+        console.log('📋 Primer registro:', result.rows[0]);
+    }
+    
     return result.rows;
 }
 
@@ -241,7 +265,6 @@ async function getActividadAdministrativo(usuarioId, tipo, fecha, semana, mes, a
             'Registro general' as detalle
         WHERE 1=0
     `;
-    // Por ahora, retornar vacío para administrativos
     const result = await pool.query(query);
     return result.rows;
 }
@@ -306,16 +329,6 @@ router.get('/lista', async (req, res) => {
         console.error('❌ Error en GET /empleados/lista:', error);
         res.status(500).json({ error: error.message });
     }
-});
-
-// ============================================
-// GET /empleados/actividad/:id - Actividad de un empleado (alias)
-// ============================================
-router.get('/actividad/:id', async (req, res) => {
-    // Redirigir a la ruta correcta
-    req.params.id = req.params.id;
-    req.query = req.query;
-    return router.handle(req, res);
 });
 
 // ============================================

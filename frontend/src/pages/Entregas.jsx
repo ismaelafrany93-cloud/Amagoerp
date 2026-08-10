@@ -17,7 +17,6 @@ function Entregas() {
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
   
-  // 👇 SOLO estos roles pueden gestionar entregas
   const puedeGestionar = ['chofer', 'subgerente', 'dueno', 'dueño', 'admin'].includes(rol)
   const esSubgerente = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
 
@@ -29,7 +28,6 @@ function Entregas() {
     try {
       let url = `${API_URL}/entregas`
       
-      // Si es chofer, solo ver entregas de su sucursal
       if (rol === 'chofer') {
         url = `${API_URL}/entregas?sucursal_id=${usuario.sucursal_id}`
       } else if (!esSubgerente) {
@@ -73,17 +71,27 @@ function Entregas() {
     }
   }
 
+  // ============================================
+  // MARCAR COMO ENTREGADA - CON CHOFER_ID
+  // ============================================
   const marcarComoEntregada = async (id) => {
     if (!window.confirm('✅ ¿Confirmar que esta entrega fue realizada?')) return
 
     try {
+      // Obtener el ID del usuario actual (chofer)
+      const usuarioActual = JSON.parse(localStorage.getItem('usuario') || '{}')
+      
       const response = await fetch(`${API_URL}/entregas/${id}/entregar`, {
-        method: 'PUT'
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chofer_id: usuarioActual.id // 👈 Enviar el ID del chofer
+        })
       })
       const data = await response.json()
 
       if (data.success) {
-        setMensaje('✅ Entrega marcada como completada')
+        setMensaje(data.message || '✅ Entrega marcada como completada')
         cargarEntregas()
         setTimeout(() => setMensaje(''), 3000)
       } else {
@@ -94,37 +102,6 @@ function Entregas() {
       setMensaje('❌ Error al marcar entrega')
     }
   }
-
-  // ============================================
-// MARCAR COMO ENTREGADA - MODIFICADA
-// ============================================
-const marcarComoEntregada = async (id) => {
-    if (!window.confirm('✅ ¿Confirmar que esta entrega fue realizada?')) return
-
-    try {
-        const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-        
-        const response = await fetch(`${API_URL}/entregas/${id}/entregar`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chofer_id: usuario.id // 👈 ENVIAR ID DEL CHOFER
-            })
-        })
-        const data = await response.json()
-
-        if (data.success) {
-            setMensaje(data.message || '✅ Entrega marcada como completada')
-            cargarEntregas()
-            setTimeout(() => setMensaje(''), 3000)
-        } else {
-            setMensaje('❌ Error: ' + (data.message || data.error))
-        }
-    } catch (error) {
-        console.error('Error:', error)
-        setMensaje('❌ Error al marcar entrega')
-    }
-}
 
   // ============================================
   // FUNCIÓN PARA NO ENTREGADO (CON MOTIVO)
@@ -345,13 +322,14 @@ const marcarComoEntregada = async (id) => {
               <th style={{ padding: '12px', textAlign: 'left' }}>Dirección</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Estado</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Fecha</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Chofer</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {filtradas.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                <td colSpan="8" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                   {busqueda ? 'No se encontraron entregas con ese código' : 'No hay entregas registradas'}
                 </td>
               </tr>
@@ -424,6 +402,21 @@ const marcarComoEntregada = async (id) => {
                   </td>
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     {new Date(e.fecha_salida || e.created_at).toLocaleDateString()}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    {e.chofer_nombre ? (
+                      <span style={{
+                        backgroundColor: '#e3f2fd',
+                        color: '#003b6f',
+                        padding: '4px 12px',
+                        borderRadius: '20px',
+                        fontSize: '0.75rem'
+                      }}>
+                        🚚 {e.chofer_nombre}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#999', fontSize: '0.75rem' }}>Sin asignar</span>
+                    )}
                   </td>
                   <td style={{ padding: '12px', textAlign: 'center' }}>
                     {e.estado === 'pendiente' && puedeGestionar && (

@@ -33,8 +33,7 @@ router.get('/actividad-usuario/:id', async (req, res) => {
         if (['vendedor', 'vendedora'].includes(usuario.rol)) {
             data = await getActividadVendedor(usuario.id, tipo, fecha, semana, mes, ano);
         } else if (usuario.rol === 'operario') {
-            // PASAR EL ID DEL USUARIO
-            data = await getActividadOperario(usuario.id, tipo, fecha, semana, mes, ano);
+            data = await getActividadOperario(usuario.id, usuario.nombre, tipo, fecha, semana, mes, ano);
         } else if (['administrativo', 'gerente', 'subgerente'].includes(usuario.rol)) {
             data = await getActividadAdministrativo(usuario.id, tipo, fecha, semana, mes, ano);
         } else {
@@ -109,15 +108,16 @@ router.get('/estadisticas/:id', async (req, res) => {
             estadisticas.total_monto = parseFloat(ventasResult.rows[0]?.total_monto || 0);
             estadisticas.total_registros = estadisticas.total_ventas;
         } else if (usuario.rol === 'operario') {
+            // Usar ILIKE para búsqueda insensible a mayúsculas
             const produccionResult = await pool.query(
                 `SELECT 
                     COUNT(*) as total_produccion,
                     COALESCE(SUM(cantidad), 0) as total_unidades
                 FROM produccion 
-                WHERE operario = $1 
+                WHERE operario ILIKE $1 
                 AND EXTRACT(MONTH FROM fecha) = $2 
                 AND EXTRACT(YEAR FROM fecha) = $3`,
-                [usuario.nombre, mesActual, anoActual]
+                [`%${usuario.nombre}%`, mesActual, anoActual]
             );
             
             estadisticas.total_produccion = parseInt(produccionResult.rows[0]?.total_produccion || 0);
@@ -187,25 +187,12 @@ async function getActividadVendedor(usuarioId, tipo, fecha, semana, mes, ano) {
 }
 
 // ============================================
-// FUNCIÓN: Actividad para Operarios (VERSIÓN CORREGIDA)
+// FUNCIÓN: Actividad para Operarios (VERSIÓN CORREGIDA CON ILIKE)
 // ============================================
-async function getActividadOperario(usuarioId, tipo, fecha, semana, mes, ano) {
-    console.log('🔧 getActividadOperario - usuarioId:', usuarioId, 'tipo:', tipo);
+async function getActividadOperario(usuarioId, nombreUsuario, tipo, fecha, semana, mes, ano) {
+    console.log('🔧 getActividadOperario - usuarioId:', usuarioId, 'nombre:', nombreUsuario, 'tipo:', tipo);
     
-    // Primero obtener el nombre del operario
-    const usuarioResult = await pool.query(
-        'SELECT nombre FROM usuarios WHERE id = $1',
-        [usuarioId]
-    );
-    
-    if (usuarioResult.rows.length === 0) {
-        console.log('❌ Usuario no encontrado');
-        return [];
-    }
-    
-    const operarioNombre = usuarioResult.rows[0].nombre;
-    console.log('🔍 Buscando producción para operario:', operarioNombre);
-    
+    // Buscar producción usando ILIKE para coincidencia parcial (insensible a mayúsculas)
     let query = `
         SELECT 
             p.id as produccion_id,
@@ -213,12 +200,13 @@ async function getActividadOperario(usuarioId, tipo, fecha, semana, mes, ano) {
             p.producto_id,
             prod.nombre as producto_nombre,
             p.cantidad,
-            TO_CHAR(p.fecha, 'DD/MM/YYYY') as fecha_formateada
+            TO_CHAR(p.fecha, 'DD/MM/YYYY') as fecha_formateada,
+            p.operario as operario_nombre
         FROM produccion p
         JOIN productos prod ON p.producto_id = prod.id
-        WHERE p.operario = $1
+        WHERE p.operario ILIKE $1
     `;
-    let params = [operarioNombre];
+    let params = [`%${nombreUsuario}%`];
     let paramCount = 2;
     
     if (tipo === 'dia' && fecha) {
@@ -246,9 +234,16 @@ async function getActividadOperario(usuarioId, tipo, fecha, semana, mes, ano) {
     
     const result = await pool.query(query, params);
     
-    console.log(`✅ Encontrados ${result.rows.length} registros de producción`);
+    console.log(`✅ Encontrados ${result.rows.length} registros de producción para "${nombreUsuario}"`);
     if (result.rows.length > 0) {
         console.log('📋 Primer registro:', result.rows[0]);
+    } else {
+        // Si no encuentra con ILIKE, intentar buscar todos los operarios similares
+        const allOperarios = await pool.query(
+            `SELECT DISTINCT operario FROM produccion WHERE operario ILIKE $1 LIMIT 10`,
+            [`%${nombreUsuario}%`]
+        );
+        console.log('🔍 Operarios similares encontrados:', allOperarios.rows.map(r => r.operario));
     }
     
     return result.rows;
@@ -380,10 +375,10 @@ router.get('/stats/:id', async (req, res) => {
                     COUNT(*) as total_producciones,
                     COALESCE(SUM(cantidad), 0) as total_unidades
                 FROM produccion 
-                WHERE operario = $1 
+                WHERE operario ILIKE $1 
                 AND EXTRACT(MONTH FROM fecha) = $2 
                 AND EXTRACT(YEAR FROM fecha) = $3`,
-                [usuario.nombre, mesActual, anoActual]
+                [`%${usuario.nombre}%`, mesActual, anoActual]
             );
             
             stats = produccionResult.rows[0] || {};

@@ -34,6 +34,8 @@ router.get('/actividad-usuario/:id', async (req, res) => {
             data = await getActividadVendedor(usuario.id, tipo, fecha, semana, mes, ano);
         } else if (usuario.rol === 'operario') {
             data = await getActividadOperario(usuario.id, usuario.nombre, tipo, fecha, semana, mes, ano);
+        } else if (usuario.rol === 'chofer') {
+            data = await getActividadChofer(usuario.id, usuario.nombre, tipo, fecha, semana, mes, ano);
         } else if (['administrativo', 'gerente', 'subgerente'].includes(usuario.rol)) {
             data = await getActividadAdministrativo(usuario.id, tipo, fecha, semana, mes, ano);
         } else {
@@ -88,7 +90,8 @@ router.get('/estadisticas/:id', async (req, res) => {
             total_registros: 0,
             total_ventas: 0,
             total_produccion: 0,
-            total_monto: 0
+            total_monto: 0,
+            total_entregas: 0
         };
         
         if (['vendedor', 'vendedora'].includes(usuario.rol)) {
@@ -108,7 +111,6 @@ router.get('/estadisticas/:id', async (req, res) => {
             estadisticas.total_monto = parseFloat(ventasResult.rows[0]?.total_monto || 0);
             estadisticas.total_registros = estadisticas.total_ventas;
         } else if (usuario.rol === 'operario') {
-            // Usar ILIKE para búsqueda insensible a mayúsculas
             const produccionResult = await pool.query(
                 `SELECT 
                     COUNT(*) as total_produccion,
@@ -122,6 +124,19 @@ router.get('/estadisticas/:id', async (req, res) => {
             
             estadisticas.total_produccion = parseInt(produccionResult.rows[0]?.total_produccion || 0);
             estadisticas.total_registros = estadisticas.total_produccion;
+        } else if (usuario.rol === 'chofer') {
+            const entregasResult = await pool.query(
+                `SELECT 
+                    COUNT(*) as total_entregas
+                FROM entregas 
+                WHERE chofer_id = $1 
+                AND EXTRACT(MONTH FROM fecha_entrega) = $2 
+                AND EXTRACT(YEAR FROM fecha_entrega) = $3`,
+                [usuario.id, mesActual, anoActual]
+            );
+            
+            estadisticas.total_entregas = parseInt(entregasResult.rows[0]?.total_entregas || 0);
+            estadisticas.total_registros = estadisticas.total_entregas;
         }
         
         res.json({
@@ -187,12 +202,11 @@ async function getActividadVendedor(usuarioId, tipo, fecha, semana, mes, ano) {
 }
 
 // ============================================
-// FUNCIÓN: Actividad para Operarios (VERSIÓN CORREGIDA CON ILIKE)
+// FUNCIÓN: Actividad para Operarios
 // ============================================
 async function getActividadOperario(usuarioId, nombreUsuario, tipo, fecha, semana, mes, ano) {
     console.log('🔧 getActividadOperario - usuarioId:', usuarioId, 'nombre:', nombreUsuario, 'tipo:', tipo);
     
-    // Buscar producción usando ILIKE para coincidencia parcial (insensible a mayúsculas)
     let query = `
         SELECT 
             p.id as produccion_id,
@@ -229,22 +243,73 @@ async function getActividadOperario(usuarioId, nombreUsuario, tipo, fecha, seman
     
     query += ` ORDER BY p.fecha DESC`;
     
-    console.log('📝 Query:', query);
+    console.log('📝 Query Operario:', query);
     console.log('📊 Params:', params);
     
     const result = await pool.query(query, params);
     
     console.log(`✅ Encontrados ${result.rows.length} registros de producción para "${nombreUsuario}"`);
-    if (result.rows.length > 0) {
-        console.log('📋 Primer registro:', result.rows[0]);
-    } else {
-        // Si no encuentra con ILIKE, intentar buscar todos los operarios similares
+    if (result.rows.length === 0) {
         const allOperarios = await pool.query(
             `SELECT DISTINCT operario FROM produccion WHERE operario ILIKE $1 LIMIT 10`,
             [`%${nombreUsuario}%`]
         );
         console.log('🔍 Operarios similares encontrados:', allOperarios.rows.map(r => r.operario));
     }
+    
+    return result.rows;
+}
+
+// ============================================
+// FUNCIÓN: Actividad para Choferes (NUEVA)
+// ============================================
+async function getActividadChofer(usuarioId, nombreUsuario, tipo, fecha, semana, mes, ano) {
+    console.log('🚚 getActividadChofer - usuarioId:', usuarioId, 'nombre:', nombreUsuario, 'tipo:', tipo);
+    
+    let query = `
+        SELECT 
+            e.id as entrega_id,
+            e.fecha_entrega as fecha,
+            e.direccion,
+            e.estado,
+            e.observaciones,
+            v.id as venta_id,
+            c.nombre as cliente_nombre,
+            TO_CHAR(e.fecha_entrega, 'DD/MM/YYYY HH24:MI') as fecha_formateada
+        FROM entregas e
+        LEFT JOIN ventas v ON e.venta_id = v.id
+        LEFT JOIN clientes c ON v.cliente_id = c.id
+        WHERE e.chofer_id = $1
+    `;
+    let params = [usuarioId];
+    let paramCount = 2;
+    
+    if (tipo === 'dia' && fecha) {
+        query += ` AND DATE(e.fecha_entrega) = $${paramCount}`;
+        params.push(fecha);
+        paramCount++;
+    } else if (tipo === 'semana' && semana && mes && ano) {
+        const diaInicio = (semana - 1) * 7 + 1;
+        const diaFin = Math.min(semana * 7, new Date(ano, mes, 0).getDate());
+        const fechaInicio = `${ano}-${mes.toString().padStart(2, '0')}-${diaInicio.toString().padStart(2, '0')}`;
+        const fechaFin = `${ano}-${mes.toString().padStart(2, '0')}-${diaFin.toString().padStart(2, '0')}`;
+        query += ` AND DATE(e.fecha_entrega) >= $${paramCount} AND DATE(e.fecha_entrega) <= $${paramCount + 1}`;
+        params.push(fechaInicio, fechaFin);
+        paramCount += 2;
+    } else if (tipo === 'mes' && mes && ano) {
+        query += ` AND EXTRACT(MONTH FROM e.fecha_entrega) = $${paramCount} AND EXTRACT(YEAR FROM e.fecha_entrega) = $${paramCount + 1}`;
+        params.push(mes, ano);
+        paramCount += 2;
+    }
+    
+    query += ` ORDER BY e.fecha_entrega DESC`;
+    
+    console.log('📝 Query Chofer:', query);
+    console.log('📊 Params:', params);
+    
+    const result = await pool.query(query, params);
+    
+    console.log(`✅ Encontrados ${result.rows.length} registros de entregas para "${nombreUsuario}"`);
     
     return result.rows;
 }
@@ -382,6 +447,22 @@ router.get('/stats/:id', async (req, res) => {
             );
             
             stats = produccionResult.rows[0] || {};
+            stats.mes = mesActual;
+            stats.ano = anoActual;
+            stats.rol = usuario.rol;
+            stats.nombre = usuario.nombre;
+        } else if (usuario.rol === 'chofer') {
+            const entregasResult = await pool.query(
+                `SELECT 
+                    COUNT(*) as total_entregas
+                FROM entregas 
+                WHERE chofer_id = $1 
+                AND EXTRACT(MONTH FROM fecha_entrega) = $2 
+                AND EXTRACT(YEAR FROM fecha_entrega) = $3`,
+                [usuario.id, mesActual, anoActual]
+            );
+            
+            stats = entregasResult.rows[0] || {};
             stats.mes = mesActual;
             stats.ano = anoActual;
             stats.rol = usuario.rol;

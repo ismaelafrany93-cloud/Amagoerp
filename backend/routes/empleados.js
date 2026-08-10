@@ -261,7 +261,7 @@ async function getActividadOperario(usuarioId, nombreUsuario, tipo, fecha, seman
 }
 
 // ============================================
-// FUNCIÓN: Actividad para Choferes (NUEVA)
+// FUNCIÓN: Actividad para Choferes (CORREGIDA - SIN observaciones)
 // ============================================
 async function getActividadChofer(usuarioId, nombreUsuario, tipo, fecha, semana, mes, ano) {
     console.log('🚚 getActividadChofer - usuarioId:', usuarioId, 'nombre:', nombreUsuario, 'tipo:', tipo);
@@ -272,7 +272,6 @@ async function getActividadChofer(usuarioId, nombreUsuario, tipo, fecha, semana,
             e.fecha_entrega as fecha,
             e.direccion,
             e.estado,
-            e.observaciones,
             v.id as venta_id,
             c.nombre as cliente_nombre,
             TO_CHAR(e.fecha_entrega, 'DD/MM/YYYY HH24:MI') as fecha_formateada

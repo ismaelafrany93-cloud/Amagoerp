@@ -96,6 +96,37 @@ function Entregas() {
   }
 
   // ============================================
+// MARCAR COMO ENTREGADA - MODIFICADA
+// ============================================
+const marcarComoEntregada = async (id) => {
+    if (!window.confirm('✅ ¿Confirmar que esta entrega fue realizada?')) return
+
+    try {
+        const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
+        
+        const response = await fetch(`${API_URL}/entregas/${id}/entregar`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chofer_id: usuario.id // 👈 ENVIAR ID DEL CHOFER
+            })
+        })
+        const data = await response.json()
+
+        if (data.success) {
+            setMensaje(data.message || '✅ Entrega marcada como completada')
+            cargarEntregas()
+            setTimeout(() => setMensaje(''), 3000)
+        } else {
+            setMensaje('❌ Error: ' + (data.message || data.error))
+        }
+    } catch (error) {
+        console.error('Error:', error)
+        setMensaje('❌ Error al marcar entrega')
+    }
+}
+
+  // ============================================
   // FUNCIÓN PARA NO ENTREGADO (CON MOTIVO)
   // ============================================
   const abrirModalNoEntregado = (entrega) => {

@@ -261,7 +261,7 @@ async function getActividadOperario(usuarioId, nombreUsuario, tipo, fecha, seman
 }
 
 // ============================================
-// FUNCIÓN: Actividad para Choferes (CORREGIDA - SIN observaciones)
+// FUNCIÓN: Actividad para Choferes
 // ============================================
 async function getActividadChofer(usuarioId, nombreUsuario, tipo, fecha, semana, mes, ano) {
     console.log('🚚 getActividadChofer - usuarioId:', usuarioId, 'nombre:', nombreUsuario, 'tipo:', tipo);
@@ -274,10 +274,12 @@ async function getActividadChofer(usuarioId, nombreUsuario, tipo, fecha, semana,
             e.estado,
             v.id as venta_id,
             c.nombre as cliente_nombre,
+            u.nombre as chofer_nombre,
             TO_CHAR(e.fecha_entrega, 'DD/MM/YYYY HH24:MI') as fecha_formateada
         FROM entregas e
         LEFT JOIN ventas v ON e.venta_id = v.id
         LEFT JOIN clientes c ON v.cliente_id = c.id
+        LEFT JOIN usuarios u ON e.chofer_id = u.id
         WHERE e.chofer_id = $1
     `;
     let params = [usuarioId];
@@ -301,7 +303,7 @@ async function getActividadChofer(usuarioId, nombreUsuario, tipo, fecha, semana,
         paramCount += 2;
     }
     
-    query += ` ORDER BY e.fecha_entrega DESC`;
+    query += ` ORDER BY e.fecha_entrega DESC NULLS LAST`;
     
     console.log('📝 Query Chofer:', query);
     console.log('📊 Params:', params);

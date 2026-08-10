@@ -151,7 +151,6 @@ router.post('/confirmar', async (req, res) => {
 
         console.log('📝 Confirmando entrega:', { codigo, entregado, motivo, chofer_id });
 
-        // Buscar por código alfanumérico
         const entregaResult = await pool.query(
             'SELECT * FROM entregas WHERE codigo = $1 AND estado = $2',
             [codigo, 'pendiente']
@@ -167,7 +166,6 @@ router.post('/confirmar', async (req, res) => {
         const entrega = entregaResult.rows[0];
         const ventaId = entrega.venta_id;
 
-        // Obtener datos de la venta
         const ventaData = await pool.query(
             `SELECT cliente_nombre, cliente_telefono, cliente_direccion, sucursal_id
              FROM ventas WHERE id = $1`,
@@ -175,7 +173,6 @@ router.post('/confirmar', async (req, res) => {
         );
 
         if (entregado) {
-            // ✅ ENTREGADO
             console.log('✅ Marcando como entregado:', codigo);
 
             await pool.query(
@@ -193,7 +190,6 @@ router.post('/confirmar', async (req, res) => {
                 [ventaId]
             );
 
-            // Descontar inventario
             const detalles = await pool.query(
                 'SELECT producto_id, cantidad FROM detalle_ventas WHERE venta_id = $1',
                 [ventaId]
@@ -214,13 +210,11 @@ router.post('/confirmar', async (req, res) => {
             });
 
         } else {
-            // ❌ NO ENTREGADO
             console.log('❌ Marcando como NO entregado:', codigo);
             console.log('📝 Motivo:', motivo);
 
             const recibidoPorFinal = recibido_por || 'Chofer';
 
-            // Actualizar entrega
             await pool.query(
                 `UPDATE entregas 
                  SET estado = 'cancelada', 
@@ -231,14 +225,12 @@ router.post('/confirmar', async (req, res) => {
                 [motivo || 'No entregado', chofer_id, codigo]
             );
 
-            // Actualizar venta
             await pool.query(
                 `UPDATE ventas SET estado_entrega = 'fallido' 
                  WHERE id = $1`,
                 [ventaId]
             );
 
-            // 👇 INSERTAR EN productos_no_entregados
             try {
                 console.log('📝 Insertando en productos_no_entregados...');
                 
@@ -271,7 +263,6 @@ router.post('/confirmar', async (req, res) => {
 
             } catch (insertError) {
                 console.error('❌ Error al insertar en productos_no_entregados:', insertError.message);
-                // No detenemos el flujo, solo registramos el error
             }
 
             res.json({
@@ -290,14 +281,28 @@ router.post('/confirmar', async (req, res) => {
 });
 
 // ============================================
-// PUT /entregas/:id/entregar - Marcar entrega como entregada (desde el frontend)
+// PUT /entregas/:id/entregar - Marcar entrega como entregada (CON REGISTRO DE CHOFER)
 // ============================================
 router.put('/:id/entregar', async (req, res) => {
     try {
         const { id } = req.params;
+        
+        console.log('🚚 PUT /entregas/:id/entregar - ID:', id);
 
+        // Obtener el usuario de la sesión (chofer)
+        const usuario = req.user || {};
+        const choferId = usuario?.id || req.body.chofer_id || null;
+
+        if (!choferId) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de chofer requerido'
+            });
+        }
+
+        // Verificar que la entrega existe
         const existe = await pool.query(
-            'SELECT id, estado, venta_id FROM entregas WHERE id = $1',
+            'SELECT id, estado, venta_id, codigo FROM entregas WHERE id = $1',
             [id]
         );
 
@@ -315,19 +320,39 @@ router.put('/:id/entregar', async (req, res) => {
             });
         }
 
-        const ventaId = existe.rows[0].venta_id;
+        // Verificar que el chofer existe
+        const choferCheck = await pool.query(
+            'SELECT id, nombre, rol FROM usuarios WHERE id = $1',
+            [choferId]
+        );
 
+        if (choferCheck.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Chofer no encontrado'
+            });
+        }
+
+        const chofer = choferCheck.rows[0];
+        console.log('✅ Chofer encontrado:', chofer.nombre, 'Rol:', chofer.rol);
+
+        const ventaId = existe.rows[0].venta_id;
+        const codigo = existe.rows[0].codigo;
+
+        // ACTUALIZAR ENTREGA - GUARDANDO EL CHOFER_ID
         await pool.query(
             `UPDATE entregas 
              SET estado = 'entregada', 
-                 fecha_entrega = NOW()
-             WHERE id = $1`,
-            [id]
+                 fecha_entrega = NOW(), 
+                 chofer_id = $1,
+                 comentario = COALESCE(comentario, '') || ' | Entregado por: ' || $2
+             WHERE id = $3`,
+            [choferId, chofer.nombre, id]
         );
 
+        // Actualizar venta
         await pool.query(
-            `UPDATE ventas 
-             SET estado_entrega = 'entregado', fecha_entrega = NOW()
+            `UPDATE ventas SET estado_entrega = 'entregado', fecha_entrega = NOW()
              WHERE id = $1`,
             [ventaId]
         );
@@ -353,9 +378,18 @@ router.put('/:id/entregar', async (req, res) => {
             );
         }
 
+        console.log('✅ Entrega marcada como entregada por:', chofer.nombre, '(ID:', choferId, ')');
+
         res.json({
             success: true,
-            message: '✅ Entrega marcada como completada'
+            message: `✅ Entrega ${codigo} marcada como completada por ${chofer.nombre}`,
+            entrega: {
+                id: id,
+                estado: 'entregada',
+                chofer_id: choferId,
+                chofer_nombre: chofer.nombre,
+                codigo: codigo
+            }
         });
 
     } catch (error) {

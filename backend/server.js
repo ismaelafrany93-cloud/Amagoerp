@@ -41,16 +41,31 @@ app.use('/sucursales', require('./routes/sucursales'));
 app.use('/historial', require('./routes/historial'));
 app.use('/dashboard', require('./routes/dashboard'));
 app.use('/transferencias', require('./routes/transferencias'));
-app.use('/cambios', require('./routes/cambios')); // 👈 NUEVA RUTA DE CAMBIOS
+app.use('/cambios', require('./routes/cambios'));
 app.use('/nomina', require('./routes/nomina'));
 app.use('/empleados', require('./routes/empleados'));
 
+// ============================================
+// 👇 NUEVAS RUTAS CONTABLES - CORREGIDAS
+// ============================================
+app.use('/cuentas-pagar', require('./routes/cuentasPagar'));
+app.use('/gastos', require('./routes/gastos'));
+app.use('/costos-productos', require('./routes/costosProductos'));
 
 // ============================================
 // TEST ROUTE
 // ============================================
 app.get('/', (req, res) => {
-    res.send('🚀 AMAGO ERP Backend funcionando');
+    res.json({
+        message: '🚀 AMAGO ERP Backend funcionando',
+        modulos: [
+            'auth', 'productos', 'ventas', 'inventario', 'clientes',
+            'produccion', 'entregas', 'reportes', 'materiales', 'usuarios',
+            'creditos', 'operarios', 'recetas', 'sucursales', 'historial',
+            'dashboard', 'transferencias', 'cambios', 'nomina', 'empleados',
+            'cuentas-pagar', 'gastos', 'costos-productos' // 👈 NUEVOS
+        ]
+    });
 });
 
 // ============================================
@@ -66,4 +81,5 @@ app.use((err, req, res, next) => {
 // ============================================
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📋 Módulos cargados: auth, productos, ventas, inventario, clientes, produccion, entregas, reportes, materiales, usuarios, creditos, operarios, recetas, sucursales, historial, dashboard, transferencias, cambios, nomina, empleados, cuentas-pagar, gastos, costos-productos`);
 });

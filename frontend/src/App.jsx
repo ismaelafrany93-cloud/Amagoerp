@@ -22,7 +22,9 @@ import NoEntregados from './pages/NoEntregados'
 import Cambios from './pages/Cambios'
 import Nomina from './pages/Nomina'
 import Empleados from './pages/Empleados'
-
+import CuentasPagar from './pages/CuentasPagar'
+import Gastos from './pages/Gastos'
+import CostosProductos from './pages/CostosProductos'
 
 function App() {
   return (

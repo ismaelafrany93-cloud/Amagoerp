@@ -628,6 +628,78 @@ function Sidebar() {
               <span>📦</span>
               {!colapsado && <span>Transferencias</span>}
             </Link>
+
+            {/* ========================================== */}
+            {/* 👇 NUEVOS MÓDULOS CONTABLES */}
+            {/* ========================================== */}
+            <Link 
+              to="/cuentas-pagar" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/cuentas-pagar' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
+              }}
+              title={colapsado ? 'Cuentas por Pagar' : ''}
+            >
+              <span>📋</span>
+              {!colapsado && <span>Cuentas por Pagar</span>}
+            </Link>
+
+            <Link 
+              to="/gastos" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/gastos' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
+              }}
+              title={colapsado ? 'Gastos' : ''}
+            >
+              <span>💰</span>
+              {!colapsado && <span>Gastos</span>}
+            </Link>
+
+            <Link 
+              to="/costos-productos" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/costos-productos' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
+              }}
+              title={colapsado ? 'Costos Productos' : ''}
+            >
+              <span>📊</span>
+              {!colapsado && <span>Costos Productos</span>}
+            </Link>
             
             <Link 
               to="/configuracion" 

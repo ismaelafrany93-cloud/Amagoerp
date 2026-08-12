@@ -57,6 +57,9 @@ function App() {
         <Route path="/cambios" element={<ProtectedRoute><Cambios /></ProtectedRoute>} />
         <Route path="/nomina" element={<ProtectedRoute><Nomina /></ProtectedRoute>} />
         <Route path="/empleados" element={<ProtectedRoute><Empleados /></ProtectedRoute>} />
+        <Route path="/cuentas-pagar" element={<ProtectedRoute><CuentasPagar /></ProtectedRoute>} />
+<Route path="/gastos" element={<ProtectedRoute><Gastos /></ProtectedRoute>} />
+<Route path="/costos-productos" element={<ProtectedRoute><CostosProductos /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   )

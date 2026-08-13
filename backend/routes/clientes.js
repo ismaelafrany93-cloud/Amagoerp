@@ -7,7 +7,7 @@ const pool = require('../db');
 // ============================================
 router.get('/', async (req, res) => {
     try {
-        const { sucursal_id } = req.query;
+        const { sucursal_id, es_mayorista } = req.query;
         
         let query = `
             SELECT 
@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
                 c.telefono, 
                 c.direccion,
                 c.referencia,
-                c.es_mayorista,
+                COALESCE(c.es_mayorista, false) as es_mayorista,
                 c.saldo_pendiente,
                 c.sucursal_id,
                 s.nombre as sucursal_nombre,
@@ -28,11 +28,16 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
-        // Si se envía sucursal_id, filtrar
         if (sucursal_id) {
             query += ` AND c.sucursal_id = $${paramIndex}`;
             params.push(sucursal_id);
             paramIndex++;
+        }
+
+        if (es_mayorista === 'true') {
+            query += ` AND COALESCE(c.es_mayorista, false) = true`;
+        } else if (es_mayorista === 'false') {
+            query += ` AND (c.es_mayorista = false OR c.es_mayorista IS NULL)`;
         }
 
         query += ` ORDER BY c.nombre`;
@@ -47,7 +52,91 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// POST /clientes - Crear cliente
+// GET /clientes/mayoristas - Obtener clientes mayoristas
+// ============================================
+router.get('/mayoristas', async (req, res) => {
+    try {
+        const { sucursal_id } = req.query;
+        
+        let query = `
+            SELECT 
+                c.id, 
+                c.nombre, 
+                c.telefono, 
+                c.direccion,
+                c.referencia,
+                COALESCE(c.es_mayorista, false) as es_mayorista,
+                c.saldo_pendiente,
+                c.sucursal_id,
+                s.nombre as sucursal_nombre,
+                c.created_at
+            FROM clientes c
+            LEFT JOIN sucursales s ON c.sucursal_id = s.id
+            WHERE COALESCE(c.es_mayorista, false) = true
+        `;
+        let params = [];
+        let paramIndex = 1;
+        
+        if (sucursal_id) {
+            query += ` AND c.sucursal_id = $${paramIndex}`;
+            params.push(sucursal_id);
+            paramIndex++;
+        }
+        
+        query += ` ORDER BY c.nombre ASC`;
+        
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('❌ Error en GET /clientes/mayoristas:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// GET /clientes/normales - Obtener clientes normales (del historial)
+// ============================================
+router.get('/normales', async (req, res) => {
+    try {
+        const { sucursal_id } = req.query;
+        
+        let query = `
+            SELECT 
+                c.id, 
+                c.nombre, 
+                c.telefono, 
+                c.direccion,
+                c.referencia,
+                COALESCE(c.es_mayorista, false) as es_mayorista,
+                c.saldo_pendiente,
+                c.sucursal_id,
+                s.nombre as sucursal_nombre,
+                c.created_at
+            FROM clientes c
+            LEFT JOIN sucursales s ON c.sucursal_id = s.id
+            WHERE (c.es_mayorista = false OR c.es_mayorista IS NULL)
+        `;
+        let params = [];
+        let paramIndex = 1;
+        
+        if (sucursal_id) {
+            query += ` AND c.sucursal_id = $${paramIndex}`;
+            params.push(sucursal_id);
+            paramIndex++;
+        }
+        
+        query += ` ORDER BY c.nombre ASC`;
+        
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('❌ Error en GET /clientes/normales:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// POST /clientes - Crear cliente (normal o mayorista)
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -85,7 +174,7 @@ router.post('/', async (req, res) => {
         res.json({
             success: true,
             cliente: result.rows[0],
-            message: 'Cliente creado correctamente'
+            message: es_mayorista ? '✅ Cliente mayorista creado correctamente' : '✅ Cliente normal creado correctamente'
         });
         
     } catch (error) {
@@ -112,7 +201,6 @@ router.put('/:id', async (req, res) => {
             es_mayorista
         } = req.body;
 
-        // Verificar que el cliente existe
         const existe = await pool.query(
             'SELECT id FROM clientes WHERE id = $1',
             [id]
@@ -132,7 +220,8 @@ router.put('/:id', async (req, res) => {
                  direccion = $3, 
                  referencia = $4,
                  sucursal_id = $5,
-                 es_mayorista = $6
+                 es_mayorista = $6,
+                 updated_at = NOW()
              WHERE id = $7
              RETURNING *`,
             [
@@ -149,7 +238,7 @@ router.put('/:id', async (req, res) => {
         res.json({
             success: true,
             cliente: result.rows[0],
-            message: 'Cliente actualizado correctamente'
+            message: '✅ Cliente actualizado correctamente'
         });
         
     } catch (error) {
@@ -158,34 +247,6 @@ router.put('/:id', async (req, res) => {
             success: false,
             error: error.message
         });
-    }
-});
-
-// ============================================
-// GET /clientes/mayoristas - Obtener clientes mayoristas
-// ============================================
-router.get('/mayoristas', async (req, res) => {
-    try {
-        const { sucursal_id } = req.query;
-        
-        let query = `
-            SELECT * FROM clientes 
-            WHERE es_mayorista = true
-        `;
-        let params = [];
-        
-        if (sucursal_id) {
-            query += ` AND sucursal_id = $1`;
-            params.push(sucursal_id);
-        }
-        
-        query += ` ORDER BY nombre ASC`;
-        
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (error) {
-        console.error('❌ Error en GET /clientes/mayoristas:', error);
-        res.status(500).json({ error: error.message });
     }
 });
 
@@ -222,48 +283,12 @@ router.put('/:id/mayorista', async (req, res) => {
 });
 
 // ============================================
-// POST /clientes/mayorista - Crear cliente mayorista directamente
-// ============================================
-router.post('/mayorista', async (req, res) => {
-    try {
-        const { 
-            nombre, 
-            telefono, 
-            direccion, 
-            email,
-            referencia,
-            sucursal_id,
-            created_by 
-        } = req.body;
-        
-        const result = await pool.query(
-            `INSERT INTO clientes (
-                nombre, telefono, direccion, email, 
-                referencia, sucursal_id, es_mayorista, created_by
-            ) VALUES ($1, $2, $3, $4, $5, $6, true, $7)
-            RETURNING *`,
-            [nombre, telefono, direccion, email, referencia, sucursal_id, created_by]
-        );
-        
-        res.json({
-            success: true,
-            message: '✅ Cliente mayorista creado correctamente',
-            cliente: result.rows[0]
-        });
-    } catch (error) {
-        console.error('❌ Error en POST /clientes/mayorista:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// ============================================
 // DELETE /clientes/:id - Eliminar cliente
 // ============================================
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Verificar que el cliente existe
         const existe = await pool.query(
             'SELECT id FROM clientes WHERE id = $1',
             [id]
@@ -280,7 +305,7 @@ router.delete('/:id', async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Cliente eliminado correctamente'
+            message: '✅ Cliente eliminado correctamente'
         });
         
     } catch (error) {

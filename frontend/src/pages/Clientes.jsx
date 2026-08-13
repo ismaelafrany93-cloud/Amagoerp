@@ -27,10 +27,12 @@ function Clientes() {
   const sucursalId = usuario?.sucursal_id || 3
 
   useEffect(() => {
-    cargarClientes()
-    if (esSucursalPrincipal) {
-      cargarMayoristas()
-      cargarNormales()
+    if (esAdmin) {
+      cargarClientes()
+      if (esSucursalPrincipal) {
+        cargarMayoristas()
+        cargarNormales()
+      }
     }
   }, [pestaniaActiva])
 
@@ -60,7 +62,7 @@ function Clientes() {
 
   const cargarNormales = async () => {
     try {
-      const response = await fetch(`${API_URL}/clientes?sucursal_id=${sucursalId}&es_mayorista=false`)
+      const response = await fetch(`${API_URL}/clientes/normales?sucursal_id=${sucursalId}`)
       const data = await response.json()
       setNormales(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -88,7 +90,7 @@ function Clientes() {
       const data = await response.json()
       
       if (data.success) {
-        setMensaje('✅ Cliente creado correctamente')
+        setMensaje(data.message || '✅ Cliente creado correctamente')
         setMostrarFormulario(false)
         setNuevoCliente({
           nombre: '',
@@ -156,7 +158,7 @@ function Clientes() {
       const data = await response.json()
       
       if (data.success) {
-        setMensaje('✅ Cliente eliminado')
+        setMensaje('✅ Cliente eliminado correctamente')
         cargarClientes()
         if (esSucursalPrincipal) {
           cargarMayoristas()
@@ -172,49 +174,6 @@ function Clientes() {
     }
   }
 
-  const crearMayorista = async () => {
-    if (!nuevoCliente.nombre) {
-      setError('⚠️ El nombre del cliente mayorista es requerido')
-      return
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/clientes/mayorista`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...nuevoCliente,
-          sucursal_id: sucursalId,
-          created_by: usuario.id
-        })
-      })
-
-      const data = await response.json()
-      
-      if (data.success) {
-        setMensaje(data.message)
-        setMostrarFormulario(false)
-        setNuevoCliente({
-          nombre: '',
-          telefono: '',
-          direccion: '',
-          email: '',
-          referencia: '',
-          es_mayorista: true
-        })
-        cargarMayoristas()
-        cargarClientes()
-        cargarNormales()
-        setTimeout(() => setMensaje(''), 3000)
-      } else {
-        setError('❌ Error: ' + data.error)
-      }
-    } catch (error) {
-      console.error('Error:', error)
-      setError('❌ Error al crear cliente mayorista')
-    }
-  }
-
   if (!esAdmin) {
     return (
       <AdminLayout>
@@ -226,7 +185,6 @@ function Clientes() {
     )
   }
 
-  // Obtener los clientes según la pestaña activa
   const getClientesMostrar = () => {
     if (pestaniaActiva === 'todos') return clientes
     if (pestaniaActiva === 'mayoristas') return mayoristas
@@ -423,13 +381,24 @@ function Clientes() {
                 onChange={(e) => setNuevoCliente({ ...nuevoCliente, referencia: e.target.value })}
                 style={{ padding: '10px', borderRadius: '8px', border: '1px solid #ddd' }}
               />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <label style={{ fontWeight: '500' }}>
+                  <input
+                    type="checkbox"
+                    checked={nuevoCliente.es_mayorista}
+                    onChange={(e) => setNuevoCliente({ ...nuevoCliente, es_mayorista: e.target.checked })}
+                    style={{ marginRight: '8px' }}
+                  />
+                  🏷️ Cliente Mayorista (precio al por mayor)
+                </label>
+              </div>
             </div>
             <div style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
               <button
-                onClick={pestaniaActiva === 'mayoristas' ? crearMayorista : guardarCliente}
+                onClick={guardarCliente}
                 style={{
                   padding: '12px 40px',
-                  backgroundColor: pestaniaActiva === 'mayoristas' ? '#FF9800' : '#4CAF50',
+                  backgroundColor: nuevoCliente.es_mayorista ? '#FF9800' : '#4CAF50',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
@@ -437,7 +406,7 @@ function Clientes() {
                   fontWeight: 'bold'
                 }}
               >
-                {pestaniaActiva === 'mayoristas' ? '🏷️ Guardar Mayorista' : '💾 Guardar Cliente'}
+                {nuevoCliente.es_mayorista ? '🏷️ Guardar Mayorista' : '💾 Guardar Cliente'}
               </button>
               <button
                 onClick={() => setMostrarFormulario(false)}
@@ -466,8 +435,8 @@ function Clientes() {
         }}>
           <h3 style={{ marginTop: 0, color: '#003b6f' }}>
             {pestaniaActiva === 'todos' ? '📋 Todos los Clientes' : 
-             pestaniaActiva === 'mayoristas' ? '🏷️ Clientes Mayoristas' : 
-             '👤 Clientes Normales'}
+             pestaniaActiva === 'mayoristas' ? '🏷️ Clientes Mayoristas (Precio al por mayor)' : 
+             '👤 Clientes Normales (Precio al detalle)'}
           </h3>
           
           {pestaniaActiva === 'mayoristas' && (
@@ -479,7 +448,7 @@ function Clientes() {
               borderLeft: '4px solid #FF9800'
             }}>
               <p style={{ margin: 0, color: '#e65100' }}>
-                🏷️ <strong>Clientes Mayoristas</strong> - Estos clientes compran al por mayor.
+                🏷️ <strong>Clientes Mayoristas</strong> - Estos clientes tienen <strong>precio al por mayor</strong> automático al momento de vender.
               </p>
             </div>
           )}
@@ -493,7 +462,7 @@ function Clientes() {
               borderLeft: '4px solid #003b6f'
             }}>
               <p style={{ margin: 0, color: '#003b6f' }}>
-                👤 <strong>Clientes Normales</strong> - Estos clientes compran al detalle (uno y así).
+                👤 <strong>Clientes Normales</strong> - Estos clientes compran al <strong>precio al detalle</strong> (del historial de ventas).
               </p>
             </div>
           )}

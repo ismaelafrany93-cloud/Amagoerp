@@ -7,7 +7,7 @@ const pool = require('../db');
 // ============================================
 router.get('/', async (req, res) => {
     try {
-        const { sucursal_id, es_mayorista, limit, offset } = req.query;
+        const { sucursal_id, es_mayorista } = req.query;
         
         let query = `
             SELECT 
@@ -28,14 +28,12 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
-        // FILTRO POR SUCURSAL - AHORA ES OPCIONAL
         if (sucursal_id) {
             query += ` AND c.sucursal_id = $${paramIndex}`;
             params.push(parseInt(sucursal_id));
             paramIndex++;
         }
 
-        // FILTRO POR TIPO DE CLIENTE
         if (es_mayorista === 'true') {
             query += ` AND COALESCE(c.es_mayorista, false) = true`;
         } else if (es_mayorista === 'false') {
@@ -44,24 +42,7 @@ router.get('/', async (req, res) => {
 
         query += ` ORDER BY c.nombre ASC`;
 
-        // LIMIT y OFFSET para paginación (opcional)
-        if (limit) {
-            query += ` LIMIT $${paramIndex}`;
-            params.push(parseInt(limit));
-            paramIndex++;
-        }
-        if (offset) {
-            query += ` OFFSET $${paramIndex}`;
-            params.push(parseInt(offset));
-            paramIndex++;
-        }
-
-        console.log('📝 Query clientes:', query);
-        console.log('📊 Params:', params);
-
         const result = await pool.query(query, params);
-        console.log(`✅ ${result.rows.length} clientes encontrados`);
-        
         res.json(result.rows || []);
         
     } catch (error) {
@@ -206,7 +187,7 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
-// PUT /clientes/:id - Actualizar cliente
+// PUT /clientes/:id - Actualizar cliente (SIN updated_at)
 // ============================================
 router.put('/:id', async (req, res) => {
     try {
@@ -239,8 +220,7 @@ router.put('/:id', async (req, res) => {
                  direccion = $3, 
                  referencia = $4,
                  sucursal_id = $5,
-                 es_mayorista = $6,
-                 updated_at = NOW()
+                 es_mayorista = $6
              WHERE id = $7
              RETURNING *`,
             [
@@ -270,25 +250,30 @@ router.put('/:id', async (req, res) => {
 });
 
 // ============================================
-// PUT /clientes/:id/mayorista - Marcar/Desmarcar como mayorista
+// PUT /clientes/:id/mayorista - Marcar/Desmarcar como mayorista (SIN updated_at)
 // ============================================
 router.put('/:id/mayorista', async (req, res) => {
     try {
         const { id } = req.params;
         const { es_mayorista } = req.body;
         
+        // Verificar que el cliente existe
+        const existe = await pool.query(
+            'SELECT id FROM clientes WHERE id = $1',
+            [id]
+        );
+
+        if (existe.rows.length === 0) {
+            return res.status(404).json({ error: 'Cliente no encontrado' });
+        }
+        
         const result = await pool.query(
             `UPDATE clientes 
-             SET es_mayorista = $1, 
-                 updated_at = NOW() 
+             SET es_mayorista = $1 
              WHERE id = $2 
              RETURNING *`,
             [es_mayorista, id]
         );
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Cliente no encontrado' });
-        }
         
         res.json({
             success: true,
@@ -346,7 +331,6 @@ router.post('/sincronizar', async (req, res) => {
         
         console.log('🔄 Sincronizando clientes del historial...');
         
-        // Primero, verificar cuántos clientes hay en ventas
         const countResult = await pool.query(
             `SELECT COUNT(DISTINCT cliente_nombre) as total 
              FROM ventas 
@@ -355,7 +339,6 @@ router.post('/sincronizar', async (req, res) => {
         );
         console.log(`📊 Total de clientes en ventas: ${countResult.rows[0].total}`);
         
-        // Insertar clientes que no existen
         const result = await pool.query(
             `INSERT INTO clientes (nombre, telefono, direccion, sucursal_id, es_mayorista, created_at)
              SELECT DISTINCT 
@@ -372,7 +355,6 @@ router.post('/sincronizar', async (req, res) => {
                    SELECT 1 FROM clientes c 
                    WHERE TRIM(LOWER(c.nombre)) = TRIM(LOWER(v.cliente_nombre))
                )
-               AND (v.sucursal_id = $1 OR v.sucursal_id IS NULL)
              GROUP BY TRIM(v.cliente_nombre), v.cliente_telefono, v.cliente_direccion, v.sucursal_id`,
             [sucursalFinal]
         );

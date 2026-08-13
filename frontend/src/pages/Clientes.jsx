@@ -11,6 +11,7 @@ function Clientes() {
   const [mensaje, setMensaje] = useState('')
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [pestaniaActiva, setPestaniaActiva] = useState('todos')
+  const [sincronizando, setSincronizando] = useState(false)
   
   const [nuevoCliente, setNuevoCliente] = useState({
     nombre: '',
@@ -67,6 +68,41 @@ function Clientes() {
       setNormales(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error:', error)
+    }
+  }
+
+  // ============================================
+  // SINCRONIZAR CLIENTES DEL HISTORIAL
+  // ============================================
+  const sincronizarClientes = async () => {
+    if (!window.confirm('🔄 ¿Sincronizar clientes del historial de ventas?\n\nEsto importará todos los clientes que han comprado y no están registrados.')) return
+    
+    setSincronizando(true)
+    try {
+      const response = await fetch(`${API_URL}/clientes/sincronizar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sucursal_id: sucursalId })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        setMensaje(data.message)
+        cargarClientes()
+        if (esSucursalPrincipal) {
+          cargarMayoristas()
+          cargarNormales()
+        }
+        setTimeout(() => setMensaje(''), 5000)
+      } else {
+        setError('❌ Error: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setError('❌ Error al sincronizar clientes')
+    } finally {
+      setSincronizando(false)
     }
   }
 
@@ -219,21 +255,39 @@ function Clientes() {
               {esSucursalPrincipal && ' · 🏢 Sucursal Principal'}
             </p>
           </div>
-          <button
-            onClick={() => setMostrarFormulario(!mostrarFormulario)}
-            style={{
-              padding: '10px 24px',
-              backgroundColor: mostrarFormulario ? '#ff5722' : '#4CAF50',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '0.95rem',
-              fontWeight: 'bold'
-            }}
-          >
-            {mostrarFormulario ? '✕ Cancelar' : '+ Nuevo Cliente'}
-          </button>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              onClick={sincronizarClientes}
+              disabled={sincronizando}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#2196F3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: sincronizando ? 'not-allowed' : 'pointer',
+                fontSize: '0.9rem',
+                opacity: sincronizando ? 0.6 : 1
+              }}
+            >
+              {sincronizando ? '⏳ Sincronizando...' : '🔄 Sincronizar Historial'}
+            </button>
+            <button
+              onClick={() => setMostrarFormulario(!mostrarFormulario)}
+              style={{
+                padding: '10px 24px',
+                backgroundColor: mostrarFormulario ? '#ff5722' : '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+                fontWeight: 'bold'
+              }}
+            >
+              {mostrarFormulario ? '✕ Cancelar' : '+ Nuevo Cliente'}
+            </button>
+          </div>
         </div>
 
         {/* MENSAJES */}
@@ -474,7 +528,7 @@ function Clientes() {
                  pestaniaActiva === 'normales' ? '👤 No hay clientes normales registrados' :
                  '📭 No hay clientes registrados'}
               </p>
-              <p>Haz clic en "+ Nuevo Cliente" para agregar uno</p>
+              <p>Haz clic en "🔄 Sincronizar Historial" para importar clientes de las ventas</p>
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>

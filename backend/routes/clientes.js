@@ -94,7 +94,7 @@ router.get('/mayoristas', async (req, res) => {
 });
 
 // ============================================
-// GET /clientes/normales - Obtener clientes normales (del historial)
+// GET /clientes/normales - Obtener clientes normales
 // ============================================
 router.get('/normales', async (req, res) => {
     try {
@@ -136,7 +136,7 @@ router.get('/normales', async (req, res) => {
 });
 
 // ============================================
-// POST /clientes - Crear cliente (normal o mayorista)
+// POST /clientes - Crear cliente
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -314,6 +314,60 @@ router.delete('/:id', async (req, res) => {
             success: false,
             error: error.message
         });
+    }
+});
+
+// ============================================
+// POST /clientes/sincronizar - Sincronizar clientes del historial
+// ============================================
+router.post('/sincronizar', async (req, res) => {
+    try {
+        const { sucursal_id } = req.body;
+        const sucursalFinal = sucursal_id || 3;
+        
+        console.log('🔄 Sincronizando clientes del historial...');
+        
+        // Primero, verificar cuántos clientes hay en ventas
+        const countResult = await pool.query(
+            `SELECT COUNT(DISTINCT cliente_nombre) as total 
+             FROM ventas 
+             WHERE cliente_nombre IS NOT NULL 
+               AND cliente_nombre != ''`
+        );
+        console.log(`📊 Total de clientes en ventas: ${countResult.rows[0].total}`);
+        
+        // Insertar clientes que no existen
+        const result = await pool.query(
+            `INSERT INTO clientes (nombre, telefono, direccion, sucursal_id, es_mayorista, created_at)
+             SELECT DISTINCT 
+                 TRIM(v.cliente_nombre) as nombre,
+                 v.cliente_telefono as telefono,
+                 v.cliente_direccion as direccion,
+                 COALESCE(v.sucursal_id, $1) as sucursal_id,
+                 false as es_mayorista,
+                 MIN(v.fecha) as created_at
+             FROM ventas v
+             WHERE v.cliente_nombre IS NOT NULL 
+               AND v.cliente_nombre != ''
+               AND NOT EXISTS (
+                   SELECT 1 FROM clientes c 
+                   WHERE TRIM(LOWER(c.nombre)) = TRIM(LOWER(v.cliente_nombre))
+               )
+               AND (v.sucursal_id = $1 OR v.sucursal_id IS NULL)
+             GROUP BY TRIM(v.cliente_nombre), v.cliente_telefono, v.cliente_direccion, v.sucursal_id`,
+            [sucursalFinal]
+        );
+        
+        console.log(`✅ ${result.rowCount} clientes importados del historial`);
+        
+        res.json({
+            success: true,
+            message: `✅ ${result.rowCount} clientes sincronizados del historial`,
+            clientes_importados: result.rowCount
+        });
+    } catch (error) {
+        console.error('❌ Error en POST /clientes/sincronizar:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 

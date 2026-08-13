@@ -162,6 +162,101 @@ router.put('/:id', async (req, res) => {
 });
 
 // ============================================
+// GET /clientes/mayoristas - Obtener clientes mayoristas
+// ============================================
+router.get('/mayoristas', async (req, res) => {
+    try {
+        const { sucursal_id } = req.query;
+        
+        let query = `
+            SELECT * FROM clientes 
+            WHERE es_mayorista = true
+        `;
+        let params = [];
+        
+        if (sucursal_id) {
+            query += ` AND sucursal_id = $1`;
+            params.push(sucursal_id);
+        }
+        
+        query += ` ORDER BY nombre ASC`;
+        
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('❌ Error en GET /clientes/mayoristas:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// PUT /clientes/:id/mayorista - Marcar/Desmarcar como mayorista
+// ============================================
+router.put('/:id/mayorista', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { es_mayorista } = req.body;
+        
+        const result = await pool.query(
+            `UPDATE clientes 
+             SET es_mayorista = $1, 
+                 updated_at = NOW() 
+             WHERE id = $2 
+             RETURNING *`,
+            [es_mayorista, id]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Cliente no encontrado' });
+        }
+        
+        res.json({
+            success: true,
+            message: es_mayorista ? '✅ Cliente marcado como mayorista' : '❌ Cliente desmarcado como mayorista',
+            cliente: result.rows[0]
+        });
+    } catch (error) {
+        console.error('❌ Error en PUT /clientes/:id/mayorista:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// POST /clientes/mayorista - Crear cliente mayorista directamente
+// ============================================
+router.post('/mayorista', async (req, res) => {
+    try {
+        const { 
+            nombre, 
+            telefono, 
+            direccion, 
+            email,
+            referencia,
+            sucursal_id,
+            created_by 
+        } = req.body;
+        
+        const result = await pool.query(
+            `INSERT INTO clientes (
+                nombre, telefono, direccion, email, 
+                referencia, sucursal_id, es_mayorista, created_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, true, $7)
+            RETURNING *`,
+            [nombre, telefono, direccion, email, referencia, sucursal_id, created_by]
+        );
+        
+        res.json({
+            success: true,
+            message: '✅ Cliente mayorista creado correctamente',
+            cliente: result.rows[0]
+        });
+    } catch (error) {
+        console.error('❌ Error en POST /clientes/mayorista:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // DELETE /clientes/:id - Eliminar cliente
 // ============================================
 router.delete('/:id', async (req, res) => {

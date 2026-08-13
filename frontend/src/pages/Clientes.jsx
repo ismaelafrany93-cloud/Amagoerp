@@ -9,7 +9,7 @@ function Clientes() {
   const [error, setError] = useState('')
   const [mensaje, setMensaje] = useState('')
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
-  const [pestaniaActiva, setPestaniaActiva] = useState('todos') // 'todos' | 'mayoristas'
+  const [pestaniaActiva, setPestaniaActiva] = useState('todos')
   
   const [nuevoCliente, setNuevoCliente] = useState({
     nombre: '',
@@ -100,9 +100,6 @@ function Clientes() {
     }
   }
 
-  // ============================================
-  // MARCAR/DESMARCAR COMO MAYORISTA
-  // ============================================
   const toggleMayorista = async (id, esMayoristaActual) => {
     const nuevoEstado = !esMayoristaActual
     const accion = nuevoEstado ? 'marcar como mayorista' : 'desmarcar como mayorista'
@@ -134,9 +131,6 @@ function Clientes() {
     }
   }
 
-  // ============================================
-  // ELIMINAR CLIENTE MAYORISTA
-  // ============================================
   const eliminarMayorista = async (id, nombre) => {
     if (!window.confirm(`¿Eliminar al cliente mayorista "${nombre}"?`)) return
 
@@ -161,9 +155,6 @@ function Clientes() {
     }
   }
 
-  // ============================================
-  // CREAR CLIENTE MAYORISTA DIRECTAMENTE
-  // ============================================
   const crearMayorista = async () => {
     if (!nuevoCliente.nombre) {
       setError('⚠️ El nombre del cliente mayorista es requerido')
@@ -204,10 +195,6 @@ function Clientes() {
       console.error('Error:', error)
       setError('❌ Error al crear cliente mayorista')
     }
-  }
-
-  const formatearPrecio = (valor) => {
-    return `RD$ ${Number(valor).toFixed(2)}`
   }
 
   if (!esAdmin) {
@@ -261,7 +248,6 @@ function Clientes() {
           </button>
         </div>
 
-        {/* MENSAJES */}
         {mensaje && (
           <div style={{
             backgroundColor: '#e8f5e9',
@@ -514,7 +500,6 @@ function Clientes() {
                     </td>
                     <td style={{ padding: '10px 15px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                        {/* Botón Marcar/Desmarcar Mayorista - Solo en Sucursal Principal */}
                         {esSucursalPrincipal && (
                           <button
                             onClick={() => toggleMayorista(c.id, c.es_mayorista)}
@@ -532,7 +517,6 @@ function Clientes() {
                           </button>
                         )}
                         
-                        {/* Botón Eliminar - Solo para mayoristas */}
                         {pestaniaActiva === 'mayoristas' && (
                           <button
                             onClick={() => eliminarMayorista(c.id, c.nombre)}
@@ -581,5 +565,4 @@ function Clientes() {
   )
 }
 
-export default Clientes/ /   A c t u a l i z a c i � n   d e   m a y o r i s t a s   0 8 / 1 3 / 2 0 2 6   1 5 : 0 9 : 2 4  
- 
+export default Clientes

@@ -5,6 +5,7 @@ import API_URL from '../config'
 function Clientes() {
   const [clientes, setClientes] = useState([])
   const [mayoristas, setMayoristas] = useState([])
+  const [normales, setNormales] = useState([])
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [mensaje, setMensaje] = useState('')
@@ -29,6 +30,7 @@ function Clientes() {
     cargarClientes()
     if (esSucursalPrincipal) {
       cargarMayoristas()
+      cargarNormales()
     }
   }, [pestaniaActiva])
 
@@ -51,6 +53,16 @@ function Clientes() {
       const response = await fetch(`${API_URL}/clientes/mayoristas?sucursal_id=${sucursalId}`)
       const data = await response.json()
       setMayoristas(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error:', error)
+    }
+  }
+
+  const cargarNormales = async () => {
+    try {
+      const response = await fetch(`${API_URL}/clientes?sucursal_id=${sucursalId}&es_mayorista=false`)
+      const data = await response.json()
+      setNormales(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error:', error)
     }
@@ -89,6 +101,7 @@ function Clientes() {
         cargarClientes()
         if (esSucursalPrincipal) {
           cargarMayoristas()
+          cargarNormales()
         }
         setTimeout(() => setMensaje(''), 3000)
       } else {
@@ -120,6 +133,7 @@ function Clientes() {
         cargarClientes()
         if (esSucursalPrincipal) {
           cargarMayoristas()
+          cargarNormales()
         }
         setTimeout(() => setMensaje(''), 3000)
       } else {
@@ -131,8 +145,8 @@ function Clientes() {
     }
   }
 
-  const eliminarMayorista = async (id, nombre) => {
-    if (!window.confirm(`¿Eliminar al cliente mayorista "${nombre}"?`)) return
+  const eliminarCliente = async (id, nombre) => {
+    if (!window.confirm(`¿Eliminar al cliente "${nombre}"?`)) return
 
     try {
       const response = await fetch(`${API_URL}/clientes/${id}`, {
@@ -142,9 +156,12 @@ function Clientes() {
       const data = await response.json()
       
       if (data.success) {
-        setMensaje('✅ Cliente mayorista eliminado')
-        cargarMayoristas()
+        setMensaje('✅ Cliente eliminado')
         cargarClientes()
+        if (esSucursalPrincipal) {
+          cargarMayoristas()
+          cargarNormales()
+        }
         setTimeout(() => setMensaje(''), 3000)
       } else {
         setError('❌ Error: ' + data.error)
@@ -187,6 +204,7 @@ function Clientes() {
         })
         cargarMayoristas()
         cargarClientes()
+        cargarNormales()
         setTimeout(() => setMensaje(''), 3000)
       } else {
         setError('❌ Error: ' + data.error)
@@ -208,6 +226,16 @@ function Clientes() {
     )
   }
 
+  // Obtener los clientes según la pestaña activa
+  const getClientesMostrar = () => {
+    if (pestaniaActiva === 'todos') return clientes
+    if (pestaniaActiva === 'mayoristas') return mayoristas
+    if (pestaniaActiva === 'normales') return normales
+    return clientes
+  }
+
+  const clientesMostrar = getClientesMostrar()
+
   return (
     <AdminLayout>
       <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
@@ -227,7 +255,9 @@ function Clientes() {
           <div>
             <h1 style={{ margin: 0, fontSize: '1.8rem' }}>👤 Clientes</h1>
             <p style={{ margin: '5px 0 0 0', opacity: 0.8, fontSize: '0.9rem' }}>
-              {pestaniaActiva === 'todos' ? `${clientes.length} clientes registrados` : `${mayoristas.length} clientes mayoristas`}
+              {clientesMostrar.length} clientes · 
+              {pestaniaActiva === 'todos' ? ' Todos' : 
+               pestaniaActiva === 'mayoristas' ? ' Mayoristas' : ' Normales'}
               {esSucursalPrincipal && ' · 🏢 Sucursal Principal'}
             </p>
           </div>
@@ -248,6 +278,7 @@ function Clientes() {
           </button>
         </div>
 
+        {/* MENSAJES */}
         {mensaje && (
           <div style={{
             backgroundColor: '#e8f5e9',
@@ -301,25 +332,42 @@ function Clientes() {
               transition: 'all 0.3s'
             }}
           >
-            📋 Todos los Clientes
+            📋 Todos ({clientes.length})
           </button>
           
           {esSucursalPrincipal && (
-            <button
-              onClick={() => setPestaniaActiva('mayoristas')}
-              style={{
-                padding: '10px 24px',
-                backgroundColor: pestaniaActiva === 'mayoristas' ? '#FF9800' : 'transparent',
-                color: pestaniaActiva === 'mayoristas' ? 'white' : '#555',
-                border: 'none',
-                borderRadius: '8px 8px 0 0',
-                cursor: 'pointer',
-                fontWeight: pestaniaActiva === 'mayoristas' ? 'bold' : 'normal',
-                transition: 'all 0.3s'
-              }}
-            >
-              🏷️ Mayoristas
-            </button>
+            <>
+              <button
+                onClick={() => setPestaniaActiva('mayoristas')}
+                style={{
+                  padding: '10px 24px',
+                  backgroundColor: pestaniaActiva === 'mayoristas' ? '#FF9800' : 'transparent',
+                  color: pestaniaActiva === 'mayoristas' ? 'white' : '#555',
+                  border: 'none',
+                  borderRadius: '8px 8px 0 0',
+                  cursor: 'pointer',
+                  fontWeight: pestaniaActiva === 'mayoristas' ? 'bold' : 'normal',
+                  transition: 'all 0.3s'
+                }}
+              >
+                🏷️ Mayoristas ({mayoristas.length})
+              </button>
+              <button
+                onClick={() => setPestaniaActiva('normales')}
+                style={{
+                  padding: '10px 24px',
+                  backgroundColor: pestaniaActiva === 'normales' ? '#4CAF50' : 'transparent',
+                  color: pestaniaActiva === 'normales' ? 'white' : '#555',
+                  border: 'none',
+                  borderRadius: '8px 8px 0 0',
+                  cursor: 'pointer',
+                  fontWeight: pestaniaActiva === 'normales' ? 'bold' : 'normal',
+                  transition: 'all 0.3s'
+                }}
+              >
+                👤 Normales ({normales.length})
+              </button>
+            </>
           )}
         </div>
 
@@ -417,7 +465,9 @@ function Clientes() {
           overflowX: 'auto'
         }}>
           <h3 style={{ marginTop: 0, color: '#003b6f' }}>
-            {pestaniaActiva === 'mayoristas' ? '🏷️ Clientes Mayoristas' : '📋 Lista de Clientes'}
+            {pestaniaActiva === 'todos' ? '📋 Todos los Clientes' : 
+             pestaniaActiva === 'mayoristas' ? '🏷️ Clientes Mayoristas' : 
+             '👤 Clientes Normales'}
           </h3>
           
           {pestaniaActiva === 'mayoristas' && (
@@ -429,20 +479,33 @@ function Clientes() {
               borderLeft: '4px solid #FF9800'
             }}>
               <p style={{ margin: 0, color: '#e65100' }}>
-                🏷️ <strong>Clientes Mayoristas</strong> - Estos clientes tienen precios especiales al por mayor.
-                {!esSucursalPrincipal && ' ⚠️ Solo disponible en Sucursal Principal'}
+                🏷️ <strong>Clientes Mayoristas</strong> - Estos clientes compran al por mayor.
               </p>
             </div>
           )}
 
-          {pestaniaActiva === 'mayoristas' && mayoristas.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-              <p style={{ fontSize: '1.2rem' }}>🏷️ No hay clientes mayoristas registrados</p>
-              <p>Haz clic en "+ Nuevo Cliente" para agregar uno</p>
+          {pestaniaActiva === 'normales' && (
+            <div style={{
+              backgroundColor: '#e3f2fd',
+              padding: '10px 15px',
+              borderRadius: '8px',
+              marginBottom: '15px',
+              borderLeft: '4px solid #003b6f'
+            }}>
+              <p style={{ margin: 0, color: '#003b6f' }}>
+                👤 <strong>Clientes Normales</strong> - Estos clientes compran al detalle (uno y así).
+              </p>
             </div>
-          ) : pestaniaActiva === 'todos' && clientes.length === 0 ? (
+          )}
+
+          {clientesMostrar.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-              <p style={{ fontSize: '1.2rem' }}>📭 No hay clientes registrados</p>
+              <p style={{ fontSize: '1.2rem' }}>
+                {pestaniaActiva === 'mayoristas' ? '🏷️ No hay clientes mayoristas registrados' :
+                 pestaniaActiva === 'normales' ? '👤 No hay clientes normales registrados' :
+                 '📭 No hay clientes registrados'}
+              </p>
+              <p>Haz clic en "+ Nuevo Cliente" para agregar uno</p>
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -456,7 +519,7 @@ function Clientes() {
                 </tr>
               </thead>
               <tbody>
-                {(pestaniaActiva === 'mayoristas' ? mayoristas : clientes).map(c => (
+                {clientesMostrar.map(c => (
                   <tr key={c.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                     <td style={{ padding: '10px 15px' }}>
                       <strong>{c.nombre}</strong>
@@ -517,22 +580,20 @@ function Clientes() {
                           </button>
                         )}
                         
-                        {pestaniaActiva === 'mayoristas' && (
-                          <button
-                            onClick={() => eliminarMayorista(c.id, c.nombre)}
-                            style={{
-                              padding: '4px 10px',
-                              backgroundColor: '#f44336',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.7rem'
-                            }}
-                          >
-                            🗑️
-                          </button>
-                        )}
+                        <button
+                          onClick={() => eliminarCliente(c.id, c.nombre)}
+                          style={{
+                            padding: '4px 10px',
+                            backgroundColor: '#f44336',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.7rem'
+                          }}
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -554,9 +615,9 @@ function Clientes() {
         }}>
           <p style={{ margin: 0 }}>
             © {new Date().getFullYear()} Sistema de Clientes · 
-            {pestaniaActiva === 'mayoristas' 
-              ? ` ${mayoristas.length} clientes mayoristas` 
-              : ` ${clientes.length} clientes registrados`}
+            {clientes.length} clientes totales · 
+            {mayoristas.length} mayoristas · 
+            {normales.length} normales
             {esSucursalPrincipal ? ' · 🏢 Sucursal Principal' : ''}
           </p>
         </div>

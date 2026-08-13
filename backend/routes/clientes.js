@@ -3,11 +3,11 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
-// GET /clientes - Obtener clientes con filtro por sucursal
+// GET /clientes - Obtener clientes
 // ============================================
 router.get('/', async (req, res) => {
     try {
-        const { sucursal_id, es_mayorista } = req.query;
+        const { sucursal_id, es_mayorista, limit, offset } = req.query;
         
         let query = `
             SELECT 
@@ -28,26 +28,45 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
+        // FILTRO POR SUCURSAL - AHORA ES OPCIONAL
         if (sucursal_id) {
             query += ` AND c.sucursal_id = $${paramIndex}`;
-            params.push(sucursal_id);
+            params.push(parseInt(sucursal_id));
             paramIndex++;
         }
 
+        // FILTRO POR TIPO DE CLIENTE
         if (es_mayorista === 'true') {
             query += ` AND COALESCE(c.es_mayorista, false) = true`;
         } else if (es_mayorista === 'false') {
             query += ` AND (c.es_mayorista = false OR c.es_mayorista IS NULL)`;
         }
 
-        query += ` ORDER BY c.nombre`;
+        query += ` ORDER BY c.nombre ASC`;
+
+        // LIMIT y OFFSET para paginación (opcional)
+        if (limit) {
+            query += ` LIMIT $${paramIndex}`;
+            params.push(parseInt(limit));
+            paramIndex++;
+        }
+        if (offset) {
+            query += ` OFFSET $${paramIndex}`;
+            params.push(parseInt(offset));
+            paramIndex++;
+        }
+
+        console.log('📝 Query clientes:', query);
+        console.log('📊 Params:', params);
 
         const result = await pool.query(query, params);
+        console.log(`✅ ${result.rows.length} clientes encontrados`);
+        
         res.json(result.rows || []);
         
     } catch (error) {
         console.error('❌ Error en GET /clientes:', error.message);
-        res.status(200).json([]);
+        res.status(500).json([]);
     }
 });
 
@@ -79,7 +98,7 @@ router.get('/mayoristas', async (req, res) => {
         
         if (sucursal_id) {
             query += ` AND c.sucursal_id = $${paramIndex}`;
-            params.push(sucursal_id);
+            params.push(parseInt(sucursal_id));
             paramIndex++;
         }
         
@@ -121,7 +140,7 @@ router.get('/normales', async (req, res) => {
         
         if (sucursal_id) {
             query += ` AND c.sucursal_id = $${paramIndex}`;
-            params.push(sucursal_id);
+            params.push(parseInt(sucursal_id));
             paramIndex++;
         }
         
@@ -162,11 +181,11 @@ router.post('/', async (req, res) => {
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
             [
-                nombre, 
+                nombre.trim(), 
                 telefono || '', 
                 direccion || '', 
                 referencia || '',
-                sucursal_id || null,
+                sucursal_id || 3,
                 es_mayorista || false
             ]
         );
@@ -225,11 +244,11 @@ router.put('/:id', async (req, res) => {
              WHERE id = $7
              RETURNING *`,
             [
-                nombre, 
+                nombre.trim(), 
                 telefono || '', 
                 direccion || '', 
                 referencia || '',
-                sucursal_id || null,
+                sucursal_id || 3,
                 es_mayorista || false,
                 id
             ]

@@ -34,12 +34,20 @@ function Pedidos() {
   })
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-  const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario?.rol)
-  const esSupervisor = ['supervisor', 'dueno', 'dueño', 'subgerente', 'admin'].includes(usuario?.rol)
+  const rol = usuario?.rol || ''
+  
+  // 👇 PERMISOS SEGÚN ROL
+  const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  const esSupervisor = ['supervisor', 'dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
+  const esVendedor = ['vendedor', 'vendedora'].includes(rol)
+  const puedeCrearPedido = esAdmin || esVendedor
+  const puedeGestionarProduccion = esSupervisor
+  const puedeEliminar = esAdmin
+  
   const sucursalId = usuario?.sucursal_id || 3
 
   useEffect(() => {
-    if (esAdmin || esSupervisor) {
+    if (esAdmin || esSupervisor || esVendedor) {
       cargarPedidos()
       cargarEstadisticas()
     }
@@ -250,10 +258,6 @@ function Pedidos() {
     }
   }
 
-  const formatearPrecio = (valor) => {
-    return `RD$ ${Number(valor).toFixed(2)}`
-  }
-
   const getEstadoColor = (estado) => {
     const colores = {
       'pendiente': '#FF9800',
@@ -274,7 +278,8 @@ function Pedidos() {
     return emojis[estado] || '❓'
   }
 
-  if (!esAdmin && !esSupervisor) {
+  // 👇 VERIFICAR PERMISOS PARA ACCEDER AL MÓDULO
+  if (!esAdmin && !esSupervisor && !esVendedor) {
     return (
       <AdminLayout>
         <div style={{ padding: '40px', textAlign: 'center' }}>
@@ -305,10 +310,12 @@ function Pedidos() {
             <h1 style={{ margin: 0, fontSize: '1.8rem' }}>📋 Pedidos</h1>
             <p style={{ margin: '5px 0 0 0', opacity: 0.8, fontSize: '0.9rem' }}>
               {pedidos.length} pedidos registrados
+              {esVendedor && ' · 🛒 Solo visualización'}
+              {esSupervisor && !esAdmin && ' · 🔧 Gestión de producción'}
             </p>
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {esAdmin && (
+            {puedeCrearPedido && (
               <button
                 onClick={() => setMostrarFormulario(!mostrarFormulario)}
                 style={{
@@ -433,8 +440,8 @@ function Pedidos() {
           </button>
         </div>
 
-        {/* FORMULARIO NUEVO PEDIDO */}
-        {mostrarFormulario && (
+        {/* FORMULARIO NUEVO PEDIDO - Solo para quienes pueden crear */}
+        {mostrarFormulario && puedeCrearPedido && (
           <div style={{
             backgroundColor: 'white',
             borderRadius: '16px',
@@ -577,6 +584,35 @@ function Pedidos() {
         }}>
           <h3 style={{ marginTop: 0, color: '#003b6f' }}>📋 Lista de Pedidos</h3>
           
+          {/* 👇 INDICADOR PARA SUPERVISORES */}
+          {esSupervisor && !esAdmin && (
+            <div style={{
+              backgroundColor: '#e3f2fd',
+              padding: '10px 15px',
+              borderRadius: '8px',
+              marginBottom: '15px',
+              borderLeft: '4px solid #2196F3'
+            }}>
+              <p style={{ margin: 0, color: '#003b6f' }}>
+                🔧 <strong>Vista de Supervisor</strong> - Aquí puedes ver los pedidos que debes fabricar y agregar la producción realizada.
+              </p>
+            </div>
+          )}
+          
+          {esVendedor && !esAdmin && !esSupervisor && (
+            <div style={{
+              backgroundColor: '#e8f5e9',
+              padding: '10px 15px',
+              borderRadius: '8px',
+              marginBottom: '15px',
+              borderLeft: '4px solid #4CAF50'
+            }}>
+              <p style={{ margin: 0, color: '#1b5e20' }}>
+                🛒 <strong>Vista de Vendedor</strong> - Puedes ver todos los pedidos y crear nuevos. La producción la gestiona el supervisor.
+              </p>
+            </div>
+          )}
+          
           {pedidos.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
               <p style={{ fontSize: '1.2rem' }}>📭 No hay pedidos registrados</p>
@@ -662,7 +698,7 @@ function Pedidos() {
                         >
                           👁️ Ver
                         </button>
-                        {esAdmin && (
+                        {puedeEliminar && (
                           <button
                             onClick={() => eliminarPedido(p.id, p.codigo)}
                             style={{
@@ -762,8 +798,8 @@ function Pedidos() {
                 </div>
               )}
 
-              {/* Agregar producción */}
-              {esSupervisor && pedidoSeleccionado.pedido.estado !== 'completado' && pedidoSeleccionado.pedido.estado !== 'entregado' && (
+              {/* 👇 Agregar producción - SOLO SUPERVISORES */}
+              {puedeGestionarProduccion && pedidoSeleccionado.pedido.estado !== 'completado' && pedidoSeleccionado.pedido.estado !== 'entregado' && (
                 <div style={{
                   backgroundColor: '#e3f2fd',
                   padding: '15px',
@@ -842,9 +878,9 @@ function Pedidos() {
                 <p style={{ color: '#999', textAlign: 'center', padding: '10px' }}>No hay producción registrada</p>
               )}
 
-              {/* Botones de acción */}
+              {/* 👇 Botones de acción - según rol */}
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '20px' }}>
-                {esSupervisor && pedidoSeleccionado.pedido.estado === 'pendiente' && (
+                {puedeGestionarProduccion && pedidoSeleccionado.pedido.estado === 'pendiente' && (
                   <button
                     onClick={() => cambiarEstado(pedidoSeleccionado.pedido.id, 'en_produccion')}
                     style={{
@@ -859,7 +895,7 @@ function Pedidos() {
                     🔧 Iniciar Producción
                   </button>
                 )}
-                {esSupervisor && pedidoSeleccionado.pedido.estado === 'en_produccion' && (
+                {puedeGestionarProduccion && pedidoSeleccionado.pedido.estado === 'en_produccion' && (
                   <button
                     onClick={() => cambiarEstado(pedidoSeleccionado.pedido.id, 'completado')}
                     style={{
@@ -874,7 +910,7 @@ function Pedidos() {
                     ✅ Completar Pedido
                   </button>
                 )}
-                {esAdmin && pedidoSeleccionado.pedido.estado === 'completado' && (
+                {puedeEliminar && pedidoSeleccionado.pedido.estado === 'completado' && (
                   <button
                     onClick={() => cambiarEstado(pedidoSeleccionado.pedido.id, 'entregado')}
                     style={{

@@ -24,7 +24,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         const filetypes = /jpeg|jpg|png|gif|webp/;
         const mimetype = filetypes.test(file.mimetype);
@@ -112,6 +112,11 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        
+        // Validar que id sea un número
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'ID inválido' });
+        }
 
         const pedidoResult = await pool.query(
             `SELECT 
@@ -133,13 +138,15 @@ router.get('/:id', async (req, res) => {
             return res.status(404).json({ error: 'Pedido no encontrado' });
         }
 
-        // Obtener detalles de producción
+        // Obtener detalles de producción - CORREGIDO: usar producto_nombre de la tabla produccion
         const detallesResult = await pool.query(
             `SELECT 
                 d.*,
-                pr.nombre as producto_nombre
+                COALESCE(p.prod_nombre, 'Sin producto') as producto_nombre
             FROM detalle_produccion_pedido d
-            LEFT JOIN produccion pr ON d.produccion_id = pr.id
+            LEFT JOIN (
+                SELECT id, nombre as prod_nombre FROM productos
+            ) p ON d.produccion_id = p.id
             WHERE d.pedido_id = $1
             ORDER BY d.fecha_produccion DESC`,
             [id]
@@ -210,7 +217,6 @@ router.post('/', upload.single('imagen'), async (req, res) => {
             ]
         );
 
-        // Registrar en historial
         await pool.query(
             `INSERT INTO historial_pedidos (pedido_id, accion, descripcion, usuario_id)
              VALUES ($1, 'creado', 'Pedido creado: ' || $2, $3)`,
@@ -234,7 +240,7 @@ router.post('/', upload.single('imagen'), async (req, res) => {
 router.post('/:id/produccion', async (req, res) => {
     try {
         const { id } = req.params;
-        const { cantidad, operario_nombre, observaciones } = req.body;
+        const { cantidad, operario_nombre, observaciones, producto_id } = req.body;
 
         if (!cantidad || cantidad <= 0) {
             return res.status(400).json({
@@ -243,7 +249,6 @@ router.post('/:id/produccion', async (req, res) => {
             });
         }
 
-        // Verificar que el pedido existe
         const pedidoResult = await pool.query(
             'SELECT id, cantidad_total, cantidad_producida, estado, producto_nombre FROM pedidos WHERE id = $1',
             [id]
@@ -263,7 +268,15 @@ router.post('/:id/produccion', async (req, res) => {
             });
         }
 
-        // Actualizar cantidad producida
+        // Crear registro de producción
+        const produccionResult = await pool.query(
+            `INSERT INTO produccion (
+                fecha, producto_id, cantidad, operario, observaciones
+            ) VALUES (CURRENT_DATE, $1, $2, $3, $4)
+            RETURNING id`,
+            [producto_id || null, cantidad, operario_nombre || 'Supervisor', observaciones || 'Producción de pedido']
+        );
+
         const nuevoEstado = nuevaCantidad >= parseInt(pedido.cantidad_total) ? 'completado' : 'en_produccion';
 
         const updateResult = await pool.query(
@@ -277,15 +290,13 @@ router.post('/:id/produccion', async (req, res) => {
         );
 
         // Registrar detalle de producción
-        const detalleResult = await pool.query(
+        await pool.query(
             `INSERT INTO detalle_produccion_pedido (
-                pedido_id, cantidad, fecha_produccion, operario_nombre, observaciones
-            ) VALUES ($1, $2, CURRENT_DATE, $3, $4)
-            RETURNING *`,
-            [id, cantidad, operario_nombre || 'Supervisor', observaciones || '']
+                pedido_id, produccion_id, cantidad, fecha_produccion, operario_nombre, observaciones
+            ) VALUES ($1, $2, $3, CURRENT_DATE, $4, $5)`,
+            [id, produccionResult.rows[0].id, cantidad, operario_nombre || 'Supervisor', observaciones || '']
         );
 
-        // Registrar en historial
         await pool.query(
             `INSERT INTO historial_pedidos (pedido_id, accion, descripcion, usuario_id)
              VALUES ($1, 'produccion', $2 || ' unidades producidas. Total: ' || $3 || ' de ' || $4, $5)`,
@@ -296,7 +307,7 @@ router.post('/:id/produccion', async (req, res) => {
             success: true,
             message: `✅ ${cantidad} unidades producidas correctamente`,
             pedido: updateResult.rows[0],
-            detalle: detalleResult.rows[0]
+            produccion: produccionResult.rows[0]
         });
     } catch (error) {
         console.error('❌ Error en POST /pedidos/:id/produccion:', error);
@@ -352,88 +363,6 @@ router.put('/:id/estado', async (req, res) => {
 });
 
 // ============================================
-// PUT /pedidos/:id - Actualizar pedido
-// ============================================
-router.put('/:id', upload.single('imagen'), async (req, res) => {
-    try {
-        const { id } = req.params;
-        const {
-            cliente_nombre,
-            cliente_telefono,
-            cliente_direccion,
-            producto_nombre,
-            producto_descripcion,
-            cantidad_total,
-            prioridad,
-            fecha_entrega_estimada,
-            observaciones
-        } = req.body;
-
-        const existe = await pool.query('SELECT id FROM pedidos WHERE id = $1', [id]);
-        if (existe.rows.length === 0) {
-            return res.status(404).json({ error: 'Pedido no encontrado' });
-        }
-
-        let imagen_url = null;
-        if (req.file) {
-            imagen_url = `/uploads/pedidos/${req.file.filename}`;
-        }
-
-        let query = `
-            UPDATE pedidos 
-            SET cliente_nombre = $1,
-                cliente_telefono = $2,
-                cliente_direccion = $3,
-                producto_nombre = $4,
-                producto_descripcion = $5,
-                cantidad_total = $6,
-                prioridad = $7,
-                fecha_entrega_estimada = $8,
-                observaciones = $9,
-                updated_at = NOW()
-        `;
-        let params = [
-            cliente_nombre,
-            cliente_telefono || '',
-            cliente_direccion || '',
-            producto_nombre,
-            producto_descripcion || '',
-            parseInt(cantidad_total),
-            prioridad || 'normal',
-            fecha_entrega_estimada || null,
-            observaciones || ''
-        ];
-        let paramIndex = 10;
-
-        if (imagen_url) {
-            query += `, imagen_url = $${paramIndex}`;
-            params.push(imagen_url);
-            paramIndex++;
-        }
-
-        query += ` WHERE id = $${paramIndex} RETURNING *`;
-        params.push(id);
-
-        const result = await pool.query(query, params);
-
-        await pool.query(
-            `INSERT INTO historial_pedidos (pedido_id, accion, descripcion, usuario_id)
-             VALUES ($1, 'actualizado', 'Pedido actualizado', $2)`,
-            [id, req.body.usuario_id || null]
-        );
-
-        res.json({
-            success: true,
-            message: '✅ Pedido actualizado correctamente',
-            pedido: result.rows[0]
-        });
-    } catch (error) {
-        console.error('❌ Error en PUT /pedidos/:id:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// ============================================
 // DELETE /pedidos/:id - Eliminar pedido
 // ============================================
 router.delete('/:id', async (req, res) => {
@@ -467,9 +396,9 @@ router.get('/estadisticas', async (req, res) => {
         let query = `
             SELECT 
                 COUNT(*) as total_pedidos,
-                SUM(cantidad_total) as total_unidades,
-                SUM(cantidad_producida) as total_producidas,
-                SUM(cantidad_pendiente) as total_pendientes,
+                COALESCE(SUM(cantidad_total), 0) as total_unidades,
+                COALESCE(SUM(cantidad_producida), 0) as total_producidas,
+                COALESCE(SUM(cantidad_pendiente), 0) as total_pendientes,
                 COUNT(CASE WHEN estado = 'pendiente' THEN 1 END) as pendientes,
                 COUNT(CASE WHEN estado = 'en_produccion' THEN 1 END) as en_produccion,
                 COUNT(CASE WHEN estado = 'completado' THEN 1 END) as completados,

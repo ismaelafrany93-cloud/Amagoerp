@@ -6,25 +6,31 @@ const path = require('path');
 const fs = require('fs');
 
 // ============================================
+// 👇 CREAR CARPETA DE UPLOADS SI NO EXISTE
+// ============================================
+const uploadDir = './uploads/pedidos';
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log('📁 Carpeta creada:', uploadDir);
+}
+
+// ============================================
 // CONFIGURACIÓN DE MULTER PARA IMÁGENES
 // ============================================
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = './uploads/pedidos';
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
         cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'pedido-' + uniqueSuffix + path.extname(file.originalname));
+        const ext = path.extname(file.originalname);
+        cb(null, 'pedido-' + uniqueSuffix + ext);
     }
 });
 
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 },
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
     fileFilter: (req, file, cb) => {
         const filetypes = /jpeg|jpg|png|gif|webp/;
         const mimetype = filetypes.test(file.mimetype);
@@ -113,7 +119,6 @@ router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         
-        // Validar que id sea un número
         if (isNaN(id)) {
             return res.status(400).json({ error: 'ID inválido' });
         }
@@ -138,15 +143,10 @@ router.get('/:id', async (req, res) => {
             return res.status(404).json({ error: 'Pedido no encontrado' });
         }
 
-        // Obtener detalles de producción - CORREGIDO: usar producto_nombre de la tabla produccion
         const detallesResult = await pool.query(
             `SELECT 
-                d.*,
-                COALESCE(p.prod_nombre, 'Sin producto') as producto_nombre
+                d.*
             FROM detalle_produccion_pedido d
-            LEFT JOIN (
-                SELECT id, nombre as prod_nombre FROM productos
-            ) p ON d.produccion_id = p.id
             WHERE d.pedido_id = $1
             ORDER BY d.fecha_produccion DESC`,
             [id]
@@ -190,6 +190,9 @@ router.post('/', upload.single('imagen'), async (req, res) => {
 
         const codigo = generarCodigoPedido();
         const imagen_url = req.file ? `/uploads/pedidos/${req.file.filename}` : null;
+
+        console.log('📸 Imagen recibida:', req.file);
+        console.log('📸 URL guardada:', imagen_url);
 
         const result = await pool.query(
             `INSERT INTO pedidos (
@@ -240,7 +243,7 @@ router.post('/', upload.single('imagen'), async (req, res) => {
 router.post('/:id/produccion', async (req, res) => {
     try {
         const { id } = req.params;
-        const { cantidad, operario_nombre, observaciones, producto_id } = req.body;
+        const { cantidad, operario_nombre, observaciones } = req.body;
 
         if (!cantidad || cantidad <= 0) {
             return res.status(400).json({
@@ -268,15 +271,6 @@ router.post('/:id/produccion', async (req, res) => {
             });
         }
 
-        // Crear registro de producción
-        const produccionResult = await pool.query(
-            `INSERT INTO produccion (
-                fecha, producto_id, cantidad, operario, observaciones
-            ) VALUES (CURRENT_DATE, $1, $2, $3, $4)
-            RETURNING id`,
-            [producto_id || null, cantidad, operario_nombre || 'Supervisor', observaciones || 'Producción de pedido']
-        );
-
         const nuevoEstado = nuevaCantidad >= parseInt(pedido.cantidad_total) ? 'completado' : 'en_produccion';
 
         const updateResult = await pool.query(
@@ -289,12 +283,11 @@ router.post('/:id/produccion', async (req, res) => {
             [nuevaCantidad, nuevoEstado, id]
         );
 
-        // Registrar detalle de producción
         await pool.query(
             `INSERT INTO detalle_produccion_pedido (
-                pedido_id, produccion_id, cantidad, fecha_produccion, operario_nombre, observaciones
-            ) VALUES ($1, $2, $3, CURRENT_DATE, $4, $5)`,
-            [id, produccionResult.rows[0].id, cantidad, operario_nombre || 'Supervisor', observaciones || '']
+                pedido_id, cantidad, fecha_produccion, operario_nombre, observaciones
+            ) VALUES ($1, $2, CURRENT_DATE, $3, $4)`,
+            [id, cantidad, operario_nombre || 'Supervisor', observaciones || '']
         );
 
         await pool.query(
@@ -306,8 +299,7 @@ router.post('/:id/produccion', async (req, res) => {
         res.json({
             success: true,
             message: `✅ ${cantidad} unidades producidas correctamente`,
-            pedido: updateResult.rows[0],
-            produccion: produccionResult.rows[0]
+            pedido: updateResult.rows[0]
         });
     } catch (error) {
         console.error('❌ Error en POST /pedidos/:id/produccion:', error);
@@ -393,6 +385,8 @@ router.get('/estadisticas', async (req, res) => {
     try {
         const { sucursal_id } = req.query;
 
+        console.log('📊 GET /pedidos/estadisticas - Sucursal:', sucursal_id);
+
         let query = `
             SELECT 
                 COUNT(*) as total_pedidos,
@@ -417,6 +411,8 @@ router.get('/estadisticas', async (req, res) => {
         }
 
         const result = await pool.query(query, params);
+        console.log('✅ Estadísticas:', result.rows[0]);
+        
         res.json(result.rows[0] || {
             total_pedidos: 0,
             total_unidades: 0,

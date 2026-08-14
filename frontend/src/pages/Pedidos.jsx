@@ -13,6 +13,7 @@ function Pedidos() {
   const [mostrarDetalle, setMostrarDetalle] = useState(false)
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [imagenPreview, setImagenPreview] = useState(null)
+  const [operariosDisponibles, setOperariosDisponibles] = useState([])
   
   const [nuevoPedido, setNuevoPedido] = useState({
     cliente_nombre: '',
@@ -36,7 +37,6 @@ function Pedidos() {
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
   
-  // 👇 PERMISOS SEGÚN ROL
   const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
   const esSupervisor = ['supervisor', 'dueno', 'dueño', 'subgerente', 'admin'].includes(rol)
   const esVendedor = ['vendedor', 'vendedora'].includes(rol)
@@ -86,6 +86,7 @@ function Pedidos() {
       const response = await fetch(`${API_URL}/pedidos/${id}`)
       const data = await response.json()
       setPedidoSeleccionado(data)
+      setOperariosDisponibles(data.operarios || [])
       setMostrarDetalle(true)
     } catch (error) {
       console.error('Error:', error)
@@ -278,7 +279,6 @@ function Pedidos() {
     return emojis[estado] || '❓'
   }
 
-  // 👇 VERIFICAR PERMISOS PARA ACCEDER AL MÓDULO
   if (!esAdmin && !esSupervisor && !esVendedor) {
     return (
       <AdminLayout>
@@ -440,7 +440,7 @@ function Pedidos() {
           </button>
         </div>
 
-        {/* FORMULARIO NUEVO PEDIDO - Solo para quienes pueden crear */}
+        {/* FORMULARIO NUEVO PEDIDO */}
         {mostrarFormulario && puedeCrearPedido && (
           <div style={{
             backgroundColor: 'white',
@@ -584,7 +584,6 @@ function Pedidos() {
         }}>
           <h3 style={{ marginTop: 0, color: '#003b6f' }}>📋 Lista de Pedidos</h3>
           
-          {/* 👇 INDICADOR PARA SUPERVISORES */}
           {esSupervisor && !esAdmin && (
             <div style={{
               backgroundColor: '#e3f2fd',
@@ -791,14 +790,29 @@ function Pedidos() {
               {pedidoSeleccionado.pedido.imagen_url && (
                 <div style={{ marginBottom: '20px', textAlign: 'center' }}>
                   <img 
-                    src={API_URL + pedidoSeleccionado.pedido.imagen_url} 
+                    src={`${API_URL}${pedidoSeleccionado.pedido.imagen_url}`}
                     alt="Producto" 
-                    style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+                    style={{ 
+                      maxWidth: '100%', 
+                      maxHeight: '300px', 
+                      borderRadius: '8px', 
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                      objectFit: 'contain'
+                    }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      const parent = e.target.parentElement;
+                      parent.innerHTML = `
+                        <div style="padding: 20px; background: #ffebee; border-radius: 8px; color: #c62828;">
+                          ❌ No se pudo cargar la imagen
+                        </div>
+                      `;
+                    }}
                   />
                 </div>
               )}
 
-              {/* 👇 Agregar producción - SOLO SUPERVISORES */}
+              {/* Agregar producción */}
               {puedeGestionarProduccion && pedidoSeleccionado.pedido.estado !== 'completado' && pedidoSeleccionado.pedido.estado !== 'entregado' && (
                 <div style={{
                   backgroundColor: '#e3f2fd',
@@ -807,23 +821,30 @@ function Pedidos() {
                   marginBottom: '20px'
                 }}>
                   <h4 style={{ margin: '0 0 10px 0', color: '#003b6f' }}>🔧 Agregar Producción</h4>
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <input
                       type="number"
                       placeholder="Cantidad *"
                       value={produccionPedido.cantidad}
                       onChange={(e) => setProduccionPedido({ ...produccionPedido, cantidad: parseInt(e.target.value) || 0 })}
-                      style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', width: '120px' }}
+                      style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', width: '100px' }}
                       min="1"
                       max={pedidoSeleccionado.pedido.cantidad_pendiente || pedidoSeleccionado.pedido.cantidad_total}
                     />
-                    <input
-                      type="text"
-                      placeholder="Operario"
+                    
+                    <select
                       value={produccionPedido.operario_nombre}
                       onChange={(e) => setProduccionPedido({ ...produccionPedido, operario_nombre: e.target.value })}
-                      style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', width: '150px' }}
-                    />
+                      style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', minWidth: '150px' }}
+                    >
+                      <option value="">Seleccionar Operario</option>
+                      {operariosDisponibles.map(op => (
+                        <option key={op.id} value={op.nombre}>
+                          👷 {op.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    
                     <input
                       type="text"
                       placeholder="Observaciones"
@@ -845,9 +866,14 @@ function Pedidos() {
                       ✅ Agregar
                     </button>
                   </div>
-                  <p style={{ margin: '5px 0 0 0', fontSize: '0.75rem', color: '#666' }}>
-                    Pendiente: {pedidoSeleccionado.pedido.cantidad_pendiente || pedidoSeleccionado.pedido.cantidad_total} unidades
-                  </p>
+                  <div style={{ marginTop: '10px' }}>
+                    <p style={{ margin: '0', fontSize: '0.75rem', color: '#666' }}>
+                      📊 <strong>Estado:</strong> {pedidoSeleccionado.pedido.cantidad_producida || 0} de {pedidoSeleccionado.pedido.cantidad_total} unidades producidas
+                    </p>
+                    <p style={{ margin: '5px 0 0 0', fontSize: '0.75rem', color: '#e65100', fontWeight: 'bold' }}>
+                      ⏳ Pendiente: {pedidoSeleccionado.pedido.cantidad_pendiente || pedidoSeleccionado.pedido.cantidad_total} unidades
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -868,17 +894,36 @@ function Pedidos() {
                       <tr key={d.id} style={{ borderBottom: '1px solid #eee' }}>
                         <td style={{ padding: '8px' }}>{new Date(d.fecha_produccion).toLocaleDateString()}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{d.cantidad}</td>
-                        <td style={{ padding: '8px' }}>{d.operario_nombre || '-'}</td>
+                        <td style={{ padding: '8px' }}>
+                          <span style={{
+                            backgroundColor: '#e3f2fd',
+                            color: '#003b6f',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem'
+                          }}>
+                            👷 {d.operario_nombre || 'Sin asignar'}
+                          </span>
+                        </td>
                         <td style={{ padding: '8px' }}>{d.observaciones || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr style={{ backgroundColor: '#f5f7fa', fontWeight: 'bold' }}>
+                      <td style={{ padding: '8px' }}>Total</td>
+                      <td style={{ padding: '8px', textAlign: 'right' }}>
+                        {pedidoSeleccionado.detalles.reduce((sum, d) => sum + d.cantidad, 0)}
+                      </td>
+                      <td colSpan="2"></td>
+                    </tr>
+                  </tfoot>
                 </table>
               ) : (
                 <p style={{ color: '#999', textAlign: 'center', padding: '10px' }}>No hay producción registrada</p>
               )}
 
-              {/* 👇 Botones de acción - según rol */}
+              {/* Botones de acción */}
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '20px' }}>
                 {puedeGestionarProduccion && pedidoSeleccionado.pedido.estado === 'pendiente' && (
                   <button

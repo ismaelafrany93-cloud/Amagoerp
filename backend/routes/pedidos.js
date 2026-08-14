@@ -384,6 +384,70 @@ router.delete('/:id', async (req, res) => {
 });
 
 // ============================================
+// GET /pedidos/:id - Obtener pedido por ID (CON OPERARIOS)
+// ============================================
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'ID inválido' });
+        }
+
+        // Obtener el pedido
+        const pedidoResult = await pool.query(
+            `SELECT 
+                p.*,
+                u.nombre as creador_nombre,
+                s.nombre as sucursal_nombre,
+                COALESCE(
+                    (SELECT SUM(cantidad) FROM detalle_produccion_pedido WHERE pedido_id = p.id),
+                    0
+                ) as total_producido
+            FROM pedidos p
+            LEFT JOIN usuarios u ON p.creado_por = u.id
+            LEFT JOIN sucursales s ON p.sucursal_id = s.id
+            WHERE p.id = $1`,
+            [parseInt(id)]
+        );
+
+        if (pedidoResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Pedido no encontrado' });
+        }
+
+        // Obtener detalles de producción con operarios
+        const detallesResult = await pool.query(
+            `SELECT 
+                d.*,
+                u.nombre as operario_nombre_completo,
+                u.rol as operario_rol
+            FROM detalle_produccion_pedido d
+            LEFT JOIN usuarios u ON d.operario_nombre = u.nombre
+            WHERE d.pedido_id = $1
+            ORDER BY d.fecha_produccion DESC`,
+            [parseInt(id)]
+        );
+
+        // 👇 NUEVO: Obtener lista de operarios disponibles (para el selector)
+        const operariosResult = await pool.query(
+            `SELECT id, nombre, rol 
+             FROM usuarios 
+             WHERE rol = 'operario' 
+             ORDER BY nombre ASC`
+        );
+
+        res.json({
+            pedido: pedidoResult.rows[0],
+            detalles: detallesResult.rows,
+            operarios: operariosResult.rows  // 👈 Enviar lista de operarios
+        });
+    } catch (error) {
+        console.error('❌ Error en GET /pedidos/:id:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // GET /pedidos/estadisticas - Estadísticas de pedidos
 // ============================================
 router.get('/estadisticas', async (req, res) => {

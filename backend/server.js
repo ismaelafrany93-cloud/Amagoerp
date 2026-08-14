@@ -12,13 +12,20 @@ const PORT = process.env.PORT || 5000;
 // ============================================
 app.use(cors());
 app.use(express.json());
+
+// ============================================
+// 👇 SERVIDOR DE ARCHIVOS ESTÁTICOS (IMÁGENES)
+// ============================================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================================
-// CREAR UPLOADS SI NO EXISTE
+// CREAR CARPETAS SI NO EXISTEN
 // ============================================
 if (!fs.existsSync('./uploads')) {
     fs.mkdirSync('./uploads');
+}
+if (!fs.existsSync('./uploads/pedidos')) {
+    fs.mkdirSync('./uploads/pedidos', { recursive: true });
 }
 
 // ============================================
@@ -44,14 +51,12 @@ app.use('/transferencias', require('./routes/transferencias'));
 app.use('/cambios', require('./routes/cambios'));
 app.use('/nomina', require('./routes/nomina'));
 app.use('/empleados', require('./routes/empleados'));
-app.use('/pedidos', require('./routes/pedidos'));
-
-// ============================================
-// 👇 NUEVAS RUTAS CONTABLES - CORREGIDAS
-// ============================================
 app.use('/cuentas-pagar', require('./routes/cuentasPagar'));
 app.use('/gastos', require('./routes/gastos'));
 app.use('/costos-productos', require('./routes/costosProductos'));
+
+// 👇 RUTA DE PEDIDOS
+app.use('/pedidos', require('./routes/pedidos'));
 
 // ============================================
 // TEST ROUTE
@@ -64,7 +69,7 @@ app.get('/', (req, res) => {
             'produccion', 'entregas', 'reportes', 'materiales', 'usuarios',
             'creditos', 'operarios', 'recetas', 'sucursales', 'historial',
             'dashboard', 'transferencias', 'cambios', 'nomina', 'empleados',
-            'cuentas-pagar', 'gastos', 'costos-productos' // 👈 NUEVOS
+            'cuentas-pagar', 'gastos', 'costos-productos', 'pedidos'
         ]
     });
 });
@@ -82,5 +87,5 @@ app.use((err, req, res, next) => {
 // ============================================
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📋 Módulos cargados: auth, productos, ventas, inventario, clientes, produccion, entregas, reportes, materiales, usuarios, creditos, operarios, recetas, sucursales, historial, dashboard, transferencias, cambios, nomina, empleados, cuentas-pagar, gastos, costos-productos`);
+    console.log(`📋 Módulos cargados: auth, productos, ventas, inventario, clientes, produccion, entregas, reportes, materiales, usuarios, creditos, operarios, recetas, sucursales, historial, dashboard, transferencias, cambios, nomina, empleados, cuentas-pagar, gastos, costos-productos, pedidos`);
 });

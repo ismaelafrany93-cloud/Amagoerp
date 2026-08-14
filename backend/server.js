@@ -44,6 +44,7 @@ app.use('/transferencias', require('./routes/transferencias'));
 app.use('/cambios', require('./routes/cambios'));
 app.use('/nomina', require('./routes/nomina'));
 app.use('/empleados', require('./routes/empleados'));
+app.use('/pedidos', require('./routes/pedidos'));
 
 // ============================================
 // 👇 NUEVAS RUTAS CONTABLES - CORREGIDAS

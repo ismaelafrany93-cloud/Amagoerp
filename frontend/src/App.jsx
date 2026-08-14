@@ -25,6 +25,7 @@ import Empleados from './pages/Empleados'
 import CuentasPagar from './pages/CuentasPagar'
 import Gastos from './pages/Gastos'
 import CostosProductos from './pages/CostosProductos'
+import Pedidos from './pages/Pedidos'
 
 function App() {
   return (
@@ -58,6 +59,7 @@ function App() {
         <Route path="/nomina" element={<ProtectedRoute><Nomina /></ProtectedRoute>} />
         <Route path="/empleados" element={<ProtectedRoute><Empleados /></ProtectedRoute>} />
         <Route path="/cuentas-pagar" element={<ProtectedRoute><CuentasPagar /></ProtectedRoute>} />
+        <Route path="/pedidos" element={<ProtectedRoute><Pedidos /></ProtectedRoute>} />
 <Route path="/gastos" element={<ProtectedRoute><Gastos /></ProtectedRoute>} />
 <Route path="/costos-productos" element={<ProtectedRoute><CostosProductos /></ProtectedRoute>} />
       </Routes>

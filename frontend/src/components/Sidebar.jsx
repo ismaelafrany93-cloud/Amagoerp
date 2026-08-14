@@ -536,6 +536,29 @@ function Sidebar() {
               <span>📜</span>
               {!colapsado && <span>Historial</span>}
             </Link>
+
+            <Link 
+  to="/pedidos" 
+  onClick={handleLinkClick}
+  style={{ 
+    color: 'white', 
+    textDecoration: 'none', 
+    padding: '8px 12px', 
+    borderRadius: '6px', 
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    justifyContent: colapsado ? 'center' : 'flex-start',
+    backgroundColor: location.pathname === '/pedidos' ? 'rgba(255,255,255,0.15)' : 'transparent',
+    transition: 'all 0.2s ease',
+    whiteSpace: 'nowrap',
+    fontSize: colapsado ? '1.2rem' : '0.9rem'
+  }}
+  title={colapsado ? 'Pedidos' : ''}
+>
+  <span>📋</span>
+  {!colapsado && <span>Pedidos</span>}
+</Link>
             
             <Link 
               to="/cambios" 

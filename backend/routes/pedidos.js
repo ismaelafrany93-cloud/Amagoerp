@@ -117,7 +117,59 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// GET /pedidos/:id - Obtener pedido por ID
+// 👇 RUTA DE ESTADÍSTICAS - DEBE IR ANTES DE :id
+// ============================================
+router.get('/estadisticas', async (req, res) => {
+    try {
+        const { sucursal_id } = req.query;
+
+        console.log('📊 GET /pedidos/estadisticas - Sucursal:', sucursal_id);
+
+        let query = `
+            SELECT 
+                COUNT(*) as total_pedidos,
+                COALESCE(SUM(cantidad_total), 0) as total_unidades,
+                COALESCE(SUM(cantidad_producida), 0) as total_producidas,
+                COALESCE(SUM(cantidad_pendiente), 0) as total_pendientes,
+                COUNT(CASE WHEN estado = 'pendiente' THEN 1 END) as pendientes,
+                COUNT(CASE WHEN estado = 'en_produccion' THEN 1 END) as en_produccion,
+                COUNT(CASE WHEN estado = 'completado' THEN 1 END) as completados,
+                COUNT(CASE WHEN estado = 'entregado' THEN 1 END) as entregados,
+                COUNT(CASE WHEN prioridad = 'urgente' THEN 1 END) as urgentes
+            FROM pedidos
+            WHERE 1=1
+        `;
+        let params = [];
+        let paramIndex = 1;
+
+        if (sucursal_id) {
+            query += ` AND sucursal_id = $${paramIndex}`;
+            params.push(parseInt(sucursal_id));
+            paramIndex++;
+        }
+
+        const result = await pool.query(query, params);
+        console.log('✅ Estadísticas:', result.rows[0]);
+        
+        res.json(result.rows[0] || {
+            total_pedidos: 0,
+            total_unidades: 0,
+            total_producidas: 0,
+            total_pendientes: 0,
+            pendientes: 0,
+            en_produccion: 0,
+            completados: 0,
+            entregados: 0,
+            urgentes: 0
+        });
+    } catch (error) {
+        console.error('❌ Error en GET /pedidos/estadisticas:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// 👇 GET /pedidos/:id - Obtener pedido por ID (CON OPERARIOS) - ÚNICA VERSIÓN
 // ============================================
 router.get('/:id', async (req, res) => {
     try {
@@ -149,16 +201,28 @@ router.get('/:id', async (req, res) => {
 
         const detallesResult = await pool.query(
             `SELECT 
-                d.*
+                d.*,
+                u.nombre as operario_nombre_completo,
+                u.rol as operario_rol
             FROM detalle_produccion_pedido d
+            LEFT JOIN usuarios u ON d.operario_nombre = u.nombre
             WHERE d.pedido_id = $1
             ORDER BY d.fecha_produccion DESC`,
             [parseInt(id)]
         );
 
+        // Obtener lista de operarios disponibles
+        const operariosResult = await pool.query(
+            `SELECT id, nombre, rol 
+             FROM usuarios 
+             WHERE rol = 'operario' 
+             ORDER BY nombre ASC`
+        );
+
         res.json({
             pedido: pedidoResult.rows[0],
-            detalles: detallesResult.rows
+            detalles: detallesResult.rows,
+            operarios: operariosResult.rows
         });
     } catch (error) {
         console.error('❌ Error en GET /pedidos/:id:', error);
@@ -327,7 +391,6 @@ router.put('/:id/estado', async (req, res) => {
             });
         }
 
-        // 👇 CORREGIDO: usar tipo correcto
         const result = await pool.query(
             `UPDATE pedidos 
              SET estado = $1::varchar,
@@ -379,122 +442,6 @@ router.delete('/:id', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Error en DELETE /pedidos/:id:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// ============================================
-// GET /pedidos/:id - Obtener pedido por ID (CON OPERARIOS)
-// ============================================
-router.get('/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        if (isNaN(id)) {
-            return res.status(400).json({ error: 'ID inválido' });
-        }
-
-        // Obtener el pedido
-        const pedidoResult = await pool.query(
-            `SELECT 
-                p.*,
-                u.nombre as creador_nombre,
-                s.nombre as sucursal_nombre,
-                COALESCE(
-                    (SELECT SUM(cantidad) FROM detalle_produccion_pedido WHERE pedido_id = p.id),
-                    0
-                ) as total_producido
-            FROM pedidos p
-            LEFT JOIN usuarios u ON p.creado_por = u.id
-            LEFT JOIN sucursales s ON p.sucursal_id = s.id
-            WHERE p.id = $1`,
-            [parseInt(id)]
-        );
-
-        if (pedidoResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Pedido no encontrado' });
-        }
-
-        // Obtener detalles de producción con operarios
-        const detallesResult = await pool.query(
-            `SELECT 
-                d.*,
-                u.nombre as operario_nombre_completo,
-                u.rol as operario_rol
-            FROM detalle_produccion_pedido d
-            LEFT JOIN usuarios u ON d.operario_nombre = u.nombre
-            WHERE d.pedido_id = $1
-            ORDER BY d.fecha_produccion DESC`,
-            [parseInt(id)]
-        );
-
-        // 👇 NUEVO: Obtener lista de operarios disponibles (para el selector)
-        const operariosResult = await pool.query(
-            `SELECT id, nombre, rol 
-             FROM usuarios 
-             WHERE rol = 'operario' 
-             ORDER BY nombre ASC`
-        );
-
-        res.json({
-            pedido: pedidoResult.rows[0],
-            detalles: detallesResult.rows,
-            operarios: operariosResult.rows  // 👈 Enviar lista de operarios
-        });
-    } catch (error) {
-        console.error('❌ Error en GET /pedidos/:id:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// ============================================
-// GET /pedidos/estadisticas - Estadísticas de pedidos
-// ============================================
-router.get('/estadisticas', async (req, res) => {
-    try {
-        const { sucursal_id } = req.query;
-
-        console.log('📊 GET /pedidos/estadisticas - Sucursal:', sucursal_id);
-
-        let query = `
-            SELECT 
-                COUNT(*) as total_pedidos,
-                COALESCE(SUM(cantidad_total), 0) as total_unidades,
-                COALESCE(SUM(cantidad_producida), 0) as total_producidas,
-                COALESCE(SUM(cantidad_pendiente), 0) as total_pendientes,
-                COUNT(CASE WHEN estado = 'pendiente' THEN 1 END) as pendientes,
-                COUNT(CASE WHEN estado = 'en_produccion' THEN 1 END) as en_produccion,
-                COUNT(CASE WHEN estado = 'completado' THEN 1 END) as completados,
-                COUNT(CASE WHEN estado = 'entregado' THEN 1 END) as entregados,
-                COUNT(CASE WHEN prioridad = 'urgente' THEN 1 END) as urgentes
-            FROM pedidos
-            WHERE 1=1
-        `;
-        let params = [];
-        let paramIndex = 1;
-
-        if (sucursal_id) {
-            query += ` AND sucursal_id = $${paramIndex}`;
-            params.push(parseInt(sucursal_id));
-            paramIndex++;
-        }
-
-        const result = await pool.query(query, params);
-        console.log('✅ Estadísticas:', result.rows[0]);
-        
-        res.json(result.rows[0] || {
-            total_pedidos: 0,
-            total_unidades: 0,
-            total_producidas: 0,
-            total_pendientes: 0,
-            pendientes: 0,
-            en_produccion: 0,
-            completados: 0,
-            entregados: 0,
-            urgentes: 0
-        });
-    } catch (error) {
-        console.error('❌ Error en GET /pedidos/estadisticas:', error);
         res.status(500).json({ error: error.message });
     }
 });

@@ -536,29 +536,6 @@ function Sidebar() {
               <span>📜</span>
               {!colapsado && <span>Historial</span>}
             </Link>
-
-            <Link 
-  to="/pedidos" 
-  onClick={handleLinkClick}
-  style={{ 
-    color: 'white', 
-    textDecoration: 'none', 
-    padding: '8px 12px', 
-    borderRadius: '6px', 
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    justifyContent: colapsado ? 'center' : 'flex-start',
-    backgroundColor: location.pathname === '/pedidos' ? 'rgba(255,255,255,0.15)' : 'transparent',
-    transition: 'all 0.2s ease',
-    whiteSpace: 'nowrap',
-    fontSize: colapsado ? '1.2rem' : '0.9rem'
-  }}
-  title={colapsado ? 'Pedidos' : ''}
->
-  <span>📋</span>
-  {!colapsado && <span>Pedidos</span>}
-</Link>
             
             <Link 
               to="/cambios" 
@@ -651,6 +628,32 @@ function Sidebar() {
               <span>📦</span>
               {!colapsado && <span>Transferencias</span>}
             </Link>
+
+            {/* 👇 NUEVO: PEDIDOS - Solo Sucursal Principal */}
+            {esSucursalPrincipal && (
+              <Link 
+                to="/pedidos" 
+                onClick={handleLinkClick}
+                style={{ 
+                  color: 'white', 
+                  textDecoration: 'none', 
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  justifyContent: colapsado ? 'center' : 'flex-start',
+                  backgroundColor: location.pathname === '/pedidos' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                  fontSize: colapsado ? '1.2rem' : '0.9rem'
+                }}
+                title={colapsado ? 'Pedidos' : ''}
+              >
+                <span>📋</span>
+                {!colapsado && <span>Pedidos</span>}
+              </Link>
+            )}
 
             {/* ========================================== */}
             {/* 👇 NUEVOS MÓDULOS CONTABLES */}
@@ -969,59 +972,32 @@ function Sidebar() {
               </Link>
             )}
 
-            <Link 
-              to="/configuracion" 
-              onClick={handleLinkClick}
-              style={{ 
-                color: 'white', 
-                textDecoration: 'none', 
-                padding: '8px 12px', 
-                borderRadius: '6px', 
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                justifyContent: colapsado ? 'center' : 'flex-start',
-                backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent',
-                transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap',
-                fontSize: colapsado ? '1.2rem' : '0.9rem'
-              }}
-              title={colapsado ? 'Configuración' : ''}
-            >
-              <span>⚙️</span>
-              {!colapsado && <span>Configuración</span>}
-            </Link>
-          </>
-        )}
+            {/* 👇 NUEVO: PEDIDOS - Solo Sucursal Principal y Vendedores */}
+            {esSucursalPrincipal && (
+              <Link 
+                to="/pedidos" 
+                onClick={handleLinkClick}
+                style={{ 
+                  color: 'white', 
+                  textDecoration: 'none', 
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  justifyContent: colapsado ? 'center' : 'flex-start',
+                  backgroundColor: location.pathname === '/pedidos' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                  fontSize: colapsado ? '1.2rem' : '0.9rem'
+                }}
+                title={colapsado ? 'Pedidos' : ''}
+              >
+                <span>📋</span>
+                {!colapsado && <span>Pedidos</span>}
+              </Link>
+            )}
 
-        {/* ========================================== */}
-        {/* MENÚ PARA CHOFER */}
-        {/* ========================================== */}
-        {esChofer && (
-          <>
-            <Link 
-              to="/entregas" 
-              onClick={handleLinkClick}
-              style={{ 
-                color: 'white', 
-                textDecoration: 'none', 
-                padding: '8px 12px', 
-                borderRadius: '6px', 
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                justifyContent: colapsado ? 'center' : 'flex-start',
-                backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent',
-                transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap',
-                fontSize: colapsado ? '1.2rem' : '0.9rem'
-              }}
-              title={colapsado ? 'Entregas' : ''}
-            >
-              <span>🚚</span>
-              {!colapsado && <span>Entregas</span>}
-            </Link>
-            
             <Link 
               to="/configuracion" 
               onClick={handleLinkClick}
@@ -1052,6 +1028,32 @@ function Sidebar() {
         {/* ========================================== */}
         {esSupervisor && (
           <>
+            {/* 👇 NUEVO: PEDIDOS - Solo Sucursal Principal */}
+            {esSucursalPrincipal && (
+              <Link 
+                to="/pedidos" 
+                onClick={handleLinkClick}
+                style={{ 
+                  color: 'white', 
+                  textDecoration: 'none', 
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  justifyContent: colapsado ? 'center' : 'flex-start',
+                  backgroundColor: location.pathname === '/pedidos' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                  fontSize: colapsado ? '1.2rem' : '0.9rem'
+                }}
+                title={colapsado ? 'Pedidos' : ''}
+              >
+                <span>📋</span>
+                {!colapsado && <span>Pedidos</span>}
+              </Link>
+            )}
+            
             <Link 
               to="/produccion" 
               onClick={handleLinkClick}
@@ -1119,6 +1121,82 @@ function Sidebar() {
             >
               <span>📋</span>
               {!colapsado && <span>Recetas</span>}
+            </Link>
+            
+            <Link 
+              to="/entregas" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
+              }}
+              title={colapsado ? 'Entregas' : ''}
+            >
+              <span>🚚</span>
+              {!colapsado && <span>Entregas</span>}
+            </Link>
+            
+            <Link 
+              to="/configuracion" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/configuracion' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
+              }}
+              title={colapsado ? 'Configuración' : ''}
+            >
+              <span>⚙️</span>
+              {!colapsado && <span>Configuración</span>}
+            </Link>
+          </>
+        )}
+
+        {/* ========================================== */}
+        {/* MENÚ PARA CHOFER */}
+        {/* ========================================== */}
+        {esChofer && (
+          <>
+            <Link 
+              to="/entregas" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/entregas' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem'
+              }}
+              title={colapsado ? 'Entregas' : ''}
+            >
+              <span>🚚</span>
+              {!colapsado && <span>Entregas</span>}
             </Link>
             
             <Link 

@@ -6,16 +6,20 @@ const path = require('path');
 const fs = require('fs');
 
 // ============================================
-// 👇 CREAR CARPETA DE UPLOADS SI NO EXISTE
+// CREAR CARPETA DE UPLOADS
 // ============================================
-const uploadDir = './uploads/pedidos';
+const uploadDir = path.join(__dirname, '..', 'uploads', 'pedidos');
 if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-    console.log('📁 Carpeta creada:', uploadDir);
+    try {
+        fs.mkdirSync(uploadDir, { recursive: true });
+        console.log('📁 Carpeta creada:', uploadDir);
+    } catch (err) {
+        console.error('❌ Error creando carpeta:', err);
+    }
 }
 
 // ============================================
-// CONFIGURACIÓN DE MULTER PARA IMÁGENES
+// CONFIGURACIÓN DE MULTER
 // ============================================
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -30,7 +34,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         const filetypes = /jpeg|jpg|png|gif|webp/;
         const mimetype = filetypes.test(file.mimetype);
@@ -136,7 +140,7 @@ router.get('/:id', async (req, res) => {
             LEFT JOIN usuarios u ON p.creado_por = u.id
             LEFT JOIN sucursales s ON p.sucursal_id = s.id
             WHERE p.id = $1`,
-            [id]
+            [parseInt(id)]
         );
 
         if (pedidoResult.rows.length === 0) {
@@ -149,7 +153,7 @@ router.get('/:id', async (req, res) => {
             FROM detalle_produccion_pedido d
             WHERE d.pedido_id = $1
             ORDER BY d.fecha_produccion DESC`,
-            [id]
+            [parseInt(id)]
         );
 
         res.json({
@@ -215,15 +219,15 @@ router.post('/', upload.single('imagen'), async (req, res) => {
                 fecha_entrega_estimada || null,
                 observaciones || '',
                 imagen_url,
-                sucursal_id || 3,
-                creado_por
+                parseInt(sucursal_id) || 3,
+                parseInt(creado_por)
             ]
         );
 
         await pool.query(
             `INSERT INTO historial_pedidos (pedido_id, accion, descripcion, usuario_id)
              VALUES ($1, 'creado', 'Pedido creado: ' || $2, $3)`,
-            [result.rows[0].id, producto_nombre, creado_por]
+            [result.rows[0].id, producto_nombre, parseInt(creado_por)]
         );
 
         res.json({
@@ -254,7 +258,7 @@ router.post('/:id/produccion', async (req, res) => {
 
         const pedidoResult = await pool.query(
             'SELECT id, cantidad_total, cantidad_producida, estado, producto_nombre FROM pedidos WHERE id = $1',
-            [id]
+            [parseInt(id)]
         );
 
         if (pedidoResult.rows.length === 0) {
@@ -280,20 +284,20 @@ router.post('/:id/produccion', async (req, res) => {
                  updated_at = NOW()
              WHERE id = $3
              RETURNING *`,
-            [nuevaCantidad, nuevoEstado, id]
+            [nuevaCantidad, nuevoEstado, parseInt(id)]
         );
 
         await pool.query(
             `INSERT INTO detalle_produccion_pedido (
                 pedido_id, cantidad, fecha_produccion, operario_nombre, observaciones
             ) VALUES ($1, $2, CURRENT_DATE, $3, $4)`,
-            [id, cantidad, operario_nombre || 'Supervisor', observaciones || '']
+            [parseInt(id), parseInt(cantidad), operario_nombre || 'Supervisor', observaciones || '']
         );
 
         await pool.query(
             `INSERT INTO historial_pedidos (pedido_id, accion, descripcion, usuario_id)
              VALUES ($1, 'produccion', $2 || ' unidades producidas. Total: ' || $3 || ' de ' || $4, $5)`,
-            [id, cantidad, nuevaCantidad, pedido.cantidad_total, req.body.usuario_id || null]
+            [parseInt(id), parseInt(cantidad), nuevaCantidad, pedido.cantidad_total, req.body.usuario_id || null]
         );
 
         res.json({
@@ -323,14 +327,15 @@ router.put('/:id/estado', async (req, res) => {
             });
         }
 
+        // 👇 CORREGIDO: usar tipo correcto
         const result = await pool.query(
             `UPDATE pedidos 
-             SET estado = $1,
-                 fecha_entrega_real = CASE WHEN $1 = 'entregado' THEN CURRENT_DATE ELSE fecha_entrega_real END,
+             SET estado = $1::varchar,
+                 fecha_entrega_real = CASE WHEN $1::varchar = 'entregado' THEN CURRENT_DATE ELSE fecha_entrega_real END,
                  updated_at = NOW()
              WHERE id = $2
              RETURNING *`,
-            [estado, id]
+            [estado, parseInt(id)]
         );
 
         if (result.rows.length === 0) {
@@ -340,7 +345,7 @@ router.put('/:id/estado', async (req, res) => {
         await pool.query(
             `INSERT INTO historial_pedidos (pedido_id, accion, descripcion, usuario_id)
              VALUES ($1, 'estado', 'Estado cambiado a: ' || $2, $3)`,
-            [id, estado, usuario_id || null]
+            [parseInt(id), estado, usuario_id || null]
         );
 
         res.json({
@@ -361,12 +366,12 @@ router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        const existe = await pool.query('SELECT id, codigo FROM pedidos WHERE id = $1', [id]);
+        const existe = await pool.query('SELECT id, codigo FROM pedidos WHERE id = $1', [parseInt(id)]);
         if (existe.rows.length === 0) {
             return res.status(404).json({ error: 'Pedido no encontrado' });
         }
 
-        await pool.query('DELETE FROM pedidos WHERE id = $1', [id]);
+        await pool.query('DELETE FROM pedidos WHERE id = $1', [parseInt(id)]);
 
         res.json({
             success: true,

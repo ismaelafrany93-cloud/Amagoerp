@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
         
         if (sucursal_id) {
             query += ` AND g.sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
+            params.push(parseInt(sucursal_id));
             paramCount++;
         }
         
@@ -47,6 +47,9 @@ router.get('/', async (req, res) => {
         }
         
         query += ` ORDER BY g.fecha DESC, g.created_at DESC`;
+        
+        console.log('📝 Query gastos:', query);
+        console.log('📊 Params:', params);
         
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -75,7 +78,7 @@ router.post('/', async (req, res) => {
                 sucursal_id, created_by
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *`,
-            [concepto, categoria, monto, fecha, metodo_pago, referencia, descripcion, sucursal_id, created_by]
+            [concepto, categoria, monto, fecha, metodo_pago, referencia, descripcion, parseInt(sucursal_id) || 3, created_by]
         );
         
         res.json({
@@ -90,7 +93,7 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
-// GET /gastos/resumen - Resumen de gastos
+// GET /gastos/resumen - Resumen de gastos (CORREGIDO)
 // ============================================
 router.get('/resumen', async (req, res) => {
     try {
@@ -117,51 +120,40 @@ router.get('/resumen', async (req, res) => {
                 fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
         }
         
-        let query = `
-            SELECT 
-                COALESCE(SUM(g.monto), 0) as total_gastos,
-                COUNT(*) as total_registros,
-                jsonb_agg(
-                    jsonb_build_object(
-                        'categoria', g.categoria,
-                        'total', COALESCE(SUM(g.monto), 0),
-                        'cantidad', COUNT(*)
-                    )
-                ) as por_categoria
-            FROM gastos_operativos g
-            WHERE g.fecha >= $1
-        `;
-        let params = [fechaInicio];
-        let paramCount = 2;
+        console.log('📊 Resumen gastos - Periodo:', periodo, 'Fecha inicio:', fechaInicio);
         
-        if (sucursal_id) {
-            query += ` AND g.sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
-            paramCount++;
-        }
-        
-        query += ` GROUP BY g.categoria ORDER BY g.categoria`;
-        
-        const result = await pool.query(query, params);
-        
-        // Resumen general
+        // 👇 RESUMEN GENERAL - SIMPLIFICADO
         const resumenGeneral = await pool.query(
             `SELECT 
+                COALESCE(SUM(g.monto), 0) as total_gastos,
+                COUNT(*) as total_registros
+            FROM gastos_operativos g
+            WHERE g.fecha >= $1
+            ${sucursal_id ? `AND g.sucursal_id = $2` : ''}`,
+            [fechaInicio, ...(sucursal_id ? [parseInt(sucursal_id)] : [])]
+        );
+        
+        // 👇 RESUMEN POR CATEGORÍA - SIMPLIFICADO
+        const porCategoria = await pool.query(
+            `SELECT 
+                g.categoria,
                 COALESCE(SUM(g.monto), 0) as total,
                 COUNT(*) as cantidad
             FROM gastos_operativos g
             WHERE g.fecha >= $1
-            ${sucursal_id ? `AND g.sucursal_id = $2` : ''}`,
-            [fechaInicio, ...(sucursal_id ? [sucursal_id] : [])]
+            ${sucursal_id ? `AND g.sucursal_id = $2` : ''}
+            GROUP BY g.categoria
+            ORDER BY g.categoria`,
+            [fechaInicio, ...(sucursal_id ? [parseInt(sucursal_id)] : [])]
         );
         
         res.json({
             success: true,
             periodo: periodo,
             fecha_inicio: fechaInicio,
-            total_gastos: resumenGeneral.rows[0]?.total || 0,
-            total_registros: resumenGeneral.rows[0]?.cantidad || 0,
-            por_categoria: result.rows || []
+            total_gastos: resumenGeneral.rows[0]?.total_gastos || 0,
+            total_registros: resumenGeneral.rows[0]?.total_registros || 0,
+            por_categoria: porCategoria.rows || []
         });
         
     } catch (error) {
@@ -190,7 +182,7 @@ router.put('/:id', async (req, res) => {
                  updated_at = NOW()
              WHERE id = $8
              RETURNING *`,
-            [concepto, categoria, monto, fecha, metodo_pago, referencia, descripcion, id]
+            [concepto, categoria, monto, fecha, metodo_pago, referencia, descripcion, parseInt(id)]
         );
         
         if (result.rows.length === 0) {
@@ -217,7 +209,7 @@ router.delete('/:id', async (req, res) => {
         
         const result = await pool.query(
             'DELETE FROM gastos_operativos WHERE id = $1 RETURNING *',
-            [id]
+            [parseInt(id)]
         );
         
         if (result.rows.length === 0) {

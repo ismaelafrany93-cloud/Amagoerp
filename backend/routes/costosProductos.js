@@ -25,13 +25,13 @@ router.get('/', async (req, res) => {
         
         if (sucursal_id) {
             query += ` AND cp.sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
+            params.push(parseInt(sucursal_id));
             paramCount++;
         }
         
         if (producto_id) {
             query += ` AND cp.producto_id = $${paramCount}`;
-            params.push(producto_id);
+            params.push(parseInt(producto_id));
             paramCount++;
         }
         
@@ -60,7 +60,7 @@ router.post('/', async (req, res) => {
         // Verificar si ya existe
         const existente = await pool.query(
             'SELECT id FROM costos_productos WHERE producto_id = $1 AND sucursal_id = $2',
-            [producto_id, sucursal_id]
+            [parseInt(producto_id), parseInt(sucursal_id)]
         );
         
         if (existente.rows.length > 0) {
@@ -76,7 +76,7 @@ router.post('/', async (req, res) => {
                      updated_at = NOW()
                  WHERE producto_id = $6 AND sucursal_id = $7
                  RETURNING *`,
-                [costo_unitario, costo_materiales, costo_mano_obra, costo_transporte, otros_costos, producto_id, sucursal_id]
+                [costo_unitario, costo_materiales, costo_mano_obra, costo_transporte, otros_costos, parseInt(producto_id), parseInt(sucursal_id)]
             );
             
             return res.json({
@@ -93,7 +93,7 @@ router.post('/', async (req, res) => {
                 fecha_actualizacion, sucursal_id, created_by
             ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8)
             RETURNING *`,
-            [producto_id, costo_unitario, costo_materiales, costo_mano_obra, costo_transporte, otros_costos, sucursal_id, created_by]
+            [parseInt(producto_id), costo_unitario, costo_materiales, costo_mano_obra, costo_transporte, otros_costos, parseInt(sucursal_id), created_by]
         );
         
         res.json({
@@ -115,10 +115,9 @@ router.get('/ganancia/:producto_id', async (req, res) => {
         const { producto_id } = req.params;
         const { sucursal_id } = req.query;
         
-        // Obtener producto
         const productoResult = await pool.query(
             'SELECT id, nombre, precio FROM productos WHERE id = $1',
-            [producto_id]
+            [parseInt(producto_id)]
         );
         
         if (productoResult.rows.length === 0) {
@@ -127,10 +126,9 @@ router.get('/ganancia/:producto_id', async (req, res) => {
         
         const producto = productoResult.rows[0];
         
-        // Obtener costo
         const costoResult = await pool.query(
             'SELECT * FROM costos_productos WHERE producto_id = $1 AND sucursal_id = $2',
-            [producto_id, sucursal_id || 3]
+            [parseInt(producto_id), parseInt(sucursal_id) || 3]
         );
         
         const costo = costoResult.rows[0] || {
@@ -179,22 +177,23 @@ router.get('/ganancia-total', async (req, res) => {
         
         const mesActual = mes || new Date().getMonth() + 1;
         const anoActual = ano || new Date().getFullYear();
+        const sucursalFinal = sucursal_id ? parseInt(sucursal_id) : 3;
         
-        // Obtener ventas del mes
+        // Obtener ventas del mes - CORREGIDO: usar precio en lugar de precio_unitario
         const ventasResult = await pool.query(
             `SELECT 
                 v.id as venta_id,
                 v.total,
                 dv.producto_id,
                 dv.cantidad,
-                dv.precio_unitario
+                dv.precio as precio_unitario
             FROM ventas v
             JOIN detalle_ventas dv ON v.id = dv.venta_id
             WHERE EXTRACT(MONTH FROM v.fecha) = $1 
             AND EXTRACT(YEAR FROM v.fecha) = $2
             AND v.estado != 'cancelada'
-            ${sucursal_id ? `AND v.sucursal_id = $3` : ''}`,
-            [mesActual, anoActual, ...(sucursal_id ? [sucursal_id] : [])]
+            AND v.sucursal_id = $3`,
+            [mesActual, anoActual, sucursalFinal]
         );
         
         let totalVentas = 0;
@@ -204,19 +203,19 @@ router.get('/ganancia-total', async (req, res) => {
         for (const row of ventasResult.rows) {
             totalVentas += parseFloat(row.total) || 0;
             
-            // Obtener costo del producto
             const costoResult = await pool.query(
                 'SELECT costo_unitario FROM costos_productos WHERE producto_id = $1 AND sucursal_id = $2',
-                [row.producto_id, sucursal_id || 3]
+                [row.producto_id, sucursalFinal]
             );
             
             const costoUnitario = parseFloat(costoResult.rows[0]?.costo_unitario || 0);
-            const costoTotalProducto = costoUnitario * parseFloat(row.cantidad);
+            const cantidad = parseFloat(row.cantidad);
+            const costoTotalProducto = costoUnitario * cantidad;
             totalCosto += costoTotalProducto;
             
             detalle.push({
                 producto_id: row.producto_id,
-                cantidad: row.cantidad,
+                cantidad: cantidad,
                 precio_unitario: row.precio_unitario,
                 costo_unitario: costoUnitario,
                 ganancia_unidad: parseFloat(row.precio_unitario) - costoUnitario

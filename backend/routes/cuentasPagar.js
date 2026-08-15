@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
         
         if (sucursal_id) {
             query += ` AND c.sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
+            params.push(parseInt(sucursal_id));
             paramCount++;
         }
         
@@ -47,6 +47,9 @@ router.get('/', async (req, res) => {
         }
         
         query += ` ORDER BY c.fecha_vencimiento ASC, c.created_at DESC`;
+        
+        console.log('📝 Query cuentas-pagar:', query);
+        console.log('📊 Params:', params);
         
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -81,9 +84,12 @@ router.get('/resumen', async (req, res) => {
         
         if (sucursal_id) {
             query += ` AND c.sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
+            params.push(parseInt(sucursal_id));
             paramCount++;
         }
+        
+        console.log('📝 Query resumen cuentas:', query);
+        console.log('📊 Params:', params);
         
         const result = await pool.query(query, params);
         res.json(result.rows[0] || {
@@ -121,7 +127,7 @@ router.post('/', async (req, res) => {
                 estado
             ) VALUES ($1, $2, $3, 0, $4, $5, $6, $7, $8, $9, $10, 'pendiente')
             RETURNING *`,
-            [proveedor, concepto, monto_total, fecha_emision, fecha_vencimiento, tipo, factura_numero, observaciones, sucursal_id, created_by]
+            [proveedor, concepto, monto_total, fecha_emision, fecha_vencimiento, tipo, factura_numero, observaciones, parseInt(sucursal_id) || 3, created_by]
         );
         
         res.json({
@@ -158,7 +164,7 @@ router.put('/:id', async (req, res) => {
                  updated_at = NOW()
              WHERE id = $5
              RETURNING *`,
-            [monto_pagado, fecha_pago, estado, observaciones, id]
+            [monto_pagado, fecha_pago, estado, observaciones, parseInt(id)]
         );
         
         if (result.rows.length === 0) {
@@ -185,7 +191,7 @@ router.delete('/:id', async (req, res) => {
         
         const result = await pool.query(
             'DELETE FROM cuentas_por_pagar WHERE id = $1 RETURNING *',
-            [id]
+            [parseInt(id)]
         );
         
         if (result.rows.length === 0) {

@@ -12,11 +12,9 @@ router.get('/', async (req, res) => {
         let query = `
             SELECT 
                 c.*,
-                s.nombre as sucursal_nombre,
-                u.nombre as creador_nombre
+                s.nombre as sucursal_nombre
             FROM cuentas_por_pagar c
             LEFT JOIN sucursales s ON c.sucursal_id = s.id
-            LEFT JOIN usuarios u ON c.created_by = u.id
             WHERE 1=1
         `;
         let params = [];
@@ -48,9 +46,6 @@ router.get('/', async (req, res) => {
         
         query += ` ORDER BY c.fecha_vencimiento ASC, c.created_at DESC`;
         
-        console.log('📝 Query cuentas-pagar:', query);
-        console.log('📊 Params:', params);
-        
         const result = await pool.query(query, params);
         res.json(result.rows);
         
@@ -70,11 +65,8 @@ router.get('/resumen', async (req, res) => {
         let query = `
             SELECT 
                 COUNT(*) as total_cuentas,
-                COALESCE(SUM(c.monto_total), 0) as total_adeudado,
-                COALESCE(SUM(c.monto_pagado), 0) as total_pagado,
-                COALESCE(SUM(c.monto_total - c.monto_pagado), 0) as total_pendiente,
+                COALESCE(SUM(c.monto), 0) as total_adeudado,
                 COUNT(CASE WHEN c.estado = 'pendiente' THEN 1 END) as pendientes,
-                COUNT(CASE WHEN c.estado = 'parcial' THEN 1 END) as parciales,
                 COUNT(CASE WHEN c.estado = 'pagado' THEN 1 END) as pagados
             FROM cuentas_por_pagar c
             WHERE 1=1
@@ -88,18 +80,19 @@ router.get('/resumen', async (req, res) => {
             paramCount++;
         }
         
-        console.log('📝 Query resumen cuentas:', query);
-        console.log('📊 Params:', params);
-        
         const result = await pool.query(query, params);
-        res.json(result.rows[0] || {
-            total_cuentas: 0,
-            total_adeudado: 0,
-            total_pagado: 0,
-            total_pendiente: 0,
-            pendientes: 0,
+        
+        // Calcular total_pendiente y total_pagado
+        const totalAdeudado = parseFloat(result.rows[0]?.total_adeudado || 0);
+        
+        res.json({
+            total_cuentas: parseInt(result.rows[0]?.total_cuentas || 0),
+            total_adeudado: totalAdeudado,
+            total_pagado: 0, // No tenemos esta columna
+            total_pendiente: totalAdeudado,
+            pendientes: parseInt(result.rows[0]?.pendientes || 0),
             parciales: 0,
-            pagados: 0
+            pagados: parseInt(result.rows[0]?.pagados || 0)
         });
         
     } catch (error) {
@@ -114,20 +107,35 @@ router.get('/resumen', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const {
-            proveedor, concepto, monto_total, fecha_emision,
-            fecha_vencimiento, tipo, factura_numero, observaciones,
-            sucursal_id, created_by
+            proveedor,
+            monto,
+            descripcion,
+            fecha_vencimiento,
+            sucursal_id,
+            estado
         } = req.body;
+        
+        if (!proveedor || !monto) {
+            return res.status(400).json({
+                success: false,
+                error: 'Proveedor y monto son requeridos'
+            });
+        }
         
         const result = await pool.query(
             `INSERT INTO cuentas_por_pagar (
-                proveedor, concepto, monto_total, monto_pagado,
-                fecha_emision, fecha_vencimiento, tipo,
-                factura_numero, observaciones, sucursal_id, created_by,
-                estado
-            ) VALUES ($1, $2, $3, 0, $4, $5, $6, $7, $8, $9, $10, 'pendiente')
+                proveedor, monto, descripcion, fecha_vencimiento, 
+                sucursal_id, estado
+            ) VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *`,
-            [proveedor, concepto, monto_total, fecha_emision, fecha_vencimiento, tipo, factura_numero, observaciones, parseInt(sucursal_id) || 3, created_by]
+            [
+                proveedor,
+                parseFloat(monto),
+                descripcion || '',
+                fecha_vencimiento,
+                parseInt(sucursal_id) || 3,
+                estado || 'pendiente'
+            ]
         );
         
         res.json({
@@ -147,24 +155,19 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { monto_pagado, fecha_pago, estado, observaciones } = req.body;
+        const { proveedor, monto, descripcion, fecha_vencimiento, estado } = req.body;
         
         const result = await pool.query(
             `UPDATE cuentas_por_pagar 
-             SET monto_pagado = COALESCE($1, monto_pagado),
-                 fecha_pago = COALESCE($2, fecha_pago),
-                 estado = COALESCE($3, 
-                     CASE 
-                         WHEN COALESCE($1, monto_pagado) >= monto_total THEN 'pagado'
-                         WHEN COALESCE($1, monto_pagado) > 0 THEN 'parcial'
-                         ELSE 'pendiente'
-                     END
-                 ),
-                 observaciones = COALESCE($4, observaciones),
+             SET proveedor = COALESCE($1, proveedor),
+                 monto = COALESCE($2, monto),
+                 descripcion = COALESCE($3, descripcion),
+                 fecha_vencimiento = COALESCE($4, fecha_vencimiento),
+                 estado = COALESCE($5, estado),
                  updated_at = NOW()
-             WHERE id = $5
+             WHERE id = $6
              RETURNING *`,
-            [monto_pagado, fecha_pago, estado, observaciones, parseInt(id)]
+            [proveedor, monto, descripcion, fecha_vencimiento, estado, parseInt(id)]
         );
         
         if (result.rows.length === 0) {

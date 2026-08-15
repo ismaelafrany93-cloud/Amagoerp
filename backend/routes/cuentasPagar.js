@@ -58,6 +58,51 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
+// GET /cuentas-pagar/resumen - Resumen de cuentas
+// ============================================
+router.get('/resumen', async (req, res) => {
+    try {
+        const { sucursal_id } = req.query;
+        
+        let query = `
+            SELECT 
+                COUNT(*) as total_cuentas,
+                COALESCE(SUM(c.monto_total), 0) as total_adeudado,
+                COALESCE(SUM(c.monto_pagado), 0) as total_pagado,
+                COALESCE(SUM(c.monto_total - c.monto_pagado), 0) as total_pendiente,
+                COUNT(CASE WHEN c.estado = 'pendiente' THEN 1 END) as pendientes,
+                COUNT(CASE WHEN c.estado = 'parcial' THEN 1 END) as parciales,
+                COUNT(CASE WHEN c.estado = 'pagado' THEN 1 END) as pagados
+            FROM cuentas_por_pagar c
+            WHERE 1=1
+        `;
+        let params = [];
+        let paramCount = 1;
+        
+        if (sucursal_id) {
+            query += ` AND c.sucursal_id = $${paramCount}`;
+            params.push(sucursal_id);
+            paramCount++;
+        }
+        
+        const result = await pool.query(query, params);
+        res.json(result.rows[0] || {
+            total_cuentas: 0,
+            total_adeudado: 0,
+            total_pagado: 0,
+            total_pendiente: 0,
+            pendientes: 0,
+            parciales: 0,
+            pagados: 0
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en GET /cuentas-pagar/resumen:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // POST /cuentas-pagar - Crear cuenta por pagar
 // ============================================
 router.post('/', async (req, res) => {
@@ -154,51 +199,6 @@ router.delete('/:id', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Error en DELETE /cuentas-pagar:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// ============================================
-// GET /cuentas-pagar/resumen - Resumen de cuentas
-// ============================================
-router.get('/resumen', async (req, res) => {
-    try {
-        const { sucursal_id } = req.query;
-        
-        let query = `
-            SELECT 
-                COUNT(*) as total_cuentas,
-                COALESCE(SUM(monto_total), 0) as total_adeudado,
-                COALESCE(SUM(monto_pagado), 0) as total_pagado,
-                COALESCE(SUM(monto_pendiente), 0) as total_pendiente,
-                COUNT(CASE WHEN estado = 'pendiente' THEN 1 END) as pendientes,
-                COUNT(CASE WHEN estado = 'parcial' THEN 1 END) as parciales,
-                COUNT(CASE WHEN estado = 'pagado' THEN 1 END) as pagados
-            FROM cuentas_por_pagar
-            WHERE 1=1
-        `;
-        let params = [];
-        let paramCount = 1;
-        
-        if (sucursal_id) {
-            query += ` AND sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
-            paramCount++;
-        }
-        
-        const result = await pool.query(query, params);
-        res.json(result.rows[0] || {
-            total_cuentas: 0,
-            total_adeudado: 0,
-            total_pagado: 0,
-            total_pendiente: 0,
-            pendientes: 0,
-            parciales: 0,
-            pagados: 0
-        });
-        
-    } catch (error) {
-        console.error('❌ Error en GET /cuentas-pagar/resumen:', error);
         res.status(500).json({ error: error.message });
     }
 });

@@ -90,6 +90,87 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
+// GET /gastos/resumen - Resumen de gastos
+// ============================================
+router.get('/resumen', async (req, res) => {
+    try {
+        const { sucursal_id, periodo } = req.query;
+        
+        let fechaInicio;
+        const hoy = new Date();
+        
+        switch(periodo) {
+            case 'dia':
+                fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+                break;
+            case 'semana':
+                const diaSemana = hoy.getDay();
+                fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - diaSemana);
+                break;
+            case 'mes':
+                fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                break;
+            case 'ano':
+                fechaInicio = new Date(hoy.getFullYear(), 0, 1);
+                break;
+            default:
+                fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        }
+        
+        let query = `
+            SELECT 
+                COALESCE(SUM(g.monto), 0) as total_gastos,
+                COUNT(*) as total_registros,
+                jsonb_agg(
+                    jsonb_build_object(
+                        'categoria', g.categoria,
+                        'total', COALESCE(SUM(g.monto), 0),
+                        'cantidad', COUNT(*)
+                    )
+                ) as por_categoria
+            FROM gastos_operativos g
+            WHERE g.fecha >= $1
+        `;
+        let params = [fechaInicio];
+        let paramCount = 2;
+        
+        if (sucursal_id) {
+            query += ` AND g.sucursal_id = $${paramCount}`;
+            params.push(sucursal_id);
+            paramCount++;
+        }
+        
+        query += ` GROUP BY g.categoria ORDER BY g.categoria`;
+        
+        const result = await pool.query(query, params);
+        
+        // Resumen general
+        const resumenGeneral = await pool.query(
+            `SELECT 
+                COALESCE(SUM(g.monto), 0) as total,
+                COUNT(*) as cantidad
+            FROM gastos_operativos g
+            WHERE g.fecha >= $1
+            ${sucursal_id ? `AND g.sucursal_id = $2` : ''}`,
+            [fechaInicio, ...(sucursal_id ? [sucursal_id] : [])]
+        );
+        
+        res.json({
+            success: true,
+            periodo: periodo,
+            fecha_inicio: fechaInicio,
+            total_gastos: resumenGeneral.rows[0]?.total || 0,
+            total_registros: resumenGeneral.rows[0]?.cantidad || 0,
+            por_categoria: result.rows || []
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en GET /gastos/resumen:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // PUT /gastos/:id - Actualizar gasto
 // ============================================
 router.put('/:id', async (req, res) => {
@@ -150,87 +231,6 @@ router.delete('/:id', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Error en DELETE /gastos:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// ============================================
-// GET /gastos/resumen - Resumen de gastos
-// ============================================
-router.get('/resumen', async (req, res) => {
-    try {
-        const { sucursal_id, periodo } = req.query; // periodo: 'dia', 'semana', 'mes', 'ano'
-        
-        let fechaInicio;
-        const hoy = new Date();
-        
-        switch(periodo) {
-            case 'dia':
-                fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-                break;
-            case 'semana':
-                const diaSemana = hoy.getDay();
-                fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - diaSemana);
-                break;
-            case 'mes':
-                fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-                break;
-            case 'ano':
-                fechaInicio = new Date(hoy.getFullYear(), 0, 1);
-                break;
-            default:
-                fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-        }
-        
-        let query = `
-            SELECT 
-                COALESCE(SUM(monto), 0) as total_gastos,
-                COUNT(*) as total_registros,
-                jsonb_agg(
-                    jsonb_build_object(
-                        'categoria', categoria,
-                        'total', COALESCE(SUM(monto), 0),
-                        'cantidad', COUNT(*)
-                    )
-                ) as por_categoria
-            FROM gastos_operativos
-            WHERE fecha >= $1
-        `;
-        let params = [fechaInicio];
-        let paramCount = 2;
-        
-        if (sucursal_id) {
-            query += ` AND sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
-            paramCount++;
-        }
-        
-        query += ` GROUP BY categoria ORDER BY categoria`;
-        
-        const result = await pool.query(query, params);
-        
-        // Resumen general
-        const resumenGeneral = await pool.query(
-            `SELECT 
-                COALESCE(SUM(monto), 0) as total,
-                COUNT(*) as cantidad
-            FROM gastos_operativos
-            WHERE fecha >= $1
-            ${sucursal_id ? `AND sucursal_id = $2` : ''}`,
-            [fechaInicio, ...(sucursal_id ? [sucursal_id] : [])]
-        );
-        
-        res.json({
-            success: true,
-            periodo: periodo,
-            fecha_inicio: fechaInicio,
-            total_gastos: resumenGeneral.rows[0]?.total || 0,
-            total_registros: resumenGeneral.rows[0]?.cantidad || 0,
-            por_categoria: result.rows || []
-        });
-        
-    } catch (error) {
-        console.error('❌ Error en GET /gastos/resumen:', error);
         res.status(500).json({ error: error.message });
     }
 });

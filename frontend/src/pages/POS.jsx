@@ -153,9 +153,9 @@ function POS() {
   }
 
   // ============================================
-  // FUNCIÓN PARA REIMPRIMIR FACTURA
+  // FUNCIÓN PARA REIMPRIMIR FACTURA CON OPCIÓN DUAL
   // ============================================
-  const handleReimprimir = async (ventaId) => {
+  const handleReimprimir = async (ventaId, formato = 'A4') => {
     try {
       const loading = document.createElement('div');
       loading.style.cssText = `
@@ -188,89 +188,127 @@ function POS() {
       const detalles = data.detalles;
       const sucursal = data.sucursal || { nombre: 'Sucursal Principal', direccion: '', telefono: '' };
 
-      // 👇 DETECTAR SI ES SABANA PARA EL TICKET
       const esSabana = sucursal.id === 2 || 
                        (sucursal.nombre && sucursal.nombre.toLowerCase().includes('sabana'));
       
       const nombreEmpresa = esSabana ? 'Lizhomedecore' : 'AMAGO ERP';
-      const nombreCorto = esSabana ? 'LIZHOMEDECORE' : 'AMAGO';
 
-      let ticketHTML = `
-        <div style="font-family: monospace; width: 300px; margin: 0 auto; padding: 20px; background: white;">
-          <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px;">
-            <h2 style="margin: 0; font-size: 18px;">🏭 ${nombreEmpresa}</h2>
-            <p style="margin: 2px 0; font-size: 12px;">${sucursal.nombre || 'Sucursal Principal'}</p>
-            ${sucursal.direccion ? `<p style="margin: 2px 0; font-size: 11px;">${sucursal.direccion}</p>` : ''}
-            ${sucursal.telefono ? `<p style="margin: 2px 0; font-size: 11px;">Tel: ${sucursal.telefono}</p>` : ''}
-            <p style="margin: 5px 0; font-size: 14px; font-weight: bold;">FACTURA</p>
-            <p style="margin: 2px 0; font-size: 12px;">#${venta.factura || venta.id}</p>
+      let ticketHTML;
+      
+      if (formato === 'POS80') {
+        ticketHTML = `
+          <div style="font-family: monospace; width: 300px; margin: 0 auto; padding: 10px; background: white; font-size: 11px;">
+            <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px;">
+              <h2 style="margin: 0; font-size: 16px;">🏭 ${nombreEmpresa}</h2>
+              <p style="margin: 2px 0; font-size: 11px;">${sucursal.nombre || 'Sucursal Principal'}</p>
+              ${sucursal.direccion ? `<p style="margin: 2px 0; font-size: 10px;">${sucursal.direccion}</p>` : ''}
+              <p style="margin: 5px 0; font-size: 12px; font-weight: bold;">FACTURA #${venta.factura || venta.id}</p>
+            </div>
+            <div style="padding: 8px 0; border-bottom: 1px dashed #000;">
+              <p style="margin: 2px 0; font-size: 11px;"><strong>Cliente:</strong> ${venta.cliente_nombre || 'N/A'}</p>
+              <p style="margin: 2px 0; font-size: 11px;"><strong>Vendedor:</strong> ${venta.vendedor_nombre || 'N/A'}</p>
+              <p style="margin: 2px 0; font-size: 11px;"><strong>Fecha:</strong> ${new Date(venta.fecha).toLocaleString()}</p>
+              <p style="margin: 2px 0; font-size: 11px;"><strong>Pago:</strong> ${venta.tipo_pago || 'Efectivo'}</p>
+            </div>
+            <div style="padding: 8px 0; border-bottom: 1px dashed #000;">
+              <table style="width: 100%; font-size: 10px; border-collapse: collapse;">
+                <thead>
+                  <tr style="border-bottom: 1px solid #000;">
+                    <th style="text-align: left; padding: 2px 0;">Producto</th>
+                    <th style="text-align: center; padding: 2px 0;">Cant</th>
+                    <th style="text-align: right; padding: 2px 0;">Precio</th>
+                    <th style="text-align: right; padding: 2px 0;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${detalles.map(d => `
+                    <tr>
+                      <td style="padding: 2px 0; text-align: left;">${d.producto_nombre || 'Producto'}</td>
+                      <td style="padding: 2px 0; text-align: center;">${d.cantidad}</td>
+                      <td style="padding: 2px 0; text-align: right;">RD$ ${Number(d.precio).toFixed(2)}</td>
+                      <td style="padding: 2px 0; text-align: right;">RD$ ${(Number(d.precio) * d.cantidad).toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+                <tfoot>
+                  <tr style="border-top: 2px solid #000;">
+                    <td colspan="3" style="text-align: right; padding: 4px 0; font-weight: bold;">TOTAL:</td>
+                    <td style="text-align: right; padding: 4px 0; font-weight: bold; font-size: 14px;">RD$ ${Number(venta.total).toFixed(2)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <div style="padding: 8px 0; text-align: center; font-size: 10px; color: #666;">
+              <p style="margin: 2px 0;">¡Gracias por su compra!</p>
+              <p style="margin: 2px 0;">${new Date().toLocaleString()}</p>
+            </div>
           </div>
-
-          <div style="padding: 10px 0; border-bottom: 1px dashed #000;">
-            <p style="margin: 2px 0; font-size: 12px;"><strong>Cliente:</strong> ${venta.cliente_nombre || 'N/A'}</p>
-            ${venta.cliente_telefono ? `<p style="margin: 2px 0; font-size: 12px;"><strong>Teléfono:</strong> ${venta.cliente_telefono}</p>` : ''}
-            ${venta.cliente_direccion ? `<p style="margin: 2px 0; font-size: 12px;"><strong>Dirección:</strong> ${venta.cliente_direccion}</p>` : ''}
-            <p style="margin: 2px 0; font-size: 12px;"><strong>Vendedor:</strong> ${venta.vendedor_nombre || 'N/A'}</p>
-            <p style="margin: 2px 0; font-size: 12px;"><strong>Fecha:</strong> ${new Date(venta.fecha).toLocaleString()}</p>
-            <p style="margin: 2px 0; font-size: 12px;"><strong>Tipo:</strong> ${venta.tipo_venta || 'Contado'}</p>
-            <p style="margin: 2px 0; font-size: 12px;"><strong>Pago:</strong> ${venta.tipo_pago || 'Efectivo'}</p>
-            ${venta.estado_entrega ? `<p style="margin: 2px 0; font-size: 12px;"><strong>Entrega:</strong> ${venta.estado_entrega}</p>` : ''}
-          </div>
-
-          <div style="padding: 10px 0; border-bottom: 1px dashed #000;">
-            <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
-              <thead>
-                <tr style="border-bottom: 1px solid #000;">
-                  <th style="text-align: left; padding: 4px 0;">Producto</th>
-                  <th style="text-align: center; padding: 4px 0;">Cant</th>
-                  <th style="text-align: right; padding: 4px 0;">Precio</th>
-                  <th style="text-align: right; padding: 4px 0;">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-      `;
-
-      detalles.forEach(d => {
-        ticketHTML += `
-          <tr>
-            <td style="padding: 4px 0; text-align: left;">${d.producto_nombre || 'Producto'}</td>
-            <td style="padding: 4px 0; text-align: center;">${d.cantidad}</td>
-            <td style="padding: 4px 0; text-align: right;">RD$ ${Number(d.precio).toFixed(2)}</td>
-            <td style="padding: 4px 0; text-align: right;">RD$ ${(Number(d.precio) * d.cantidad).toFixed(2)}</td>
-          </tr>
         `;
-      });
-
-      ticketHTML += `
-              </tbody>
-              <tfoot>
-                <tr style="border-top: 2px solid #000;">
-                  <td colspan="3" style="text-align: right; padding: 8px 0; font-weight: bold;">TOTAL:</td>
-                  <td style="text-align: right; padding: 8px 0; font-weight: bold; font-size: 16px;">RD$ ${Number(venta.total).toFixed(2)}</td>
-                </tr>
-              </tfoot>
-            </table>
+      } else {
+        // FORMATO A4 (Normal)
+        ticketHTML = `
+          <div style="font-family: Arial, sans-serif; max-width: 210mm; margin: 0 auto; padding: 30px; background: white;">
+            <div style="text-align: center; border-bottom: 2px solid #003b6f; padding-bottom: 15px;">
+              <h1 style="margin: 0; color: #003b6f;">🏭 ${nombreEmpresa}</h1>
+              <h2 style="margin: 5px 0; color: #003b6f;">${sucursal.nombre || 'Sucursal Principal'}</h2>
+              ${sucursal.direccion ? `<p style="margin: 2px 0;">${sucursal.direccion}</p>` : ''}
+              ${sucursal.telefono ? `<p style="margin: 2px 0;">Tel: ${sucursal.telefono}</p>` : ''}
+              <h2 style="margin: 10px 0; color: #003b6f;">FACTURA #${venta.factura || venta.id}</h2>
+            </div>
+            <div style="padding: 15px 0; border-bottom: 1px solid #ddd;">
+              <table style="width: 100%;">
+                <tr><td style="padding: 4px;"><strong>Cliente:</strong></td><td>${venta.cliente_nombre || 'N/A'}</td></tr>
+                <tr><td style="padding: 4px;"><strong>Teléfono:</strong></td><td>${venta.cliente_telefono || 'N/A'}</td></tr>
+                <tr><td style="padding: 4px;"><strong>Dirección:</strong></td><td>${venta.cliente_direccion || 'N/A'}</td></tr>
+                <tr><td style="padding: 4px;"><strong>Vendedor:</strong></td><td>${venta.vendedor_nombre || 'N/A'}</td></tr>
+                <tr><td style="padding: 4px;"><strong>Fecha:</strong></td><td>${new Date(venta.fecha).toLocaleString()}</td></tr>
+                <tr><td style="padding: 4px;"><strong>Tipo Pago:</strong></td><td>${venta.tipo_pago || 'Efectivo'}</td></tr>
+                <tr><td style="padding: 4px;"><strong>Estado:</strong></td><td>${venta.estado || 'Completada'}</td></tr>
+              </table>
+            </div>
+            <div style="padding: 15px 0;">
+              <h3 style="color: #003b6f;">Detalle de Productos</h3>
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="background-color: #003b6f; color: white;">
+                    <th style="padding: 8px; text-align: left;">Producto</th>
+                    <th style="padding: 8px; text-align: center;">Cantidad</th>
+                    <th style="padding: 8px; text-align: right;">Precio</th>
+                    <th style="padding: 8px; text-align: right;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${detalles.map(d => `
+                    <tr style="border-bottom: 1px solid #eee;">
+                      <td style="padding: 8px;">${d.producto_nombre || 'Producto'}</td>
+                      <td style="padding: 8px; text-align: center;">${d.cantidad}</td>
+                      <td style="padding: 8px; text-align: right;">RD$ ${Number(d.precio).toFixed(2)}</td>
+                      <td style="padding: 8px; text-align: right;">RD$ ${(Number(d.precio) * d.cantidad).toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+                <tfoot>
+                  <tr style="border-top: 2px solid #003b6f; font-weight: bold;">
+                    <td colspan="3" style="padding: 10px; text-align: right;">TOTAL:</td>
+                    <td style="padding: 10px; text-align: right; font-size: 1.2rem; color: #003b6f;">RD$ ${Number(venta.total).toFixed(2)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <div style="text-align: center; padding-top: 20px; border-top: 2px solid #003b6f; color: #666; font-size: 0.9rem;">
+              <p>¡Gracias por su compra!</p>
+              <p>Factura reimpresa el ${new Date().toLocaleString()}</p>
+            </div>
           </div>
+        `;
+      }
 
-          <div style="padding: 10px 0; text-align: center; border-bottom: 1px dashed #000;">
-            <p style="margin: 2px 0; font-size: 12px;">${venta.estado === 'cancelada' ? '❌ FACTURA CANCELADA' : '✅ FACTURA VÁLIDA'}</p>
-            ${venta.motivo_cancelacion ? `<p style="margin: 2px 0; font-size: 11px; color: #f44336;">Motivo: ${venta.motivo_cancelacion}</p>` : ''}
-            ${venta.observacion ? `<p style="margin: 2px 0; font-size: 11px;">${venta.observacion}</p>` : ''}
-          </div>
-
-          <div style="padding: 10px 0; text-align: center; font-size: 11px; color: #666;">
-            <p style="margin: 2px 0;">¡Gracias por su compra!</p>
-            <p style="margin: 2px 0;">Este documento es una reimpresión</p>
-            <p style="margin: 2px 0;">${new Date().toLocaleString()}</p>
-          </div>
-        </div>
-      `;
-
-      const ventana = window.open('', '_blank', 'width=400,height=600');
+      const ancho = formato === 'POS80' ? 400 : 800;
+      const ventana = window.open('', '_blank', `width=${ancho},height=600`);
       ventana.document.write(`
         <html>
           <head>
-            <title>Reimpresión Factura #${venta.factura || venta.id}</title>
+            <title>${formato === 'POS80' ? 'Ticket' : 'Factura'} #${venta.factura || venta.id}</title>
             <style>
               body { margin: 0; padding: 20px; background: #f5f5f5; }
               @media print {
@@ -296,7 +334,6 @@ function POS() {
       ventana.document.close();
 
       document.body.removeChild(loading);
-      alert('✅ Factura reimpresa correctamente');
 
     } catch (error) {
       console.error('Error reimprimiendo factura:', error);
@@ -679,7 +716,7 @@ function POS() {
             </div>
           </div>
 
-          {/* 👇 FACTURA OCULTA - CON SUCURSAL */}
+          {/* FACTURA OCULTA */}
           <div style={{ 
             position: 'fixed', 
             left: '-9999px', 
@@ -767,21 +804,38 @@ function POS() {
                         {new Date(v.fecha).toLocaleDateString()}
                       </td>
                       <td style={{ padding: '6px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => handleReimprimir(v.id)}
-                          style={{
-                            backgroundColor: '#9C27B0',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 10px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem'
-                          }}
-                          title="Reimprimir factura"
-                        >
-                          🖨️ Reimprimir
-                        </button>
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button
+                            onClick={() => handleReimprimir(v.id, 'A4')}
+                            style={{
+                              backgroundColor: '#003b6f',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              cursor: 'pointer',
+                              fontSize: '0.7rem'
+                            }}
+                            title="Factura A4"
+                          >
+                            📄 A4
+                          </button>
+                          <button
+                            onClick={() => handleReimprimir(v.id, 'POS80')}
+                            style={{
+                              backgroundColor: '#4CAF50',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              cursor: 'pointer',
+                              fontSize: '0.7rem'
+                            }}
+                            title="Ticket POS80"
+                          >
+                            🧾 POS
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

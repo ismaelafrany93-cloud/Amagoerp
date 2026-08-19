@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const pool = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -57,38 +56,56 @@ app.use('/costos-productos', require('./routes/costosProductos'));
 app.use('/pedidos', require('./routes/pedidos'));
 
 // ============================================
-// 👇 SERVIR EL FRONTEND (REACT BUILD) - VERSIÓN MEJORADA
+// 👇 SERVIR EL FRONTEND (VERSIÓN SIMPLIFICADA)
 // ============================================
-// Buscar la carpeta dist en diferentes ubicaciones posibles
-const posiblesPaths = [
-    path.join(__dirname, '..', 'frontend', 'dist'),
-    path.join(__dirname, 'frontend', 'dist'),
-    path.join(__dirname, 'dist'),
-    path.join(__dirname, '..', 'dist')
+// Servir archivos estáticos desde la raíz del proyecto
+// En Render, el frontend se construye en la carpeta raíz
+const staticPaths = [
+    path.join(__dirname, '..', 'frontend', 'dist'),  // Estructura normal
+    path.join(__dirname, 'frontend', 'dist'),        // En la misma carpeta
+    path.join(__dirname, 'dist'),                    // En la raíz
+    path.join(__dirname, '..', 'dist')               // Una carpeta arriba
 ];
 
 let frontendPath = null;
-for (const p of posiblesPaths) {
-    if (fs.existsSync(p)) {
-        frontendPath = p;
-        console.log(`✅ Frontend encontrado en: ${p}`);
-        break;
+for (const p of staticPaths) {
+    console.log(`🔍 Buscando frontend en: ${p}`);
+    if (fs.existsSync(p) && fs.statSync(p).isDirectory()) {
+        const indexPath = path.join(p, 'index.html');
+        if (fs.existsSync(indexPath)) {
+            frontendPath = p;
+            console.log(`✅ Frontend encontrado en: ${p}`);
+            break;
+        }
     }
 }
 
-if (frontendPath && fs.existsSync(frontendPath)) {
-    // Servir archivos estáticos
+if (frontendPath) {
     app.use(express.static(frontendPath));
     console.log(`📁 Sirviendo frontend desde: ${frontendPath}`);
 } else {
-    console.log('⚠️ No se encontró la carpeta dist del frontend');
+    console.log('⚠️ No se encontró el frontend. Las rutas no-API devolverán mensaje JSON.');
 }
 
 // ============================================
 // MANEJAR TODAS LAS RUTAS DE REACT
 // ============================================
 app.get('*', (req, res) => {
-    // Excluir rutas de la API
+    // Si la ruta empieza con /api, es una ruta de API
+    if (req.path.startsWith('/api')) {
+        return res.json({
+            message: 'API de AMAGO ERP',
+            endpoints: [
+                '/auth', '/productos', '/ventas', '/inventario', '/clientes',
+                '/produccion', '/entregas', '/reportes', '/materiales', '/usuarios',
+                '/creditos', '/operarios', '/recetas', '/sucursales', '/historial',
+                '/dashboard', '/transferencias', '/cambios', '/nomina', '/empleados',
+                '/cuentas-pagar', '/gastos', '/costos-productos', '/pedidos'
+            ]
+        });
+    }
+    
+    // Si la ruta es de la API, devolver 404
     const apiPaths = ['/auth', '/productos', '/ventas', '/inventario', '/clientes', 
                       '/produccion', '/entregas', '/reportes', '/materiales', '/usuarios',
                       '/creditos', '/operarios', '/recetas', '/sucursales', '/historial',
@@ -109,26 +126,11 @@ app.get('*', (req, res) => {
         }
     }
     
-    // Si no hay frontend, devolver mensaje
-    res.status(404).json({
-        error: 'Frontend no disponible',
-        message: 'El frontend no ha sido construido o no se encuentra en la ubicación esperada'
-    });
-});
-
-// ============================================
-// TEST ROUTE
-// ============================================
-app.get('/api', (req, res) => {
+    // Si no hay frontend, devolver mensaje JSON
     res.json({
-        message: '🚀 AMAGO ERP Backend funcionando',
-        modulos: [
-            'auth', 'productos', 'ventas', 'inventario', 'clientes',
-            'produccion', 'entregas', 'reportes', 'materiales', 'usuarios',
-            'creditos', 'operarios', 'recetas', 'sucursales', 'historial',
-            'dashboard', 'transferencias', 'cambios', 'nomina', 'empleados',
-            'cuentas-pagar', 'gastos', 'costos-productos', 'pedidos'
-        ]
+        message: '🚀 AMAGO ERP Backend funcionando correctamente',
+        status: 'OK',
+        frontend: 'No disponible - Construye el frontend con npm run build'
     });
 });
 

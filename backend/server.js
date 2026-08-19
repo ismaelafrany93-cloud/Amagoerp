@@ -56,56 +56,48 @@ app.use('/costos-productos', require('./routes/costosProductos'));
 app.use('/pedidos', require('./routes/pedidos'));
 
 // ============================================
-// 👇 SERVIR EL FRONTEND (VERSIÓN SIMPLIFICADA)
+// 👇 SERVIR EL FRONTEND - RUTA FIJA
 // ============================================
-// Servir archivos estáticos desde la raíz del proyecto
-// En Render, el frontend se construye en la carpeta raíz
-const staticPaths = [
-    path.join(__dirname, '..', 'frontend', 'dist'),  // Estructura normal
-    path.join(__dirname, 'frontend', 'dist'),        // En la misma carpeta
-    path.join(__dirname, 'dist'),                    // En la raíz
-    path.join(__dirname, '..', 'dist')               // Una carpeta arriba
-];
+// En Render, el dist está en /opt/render/project/src/frontend/dist
+const distPath = path.join(__dirname, '..', 'frontend', 'dist');
 
-let frontendPath = null;
-for (const p of staticPaths) {
-    console.log(`🔍 Buscando frontend en: ${p}`);
-    if (fs.existsSync(p) && fs.statSync(p).isDirectory()) {
-        const indexPath = path.join(p, 'index.html');
-        if (fs.existsSync(indexPath)) {
-            frontendPath = p;
-            console.log(`✅ Frontend encontrado en: ${p}`);
+console.log('📁 Buscando frontend en:', distPath);
+
+if (fs.existsSync(distPath)) {
+    console.log('✅ Frontend encontrado en:', distPath);
+    
+    // Servir archivos estáticos
+    app.use(express.static(distPath));
+    
+    // También servir desde la raíz (para assets)
+    app.use('/assets', express.static(path.join(distPath, 'assets')));
+    
+    console.log('📁 Contenido de dist:', fs.readdirSync(distPath));
+} else {
+    console.log('❌ Frontend NO encontrado en:', distPath);
+    console.log('📁 Buscando en ubicaciones alternativas...');
+    
+    // Ubicaciones alternativas
+    const alternativas = [
+        path.join(__dirname, 'frontend', 'dist'),
+        path.join(process.cwd(), 'frontend', 'dist'),
+        path.join(process.cwd(), 'dist')
+    ];
+    
+    for (const alt of alternativas) {
+        if (fs.existsSync(alt)) {
+            console.log('✅ Frontend encontrado en:', alt);
+            app.use(express.static(alt));
             break;
         }
     }
-}
-
-if (frontendPath) {
-    app.use(express.static(frontendPath));
-    console.log(`📁 Sirviendo frontend desde: ${frontendPath}`);
-} else {
-    console.log('⚠️ No se encontró el frontend. Las rutas no-API devolverán mensaje JSON.');
 }
 
 // ============================================
 // MANEJAR TODAS LAS RUTAS DE REACT
 // ============================================
 app.get('*', (req, res) => {
-    // Si la ruta empieza con /api, es una ruta de API
-    if (req.path.startsWith('/api')) {
-        return res.json({
-            message: 'API de AMAGO ERP',
-            endpoints: [
-                '/auth', '/productos', '/ventas', '/inventario', '/clientes',
-                '/produccion', '/entregas', '/reportes', '/materiales', '/usuarios',
-                '/creditos', '/operarios', '/recetas', '/sucursales', '/historial',
-                '/dashboard', '/transferencias', '/cambios', '/nomina', '/empleados',
-                '/cuentas-pagar', '/gastos', '/costos-productos', '/pedidos'
-            ]
-        });
-    }
-    
-    // Si la ruta es de la API, devolver 404
+    // Excluir rutas de la API
     const apiPaths = ['/auth', '/productos', '/ventas', '/inventario', '/clientes', 
                       '/produccion', '/entregas', '/reportes', '/materiales', '/usuarios',
                       '/creditos', '/operarios', '/recetas', '/sucursales', '/historial',
@@ -118,19 +110,39 @@ app.get('*', (req, res) => {
         }
     }
     
-    // Si hay frontend, enviar index.html
-    if (frontendPath) {
-        const indexPath = path.join(frontendPath, 'index.html');
-        if (fs.existsSync(indexPath)) {
-            return res.sendFile(indexPath);
-        }
+    // Si es una petición de asset (css, js, etc.), no hacer nada (ya lo sirve static)
+    if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|json)$/)) {
+        return res.status(404).send('Archivo no encontrado');
     }
     
-    // Si no hay frontend, devolver mensaje JSON
+    // Para todas las demás rutas, enviar index.html
+    const indexPath = path.join(distPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        console.log('📄 Sirviendo index.html para:', req.path);
+        return res.sendFile(indexPath);
+    }
+    
+    // Fallback
+    res.status(404).json({
+        error: 'Frontend no disponible',
+        path: req.path,
+        distPath: distPath
+    });
+});
+
+// ============================================
+// RUTA DE PRUEBA
+// ============================================
+app.get('/api', (req, res) => {
     res.json({
-        message: '🚀 AMAGO ERP Backend funcionando correctamente',
-        status: 'OK',
-        frontend: 'No disponible - Construye el frontend con npm run build'
+        message: '🚀 AMAGO ERP Backend funcionando',
+        modulos: [
+            'auth', 'productos', 'ventas', 'inventario', 'clientes',
+            'produccion', 'entregas', 'reportes', 'materiales', 'usuarios',
+            'creditos', 'operarios', 'recetas', 'sucursales', 'historial',
+            'dashboard', 'transferencias', 'cambios', 'nomina', 'empleados',
+            'cuentas-pagar', 'gastos', 'costos-productos', 'pedidos'
+        ]
     });
 });
 
@@ -148,4 +160,6 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📋 Módulos cargados: auth, productos, ventas, inventario, clientes, produccion, entregas, reportes, materiales, usuarios, creditos, operarios, recetas, sucursales, historial, dashboard, transferencias, cambios, nomina, empleados, cuentas-pagar, gastos, costos-productos, pedidos`);
+    console.log(`📁 Dist path: ${distPath}`);
+    console.log(`📁 Dist existe: ${fs.existsSync(distPath)}`);
 });

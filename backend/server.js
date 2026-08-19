@@ -29,7 +29,7 @@ if (!fs.existsSync('./uploads/pedidos')) {
 }
 
 // ============================================
-// RUTAS
+// RUTAS DE LA API
 // ============================================
 app.use('/auth', require('./routes/auth'));
 app.use('/productos', require('./routes/productos'));
@@ -54,14 +54,73 @@ app.use('/empleados', require('./routes/empleados'));
 app.use('/cuentas-pagar', require('./routes/cuentasPagar'));
 app.use('/gastos', require('./routes/gastos'));
 app.use('/costos-productos', require('./routes/costosProductos'));
-
-// 👇 RUTA DE PEDIDOS
 app.use('/pedidos', require('./routes/pedidos'));
+
+// ============================================
+// 👇 SERVIR EL FRONTEND (REACT BUILD)
+// ============================================
+// Servir archivos estáticos del frontend (desde la carpeta dist)
+const frontendPath = path.join(__dirname, '..', 'frontend', 'dist');
+console.log('📁 Frontend path:', frontendPath);
+
+// Verificar si la carpeta dist existe
+if (fs.existsSync(frontendPath)) {
+    console.log('✅ Carpeta frontend/dist encontrada');
+    app.use(express.static(frontendPath));
+} else {
+    console.log('⚠️ Carpeta frontend/dist NO encontrada. Build el frontend primero.');
+}
+
+// ============================================
+// 👇 MANEJAR TODAS LAS RUTAS DE REACT
+// ============================================
+// Cualquier ruta que no sea de la API, enviar index.html
+app.get('*', (req, res) => {
+    // Excluir rutas de la API (que ya están definidas arriba)
+    if (req.path.startsWith('/auth') || 
+        req.path.startsWith('/productos') || 
+        req.path.startsWith('/ventas') || 
+        req.path.startsWith('/inventario') || 
+        req.path.startsWith('/clientes') || 
+        req.path.startsWith('/produccion') || 
+        req.path.startsWith('/entregas') || 
+        req.path.startsWith('/reportes') || 
+        req.path.startsWith('/materiales') || 
+        req.path.startsWith('/usuarios') || 
+        req.path.startsWith('/creditos') || 
+        req.path.startsWith('/operarios') || 
+        req.path.startsWith('/recetas') || 
+        req.path.startsWith('/sucursales') || 
+        req.path.startsWith('/historial') || 
+        req.path.startsWith('/dashboard') || 
+        req.path.startsWith('/transferencias') || 
+        req.path.startsWith('/cambios') || 
+        req.path.startsWith('/nomina') || 
+        req.path.startsWith('/empleados') || 
+        req.path.startsWith('/cuentas-pagar') || 
+        req.path.startsWith('/gastos') || 
+        req.path.startsWith('/costos-productos') || 
+        req.path.startsWith('/pedidos') || 
+        req.path.startsWith('/uploads')) {
+        return res.status(404).json({ error: 'Ruta no encontrada' });
+    }
+    
+    // Para todas las demás rutas, enviar index.html (React Router se encarga)
+    const indexPath = path.join(frontendPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).json({ 
+            error: 'Frontend no construido. Ejecuta npm run build en la carpeta frontend',
+            path: indexPath
+        });
+    }
+});
 
 // ============================================
 // TEST ROUTE
 // ============================================
-app.get('/', (req, res) => {
+app.get('/api', (req, res) => {
     res.json({
         message: '🚀 AMAGO ERP Backend funcionando',
         modulos: [
@@ -88,4 +147,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📋 Módulos cargados: auth, productos, ventas, inventario, clientes, produccion, entregas, reportes, materiales, usuarios, creditos, operarios, recetas, sucursales, historial, dashboard, transferencias, cambios, nomina, empleados, cuentas-pagar, gastos, costos-productos, pedidos`);
+    console.log(`📁 Serviendo frontend desde: ${frontendPath}`);
 });

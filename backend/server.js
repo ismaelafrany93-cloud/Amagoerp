@@ -14,7 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 // ============================================
-// 👇 SERVIDOR DE ARCHIVOS ESTÁTICOS (IMÁGENES)
+// SERVIDOR DE ARCHIVOS ESTÁTICOS (IMÁGENES)
 // ============================================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -57,64 +57,63 @@ app.use('/costos-productos', require('./routes/costosProductos'));
 app.use('/pedidos', require('./routes/pedidos'));
 
 // ============================================
-// 👇 SERVIR EL FRONTEND (REACT BUILD)
+// 👇 SERVIR EL FRONTEND (REACT BUILD) - VERSIÓN MEJORADA
 // ============================================
-// Servir archivos estáticos del frontend (desde la carpeta dist)
-const frontendPath = path.join(__dirname, '..', 'frontend', 'dist');
-console.log('📁 Frontend path:', frontendPath);
+// Buscar la carpeta dist en diferentes ubicaciones posibles
+const posiblesPaths = [
+    path.join(__dirname, '..', 'frontend', 'dist'),
+    path.join(__dirname, 'frontend', 'dist'),
+    path.join(__dirname, 'dist'),
+    path.join(__dirname, '..', 'dist')
+];
 
-// Verificar si la carpeta dist existe
-if (fs.existsSync(frontendPath)) {
-    console.log('✅ Carpeta frontend/dist encontrada');
+let frontendPath = null;
+for (const p of posiblesPaths) {
+    if (fs.existsSync(p)) {
+        frontendPath = p;
+        console.log(`✅ Frontend encontrado en: ${p}`);
+        break;
+    }
+}
+
+if (frontendPath && fs.existsSync(frontendPath)) {
+    // Servir archivos estáticos
     app.use(express.static(frontendPath));
+    console.log(`📁 Sirviendo frontend desde: ${frontendPath}`);
 } else {
-    console.log('⚠️ Carpeta frontend/dist NO encontrada. Build el frontend primero.');
+    console.log('⚠️ No se encontró la carpeta dist del frontend');
 }
 
 // ============================================
-// 👇 MANEJAR TODAS LAS RUTAS DE REACT
+// MANEJAR TODAS LAS RUTAS DE REACT
 // ============================================
-// Cualquier ruta que no sea de la API, enviar index.html
 app.get('*', (req, res) => {
-    // Excluir rutas de la API (que ya están definidas arriba)
-    if (req.path.startsWith('/auth') || 
-        req.path.startsWith('/productos') || 
-        req.path.startsWith('/ventas') || 
-        req.path.startsWith('/inventario') || 
-        req.path.startsWith('/clientes') || 
-        req.path.startsWith('/produccion') || 
-        req.path.startsWith('/entregas') || 
-        req.path.startsWith('/reportes') || 
-        req.path.startsWith('/materiales') || 
-        req.path.startsWith('/usuarios') || 
-        req.path.startsWith('/creditos') || 
-        req.path.startsWith('/operarios') || 
-        req.path.startsWith('/recetas') || 
-        req.path.startsWith('/sucursales') || 
-        req.path.startsWith('/historial') || 
-        req.path.startsWith('/dashboard') || 
-        req.path.startsWith('/transferencias') || 
-        req.path.startsWith('/cambios') || 
-        req.path.startsWith('/nomina') || 
-        req.path.startsWith('/empleados') || 
-        req.path.startsWith('/cuentas-pagar') || 
-        req.path.startsWith('/gastos') || 
-        req.path.startsWith('/costos-productos') || 
-        req.path.startsWith('/pedidos') || 
-        req.path.startsWith('/uploads')) {
-        return res.status(404).json({ error: 'Ruta no encontrada' });
+    // Excluir rutas de la API
+    const apiPaths = ['/auth', '/productos', '/ventas', '/inventario', '/clientes', 
+                      '/produccion', '/entregas', '/reportes', '/materiales', '/usuarios',
+                      '/creditos', '/operarios', '/recetas', '/sucursales', '/historial',
+                      '/dashboard', '/transferencias', '/cambios', '/nomina', '/empleados',
+                      '/cuentas-pagar', '/gastos', '/costos-productos', '/pedidos', '/uploads'];
+    
+    for (const apiPath of apiPaths) {
+        if (req.path.startsWith(apiPath)) {
+            return res.status(404).json({ error: 'Ruta no encontrada' });
+        }
     }
     
-    // Para todas las demás rutas, enviar index.html (React Router se encarga)
-    const indexPath = path.join(frontendPath, 'index.html');
-    if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-    } else {
-        res.status(404).json({ 
-            error: 'Frontend no construido. Ejecuta npm run build en la carpeta frontend',
-            path: indexPath
-        });
+    // Si hay frontend, enviar index.html
+    if (frontendPath) {
+        const indexPath = path.join(frontendPath, 'index.html');
+        if (fs.existsSync(indexPath)) {
+            return res.sendFile(indexPath);
+        }
     }
+    
+    // Si no hay frontend, devolver mensaje
+    res.status(404).json({
+        error: 'Frontend no disponible',
+        message: 'El frontend no ha sido construido o no se encuentra en la ubicación esperada'
+    });
 });
 
 // ============================================
@@ -147,5 +146,4 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📋 Módulos cargados: auth, productos, ventas, inventario, clientes, produccion, entregas, reportes, materiales, usuarios, creditos, operarios, recetas, sucursales, historial, dashboard, transferencias, cambios, nomina, empleados, cuentas-pagar, gastos, costos-productos, pedidos`);
-    console.log(`📁 Serviendo frontend desde: ${frontendPath}`);
 });

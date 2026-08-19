@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route } from 'react-router-dom'  // 👈 Cambiar a HashRouter
 import Dashboard from './pages/Dashboard'
 import POS from './pages/POS'
 import Inventario from './pages/Inventario'
@@ -29,7 +29,7 @@ import Pedidos from './pages/Pedidos'
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>  {/* 👈 Cambiado de BrowserRouter a HashRouter */}
       <Routes>
         <Route path="/" element={<Login />} />
         
@@ -37,7 +37,7 @@ function App() {
         <Route path="/ventas" element={<ProtectedRoute><POS /></ProtectedRoute>} />
         <Route path="/productos" element={<ProtectedRoute><Productos /></ProtectedRoute>} />
         
-        {/* 👇 INVENTARIO CON PROPS */}
+        {/* INVENTARIO CON PROPS */}
         <Route path="/inventario" element={<ProtectedRoute><Inventario sucursalId={3} sucursalNombre="Principal" /></ProtectedRoute>} />
         <Route path="/inventario-bani" element={<ProtectedRoute><Inventario sucursalId={1} sucursalNombre="Baní" /></ProtectedRoute>} />
         <Route path="/inventario-sabana" element={<ProtectedRoute><Inventario sucursalId={2} sucursalNombre="Sabana" /></ProtectedRoute>} />
@@ -60,10 +60,10 @@ function App() {
         <Route path="/empleados" element={<ProtectedRoute><Empleados /></ProtectedRoute>} />
         <Route path="/cuentas-pagar" element={<ProtectedRoute><CuentasPagar /></ProtectedRoute>} />
         <Route path="/pedidos" element={<ProtectedRoute><Pedidos /></ProtectedRoute>} />
-<Route path="/gastos" element={<ProtectedRoute><Gastos /></ProtectedRoute>} />
-<Route path="/costos-productos" element={<ProtectedRoute><CostosProductos /></ProtectedRoute>} />
+        <Route path="/gastos" element={<ProtectedRoute><Gastos /></ProtectedRoute>} />
+        <Route path="/costos-productos" element={<ProtectedRoute><CostosProductos /></ProtectedRoute>} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
 

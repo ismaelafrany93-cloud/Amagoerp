@@ -56,119 +56,69 @@ app.use('/costos-productos', require('./routes/costosProductos'));
 app.use('/pedidos', require('./routes/pedidos'));
 
 // ============================================
-// 👇 DIAGNÓSTICO - VER ESTRUCTURA DE CARPETAS
+// 👇 SERVIR EL FRONTEND
 // ============================================
-app.get('/debug-carpetas', (req, res) => {
-    const resultado = {
-        cwd: process.cwd(),
-        __dirname: __dirname,
-        carpetas: {}
-    };
-    
-    const carpetas = [
-        __dirname,
-        path.join(__dirname, '..'),
-        path.join(__dirname, '..', 'frontend'),
-        path.join(__dirname, 'frontend'),
-        path.join(process.cwd(), 'frontend'),
-        path.join(process.cwd(), 'frontend', 'dist'),
-        path.join(__dirname, '..', 'frontend', 'dist'),
-        path.join(__dirname, 'dist'),
-        path.join(process.cwd(), 'dist')
-    ];
-    
-    for (const carpeta of carpetas) {
-        try {
-            const existe = fs.existsSync(carpeta);
-            resultado.carpetas[carpeta] = { existe };
-            if (existe) {
-                const contenido = fs.readdirSync(carpeta);
-                resultado.carpetas[carpeta].contenido = contenido.slice(0, 20);
-                resultado.carpetas[carpeta].esDist = contenido.includes('index.html');
-            }
-        } catch (e) {
-            resultado.carpetas[carpeta] = { existe: false, error: e.message };
-        }
-    }
-    
-    res.json(resultado);
-});
-
-// ============================================
-// 👇 SERVIR EL FRONTEND - CON DIAGNÓSTICO
-// ============================================
-let distPath = null;
-
-// Buscar el dist en las ubicaciones más probables
-const posiblesUbicaciones = [
-    path.join(__dirname, '..', 'frontend', 'dist'),      // /backend/../frontend/dist
-    path.join(process.cwd(), 'frontend', 'dist'),        // /frontend/dist
-    path.join(__dirname, 'frontend', 'dist'),            // /backend/frontend/dist
-    path.join(process.cwd(), 'dist'),                    // /dist
-    path.join(__dirname, '..', 'dist')                   // /dist
+// En Render, el dist está en /opt/render/project/src/frontend/dist
+// En desarrollo local, está en ./frontend/dist
+const distPaths = [
+    path.join(__dirname, '..', 'frontend', 'dist'),  // Producción (Render)
+    path.join(__dirname, 'frontend', 'dist'),        // Desarrollo (backend/frontend/dist)
+    path.join(process.cwd(), 'frontend', 'dist'),    // Desde la raíz
+    path.join(__dirname, '..', 'dist'),              // /dist
+    path.join(process.cwd(), 'dist')                 // /dist
 ];
 
-console.log('🔍 Buscando carpeta dist...');
-
-for (const ubicacion of posiblesUbicaciones) {
-    console.log(`📁 Verificando: ${ubicacion}`);
-    if (fs.existsSync(ubicacion)) {
-        const indexFile = path.join(ubicacion, 'index.html');
-        if (fs.existsSync(indexFile)) {
-            distPath = ubicacion;
-            console.log(`✅ ¡DIST ENCONTRADO! en: ${ubicacion}`);
-            console.log(`📄 Contenido de dist:`, fs.readdirSync(ubicacion));
-            break;
-        }
+let distPath = null;
+for (const p of distPaths) {
+    if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) {
+        distPath = p;
+        console.log(`✅ Frontend encontrado en: ${p}`);
+        break;
     }
 }
 
 if (distPath) {
-    // Servir archivos estáticos
     app.use(express.static(distPath));
     console.log(`📁 Sirviendo frontend desde: ${distPath}`);
 } else {
-    console.log('❌ No se encontró la carpeta dist');
-    console.log('📌 Ubicaciones buscadas:', posiblesUbicaciones);
+    console.log('⚠️ No se encontró el frontend. Las rutas no-API devolverán JSON.');
 }
 
 // ============================================
-// MANEJAR TODAS LAS RUTAS DE REACT
+// MANEJAR TODAS LAS RUTAS DE REACT (SPA)
 // ============================================
 app.get('*', (req, res) => {
-    // Si es una ruta de API, ignorar
+    // Si es una ruta de API, devolver 404
     const apiPaths = ['/auth', '/productos', '/ventas', '/inventario', '/clientes', 
                       '/produccion', '/entregas', '/reportes', '/materiales', '/usuarios',
                       '/creditos', '/operarios', '/recetas', '/sucursales', '/historial',
                       '/dashboard', '/transferencias', '/cambios', '/nomina', '/empleados',
-                      '/cuentas-pagar', '/gastos', '/costos-productos', '/pedidos', '/uploads',
-                      '/debug-carpetas', '/api'];
+                      '/cuentas-pagar', '/gastos', '/costos-productos', '/pedidos', '/uploads'];
     
     for (const apiPath of apiPaths) {
-        if (req.path.startsWith(apiPath)) {
+        if (req.path.startsWith(apiPath) && req.path !== '/') {
             return res.status(404).json({ error: 'Ruta no encontrada' });
         }
     }
     
-    // Si es un archivo estático (css, js, etc.)
+    // Si es un asset (js, css, etc.), no hacer nada
     if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf)$/)) {
         return res.status(404).send('Archivo no encontrado');
     }
     
-    // Si hay dist, enviar index.html
+    // Si hay frontend, enviar index.html
     if (distPath) {
         const indexPath = path.join(distPath, 'index.html');
         if (fs.existsSync(indexPath)) {
-            console.log(`📄 Sirviendo index.html para: ${req.path}`);
             return res.sendFile(indexPath);
         }
     }
     
-    // Fallback
-    res.status(404).json({
-        error: 'Frontend no disponible',
-        message: 'No se encontró el frontend',
-        distPath: distPath,
+    // Fallback JSON
+    res.json({
+        message: '🚀 AMAGO ERP Backend funcionando',
+        status: 'OK',
+        frontend: distPath ? 'Disponible' : 'No disponible',
         path: req.path
     });
 });

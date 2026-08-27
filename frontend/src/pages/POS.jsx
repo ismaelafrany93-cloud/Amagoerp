@@ -5,13 +5,11 @@ import Factura from '../components/Factura'
 // ============================================
 // CONFIGURACIÓN DE LA API
 // ============================================
-// ✅ CAMBIADO a producción en Render
 const API_URL = 'https://amagoerp-backend.onrender.com/api';
 
 console.log('🔗 API_URL:', API_URL);
 
 function POS() {
-  // ... el resto del código (todo lo demás queda igual)
   // ============================================
   // ESTADOS PRINCIPALES
   // ============================================
@@ -148,15 +146,13 @@ function POS() {
   }
 
   // ============================================
-  // FUNCIONES DE CARGA
+  // FUNCIONES DE CARGA - CORREGIDAS SIN PARÁMETROS
   // ============================================
   const cargarProductos = async () => {
     try {
       console.log('📡 Cargando productos...')
-      let url = `${API_URL}/productos`
-      if (usuario?.sucursal_id && usuario.sucursal_id > 0) {
-        url = `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`
-      }
+      // ✅ SIN parámetro sucursal_id
+      const url = `${API_URL}/productos`
       console.log('📡 URL:', url)
       
       const response = await fetch(url)
@@ -174,13 +170,15 @@ function POS() {
   const cargarVentasRecientes = async () => {
     try {
       setCargandoHistorial(true)
-      let url = `${API_URL}/ventas/recientes?limit=20`
-      if (usuario?.sucursal_id && usuario.sucursal_id > 0) {
-        url += `&sucursal_id=${usuario.sucursal_id}`
-      }
+      // ✅ SIN parámetro sucursal_id
+      const url = `${API_URL}/ventas/recientes?limit=20`
+      console.log('📡 URL ventas:', url)
+      
       const response = await fetch(url)
       if (!response.ok) throw new Error(`Error ${response.status}`)
+      
       const data = await response.json()
+      console.log('📊 Ventas cargadas:', data?.length || 0)
       setVentasRecientes(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando ventas recientes:', error)
@@ -439,20 +437,17 @@ function POS() {
   }, [subtotal, costoEnvio, costoInstalacion, solicitudDescuento])
 
   // ============================================
-  // FILTRO DE PRODUCTOS - CORREGIDO
+  // FILTRO DE PRODUCTOS
   // ============================================
   const productosFiltrados = useMemo(() => {
-    // Si no hay productos, retornar array vacío
     if (!productos || productos.length === 0) return []
     
-    let filtrados = [...productos] // Copiar para no modificar el original
+    let filtrados = [...productos]
     
-    // Filtrar por categoría
     if (categoriaSeleccionada) {
       filtrados = filtrados.filter(p => p.categoria === categoriaSeleccionada)
     }
     
-    // Filtrar por búsqueda
     if (busqueda && busqueda.trim()) {
       const searchTerm = busqueda.toLowerCase().trim()
       filtrados = filtrados.filter(p => 
@@ -460,12 +455,11 @@ function POS() {
       )
     }
     
-    console.log(`📊 Productos filtrados: ${filtrados.length} de ${productos.length}`)
     return filtrados
   }, [productos, categoriaSeleccionada, busqueda])
 
   // ============================================
-  // FUNCIÓN COBRAR - CON BLOQUEO
+  // FUNCIÓN COBRAR
   // ============================================
   const cobrar = async () => {
     if (!cliente.nombre || !cliente.nombre.trim()) {
@@ -478,12 +472,12 @@ function POS() {
     }
     
     if (solicitudActiva && solicitudDescuento.estado === 'pendiente') {
-      alert('⏳ Esta venta tiene una solicitud de descuento pendiente de aprobación.\n\nEspera a que el administrador la apruebe o cancela la solicitud.')
+      alert('⏳ Esta venta tiene una solicitud de descuento pendiente de aprobación.')
       return
     }
 
     if (solicitudActiva && solicitudDescuento.estado !== 'aprobado' && descuentoMonto > 0) {
-      alert('⏳ El descuento no ha sido aprobado. Espera la autorización del administrador.')
+      alert('⏳ El descuento no ha sido aprobado.')
       return
     }
 
@@ -540,13 +534,6 @@ function POS() {
         let mensaje = `✅ Venta completada #${data.ventaId} - Total: RD$ ${data.total.toFixed(2)}`
         if (descMonto > 0) {
           mensaje += `\n💰 Descuento aplicado: RD$ ${descMonto.toFixed(2)}`
-          mensaje += `\n🔑 Autorizado: ${solicitudDescuento.codigo || 'DIRECTO'}`
-        }
-        if (instalacion > 0) {
-          mensaje += `\n🔧 Instalación: RD$ ${instalacion.toFixed(2)}`
-        }
-        if (cliente.es_mayorista) {
-          mensaje += `\n👑 Cliente Mayorista - Precio especial aplicado`
         }
         alert(mensaje)
         
@@ -676,7 +663,6 @@ function POS() {
             </p>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
               <button onClick={() => imprimirFactura('A4')} style={{ padding: '12px 30px', backgroundColor: '#003b6f', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🖨️ Factura A4</button>
-              <button onClick={() => imprimirFactura('POS80')} style={{ padding: '12px 30px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🧾 Ticket POS80</button>
               <button onClick={nuevaVenta} style={{ padding: '12px 30px', backgroundColor: '#ff9800', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Nueva Venta</button>
             </div>
           </div>

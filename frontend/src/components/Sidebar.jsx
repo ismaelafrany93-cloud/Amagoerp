@@ -41,10 +41,16 @@ function Sidebar() {
       if (esSubgerente) {
         try {
           const response = await fetch(`${API_URL}/solicitudes-descuento/contador?sucursal_id=${sucursalId || 3}`)
-          const data = await response.json()
-          setSolicitudesPendientes(data.pendientes || 0)
+          if (response.ok) {
+            const data = await response.json()
+            setSolicitudesPendientes(data.pendientes || 0)
+          } else {
+            console.warn('Error al obtener contador de solicitudes:', response.status)
+            setSolicitudesPendientes(0)
+          }
         } catch (error) {
           console.error('Error verificando solicitudes:', error)
+          setSolicitudesPendientes(0)
         }
       }
     }

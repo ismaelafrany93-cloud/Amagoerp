@@ -12,6 +12,7 @@ import Productos from './pages/Productos'
 import Usuarios from './pages/Usuarios'
 import Materiales from './pages/Materiales'
 import Creditos from './pages/Creditos'
+import Productoa from './pages/Productos'
 import ProductosNoEntregados from './pages/ProductosNoEntregados'
 import ProtectedRoute from './components/ProtectedRoute'
 import Recetas from './pages/Recetas'
@@ -46,6 +47,7 @@ function App() {
         <Route path="/inventario-sabana" element={<ProtectedRoute><Inventario sucursalId={2} sucursalNombre="Sabana" /></ProtectedRoute>} />
         
         <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
+        <Route path="/productos" element={<ProtectedRoute><Productos /></ProtectedRoute>} />
         <Route path="/produccion" element={<ProtectedRoute><Produccion /></ProtectedRoute>} />
         <Route path="/materiales" element={<ProtectedRoute><Materiales /></ProtectedRoute>} />
         <Route path="/entregas" element={<ProtectedRoute><Entregas /></ProtectedRoute>} />

@@ -2,9 +2,16 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import AdminLayout from '../layouts/AdminLayout'
 import Factura from '../components/Factura'
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api'
+// ============================================
+// CONFIGURACIÓN DE LA API
+// ============================================
+// ✅ CAMBIADO a producción en Render
+const API_URL = 'https://amagoerp-backend.onrender.com/api';
+
+console.log('🔗 API_URL:', API_URL);
 
 function POS() {
+  // ... el resto del código (todo lo demás queda igual)
   // ============================================
   // ESTADOS PRINCIPALES
   // ============================================

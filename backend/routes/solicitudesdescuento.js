@@ -147,7 +147,6 @@ router.post('/', async (req, res) => {
             });
         }
         
-        // Verificar que la venta existe
         const ventaCheck = await pool.query(
             'SELECT id, total, cliente_nombre FROM ventas WHERE id = $1',
             [venta_id]
@@ -162,7 +161,6 @@ router.post('/', async (req, res) => {
         
         const venta = ventaCheck.rows[0];
         
-        // Verificar que el monto no exceda el total de la venta
         if (parseFloat(monto_solicitado) > parseFloat(venta.total)) {
             return res.status(400).json({
                 success: false,
@@ -170,7 +168,6 @@ router.post('/', async (req, res) => {
             });
         }
         
-        // Generar código de autorización
         const codigo = `DESC-${Date.now().toString().slice(-8)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
         
         const result = await pool.query(
@@ -186,7 +183,6 @@ router.post('/', async (req, res) => {
             [venta_id, usuario_solicitante, monto_solicitado, motivo || '', codigo]
         );
         
-        // Actualizar la venta con la referencia a la solicitud
         await pool.query(
             `UPDATE ventas 
              SET solicitud_descuento_id = $1,
@@ -235,7 +231,6 @@ router.put('/:id', async (req, res) => {
             });
         }
         
-        // Verificar que la solicitud existe y está pendiente
         const solicitudCheck = await pool.query(
             'SELECT * FROM solicitudes_descuento WHERE id = $1',
             [id]
@@ -257,7 +252,6 @@ router.put('/:id', async (req, res) => {
             });
         }
         
-        // Actualizar solicitud
         const montoFinal = estado === 'aprobado' ? (monto_aprobado || solicitud.monto_solicitado) : 0;
         
         const result = await pool.query(
@@ -272,7 +266,6 @@ router.put('/:id', async (req, res) => {
             [estado, usuario_autorizador, montoFinal, id]
         );
         
-        // Si fue aprobado, actualizar la venta con el descuento
         if (estado === 'aprobado') {
             await pool.query(
                 `UPDATE ventas 

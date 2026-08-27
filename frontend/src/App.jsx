@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route } from 'react-router-dom'  // 👈 Cambiar a HashRouter
+import { HashRouter, Routes, Route } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import POS from './pages/POS'
 import Inventario from './pages/Inventario'
@@ -26,12 +26,13 @@ import CuentasPagar from './pages/CuentasPagar'
 import Gastos from './pages/Gastos'
 import CostosProductos from './pages/CostosProductos'
 import Pedidos from './pages/Pedidos'
-import SolicitudesDescuento from './pages/Pedidos'
 
+// 👇 IMPORTAR CORRECTAMENTE DESDE SU PROPIO ARCHIVO
+import SolicitudesDescuento from './pages/SolicitudesDescuento'
 
 function App() {
   return (
-    <HashRouter>  {/* 👈 Cambiado de BrowserRouter a HashRouter */}
+    <HashRouter>
       <Routes>
         <Route path="/" element={<Login />} />
         
@@ -63,9 +64,11 @@ function App() {
         <Route path="/cuentas-pagar" element={<ProtectedRoute><CuentasPagar /></ProtectedRoute>} />
         <Route path="/pedidos" element={<ProtectedRoute><Pedidos /></ProtectedRoute>} />
         <Route path="/gastos" element={<ProtectedRoute><Gastos /></ProtectedRoute>} />
-                <Route path="/solicitudesdescuento" element={<ProtectedRoute><SolicitudesDescuento /></ProtectedRoute>} />
         <Route path="/costos-productos" element={<ProtectedRoute><CostosProductos /></ProtectedRoute>} />
-              </Routes>
+        
+        {/* 👇 RUTA CORRECTA DE SOLICITUDES DE DESCUENTO - CON GUION */}
+        <Route path="/solicitudes-descuento" element={<ProtectedRoute><SolicitudesDescuento /></ProtectedRoute>} />
+      </Routes>
     </HashRouter>
   )
 }

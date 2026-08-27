@@ -18,18 +18,24 @@ function POS() {
   const [codigoEntrega, setCodigoEntrega] = useState('')
   const [ventaCompletada, setVentaCompletada] = useState(false)
   const [ventaId, setVentaId] = useState(null)
-  const [costoEnvio, setCostoEnvio] = useState('')
   
   // ============================================
-  // ESTADOS DE DESCUENTO Y SOLICITUDES
+  // ESTADOS DE COSTOS
+  // ============================================
+  const [costoEnvio, setCostoEnvio] = useState('')
+  const [costoInstalacion, setCostoInstalacion] = useState('')
+  
+  // ============================================
+  // ESTADOS DE DESCUENTO
   // ============================================
   const [descuentoMonto, setDescuentoMonto] = useState(0)
   const [codigoAutorizacion, setCodigoAutorizacion] = useState('')
   const [mostrarAutorizacion, setMostrarAutorizacion] = useState(false)
+  const [solicitudActiva, setSolicitudActiva] = useState(false)
   const [solicitudDescuento, setSolicitudDescuento] = useState({
     monto: 0,
     motivo: '',
-    estado: 'pendiente',
+    estado: 'ninguna', // 'ninguna', 'pendiente', 'aprobado', 'rechazado'
     codigo: '',
     id: null,
     venta_id: null
@@ -198,12 +204,17 @@ function POS() {
             id: solicitud.id,
             venta_id: solicitud.venta_id
           })
+          setSolicitudActiva(true)
           setDescuentoMonto(solicitud.monto_aprobado || solicitud.monto_solicitado)
           setVentaId(ventaId)
           localStorage.removeItem('venta_pendiente_aprobacion')
           cargarVentaPendiente(ventaId)
         } else if (solicitud.estado === 'rechazado') {
-          setSolicitudDescuento({ ...solicitudDescuento, estado: 'rechazado' })
+          setSolicitudDescuento({
+            ...solicitudDescuento,
+            estado: 'rechazado'
+          })
+          setSolicitudActiva(true)
           localStorage.removeItem('venta_pendiente_aprobacion')
           alert('❌ Su solicitud de descuento fue rechazada')
         }
@@ -230,6 +241,7 @@ function POS() {
         setTipoPago(data.venta.tipo_pago === 'Crédito' ? 'credito' : 'contado')
         setTipoEntrega(data.venta.tipo_entrega === 'domicilio' ? 'domicilio' : 'retiro')
         setCostoEnvio(data.venta.costo_envio || '')
+        setCostoInstalacion(data.venta.costo_instalacion || '')
         setVentaCompletada(true)
       }
     } catch (error) {
@@ -270,6 +282,7 @@ function POS() {
         cliente_referencia: cliente.referencia,
         detalles: cliente.detalles,
         costo_envio: parseFloat(costoEnvio) || 0,
+        costo_instalacion: parseFloat(costoInstalacion) || 0,
         descuento_monto: 0,
         descuento_aprobado: false,
         cliente_es_mayorista: cliente.es_mayorista || false,
@@ -307,6 +320,7 @@ function POS() {
             id: solicitudData.solicitud.id,
             venta_id: data.ventaId
           })
+          setSolicitudActiva(true)
           setVentaId(data.ventaId)
           setMostrarSolicitud(false)
           
@@ -324,6 +338,16 @@ function POS() {
     }
   }
 
+  const cancelarSolicitud = () => {
+    if (window.confirm('¿Cancelar la solicitud de descuento?')) {
+      setDescuentoMonto(0)
+      setSolicitudDescuento({ monto: 0, motivo: '', estado: 'ninguna', codigo: '', id: null, venta_id: null })
+      setSolicitudActiva(false)
+      setMostrarSolicitud(false)
+      localStorage.removeItem('venta_pendiente_aprobacion')
+    }
+  }
+
   const aplicarDescuentoDirecto = () => {
     if (descuentoMonto <= 0) {
       alert('⚠️ Ingresa un monto de descuento válido')
@@ -338,6 +362,7 @@ function POS() {
       id: null,
       venta_id: null
     })
+    setSolicitudActiva(true)
     
     alert(`✅ Descuento de RD$ ${descuentoMonto.toFixed(2)} aplicado directamente`)
   }
@@ -637,10 +662,11 @@ function POS() {
 
   const total = useMemo(() => {
     const envio = parseFloat(costoEnvio) || 0
+    const instalacion = parseFloat(costoInstalacion) || 0
     const descMonto = solicitudDescuento.estado === 'aprobado' ? solicitudDescuento.monto : 0
-    const base = subtotal + envio
+    const base = subtotal + envio + instalacion
     return base - descMonto
-  }, [subtotal, costoEnvio, solicitudDescuento])
+  }, [subtotal, costoEnvio, costoInstalacion, solicitudDescuento])
 
   // ============================================
   // FUNCIONES DE ACCIÓN
@@ -649,8 +675,10 @@ function POS() {
     if (window.confirm('¿Vaciar todo el carrito?')) {
       setCarrito([])
       setCostoEnvio('')
+      setCostoInstalacion('')
       setDescuentoMonto(0)
-      setSolicitudDescuento({ monto: 0, motivo: '', estado: 'pendiente', codigo: '', id: null, venta_id: null })
+      setSolicitudDescuento({ monto: 0, motivo: '', estado: 'ninguna', codigo: '', id: null, venta_id: null })
+      setSolicitudActiva(false)
       setCodigoAutorizacion('')
       setMostrarAutorizacion(false)
       localStorage.removeItem('venta_pendiente_aprobacion')
@@ -666,12 +694,16 @@ function POS() {
       alert('⚠️ El carrito está vacío')
       return
     }
-    if (solicitudDescuento.estado === 'pendiente') {
+    
+    // Solo verificar si hay una solicitud activa en pendiente
+    if (solicitudActiva && solicitudDescuento.estado === 'pendiente') {
       alert('⏳ Esta venta tiene una solicitud de descuento pendiente de aprobación')
       return
     }
 
     const descMonto = solicitudDescuento.estado === 'aprobado' ? solicitudDescuento.monto : 0
+    const envio = parseFloat(costoEnvio) || 0
+    const instalacion = parseFloat(costoInstalacion) || 0
     
     setCargando(true)
     try {
@@ -695,7 +727,8 @@ function POS() {
         cliente_direccion: cliente.direccion,
         cliente_referencia: cliente.referencia,
         detalles: cliente.detalles,
-        costo_envio: parseFloat(costoEnvio) || 0,
+        costo_envio: envio,
+        costo_instalacion: instalacion,
         descuento_monto: descMonto,
         descuento_aprobado: solicitudDescuento.estado === 'aprobado',
         codigo_autorizacion: solicitudDescuento.codigo || null,
@@ -722,13 +755,18 @@ function POS() {
           mensaje += `\n💰 Descuento aplicado: RD$ ${descMonto.toFixed(2)}`
           mensaje += `\n🔑 Autorizado: ${solicitudDescuento.codigo || 'DIRECTO'}`
         }
+        if (instalacion > 0) {
+          mensaje += `\n🔧 Instalación: RD$ ${instalacion.toFixed(2)}`
+        }
         if (cliente.es_mayorista) {
           mensaje += `\n👑 Cliente Mayorista - Precio especial aplicado`
         }
         alert(mensaje)
         
         localStorage.removeItem('venta_pendiente_aprobacion')
-        setSolicitudDescuento({ monto: 0, motivo: '', estado: 'pendiente', codigo: '', id: null, venta_id: null })
+        setSolicitudDescuento({ monto: 0, motivo: '', estado: 'ninguna', codigo: '', id: null, venta_id: null })
+        setSolicitudActiva(false)
+        
         cargarVentasRecientes()
       } else {
         alert('❌ Error: ' + (data.error || data.message || 'No se pudo guardar'))
@@ -750,8 +788,10 @@ function POS() {
     setTipoEntrega('retiro')
     setVentaId(null)
     setCostoEnvio('')
+    setCostoInstalacion('')
     setDescuentoMonto(0)
-    setSolicitudDescuento({ monto: 0, motivo: '', estado: 'pendiente', codigo: '', id: null, venta_id: null })
+    setSolicitudDescuento({ monto: 0, motivo: '', estado: 'ninguna', codigo: '', id: null, venta_id: null })
+    setSolicitudActiva(false)
     setCodigoAutorizacion('')
     setMostrarAutorizacion(false)
     localStorage.removeItem('venta_pendiente_aprobacion')
@@ -971,7 +1011,7 @@ function POS() {
       </div>
 
       {/* ========================================== */}
-      {/* SECCIÓN DE COSTOS Y DESCUENTOS - CORREGIDA */}
+      {/* SECCIÓN DE COSTOS Y DESCUENTOS */}
       {/* ========================================== */}
       <div style={{
         border: '2px solid #003b6f',
@@ -983,11 +1023,11 @@ function POS() {
       }}>
         <h4 style={{ margin: '0 0 15px 0', color: '#003b6f' }}>💰 Costos y Descuentos</h4>
         
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          {/* 👇 CAMPO DE ENVÍO - RESTAURADO */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+          {/* COSTO DE ENVÍO */}
           <div>
             <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>
-              🚚 Costo de Envío (RD$)
+              🚚 Envío (RD$)
             </label>
             <input
               type="number"
@@ -1006,7 +1046,29 @@ function POS() {
             />
           </div>
           
-          {/* 👇 CAMPO DE DESCUENTO EN MONTO */}
+          {/* COSTO DE INSTALACIÓN */}
+          <div>
+            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>
+              🔧 Instalación (RD$)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={costoInstalacion}
+              onChange={(e) => setCostoInstalacion(e.target.value)}
+              placeholder="0.00"
+              style={{ 
+                width: '100%', 
+                padding: '10px', 
+                border: '1px solid #003b6f', 
+                borderRadius: '8px', 
+                backgroundColor: 'white' 
+              }}
+            />
+          </div>
+          
+          {/* DESCUENTO */}
           <div>
             <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>
               💰 Descuento (RD$)
@@ -1024,7 +1086,8 @@ function POS() {
                 } else {
                   setMostrarSolicitud(false)
                   if (val === 0) {
-                    setSolicitudDescuento({ monto: 0, motivo: '', estado: 'pendiente', codigo: '', id: null, venta_id: null })
+                    setSolicitudDescuento({ monto: 0, motivo: '', estado: 'ninguna', codigo: '', id: null, venta_id: null })
+                    setSolicitudActiva(false)
                   }
                 }
               }}
@@ -1040,78 +1103,73 @@ function POS() {
           </div>
         </div>
         
-        {/* 👇 ESTADO DE LA SOLICITUD */}
-        <div style={{ marginTop: '10px' }}>
-          <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>
-            📋 Estado de Solicitud
-          </label>
-          <div style={{
-            padding: '10px',
-            borderRadius: '8px',
-            backgroundColor: solicitudDescuento.estado === 'pendiente' ? '#fff3e0' :
-                            solicitudDescuento.estado === 'aprobado' ? '#e8f5e9' : '#ffebee',
-            border: `1px solid ${
-              solicitudDescuento.estado === 'pendiente' ? '#ff9800' :
-              solicitudDescuento.estado === 'aprobado' ? '#4CAF50' : '#f44336'
-            }`
-          }}>
-            {solicitudDescuento.estado === 'pendiente' && (
-              <span style={{ color: '#e65100' }}>⏳ Pendiente de aprobación</span>
-            )}
-            {solicitudDescuento.estado === 'aprobado' && (
-              <span style={{ color: '#1b5e20' }}>✅ Aprobado - Código: {solicitudDescuento.codigo}</span>
-            )}
-            {solicitudDescuento.estado === 'rechazado' && (
-              <span style={{ color: '#c62828' }}>❌ Rechazado</span>
-            )}
-            {solicitudDescuento.estado === 'pendiente' && !esAdmin && (
-              <button
-                onClick={() => {
-                  if (window.confirm('¿Cancelar la solicitud de descuento?')) {
-                    setDescuentoMonto(0)
-                    setSolicitudDescuento({ monto: 0, motivo: '', estado: 'pendiente', codigo: '', id: null, venta_id: null })
-                    setMostrarSolicitud(false)
-                    localStorage.removeItem('venta_pendiente_aprobacion')
-                  }
-                }}
-                style={{
-                  marginLeft: '10px',
-                  padding: '2px 10px',
-                  backgroundColor: '#f44336',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.7rem'
-                }}
-              >
-                Cancelar
-              </button>
-            )}
-            {solicitudDescuento.codigo && solicitudDescuento.estado === 'aprobado' && (
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(solicitudDescuento.codigo)
-                  alert('📋 Código copiado: ' + solicitudDescuento.codigo)
-                }}
-                style={{
-                  marginLeft: '10px',
-                  padding: '2px 10px',
-                  backgroundColor: '#003b6f',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.7rem'
-                }}
-              >
-                📋 Copiar
-              </button>
-            )}
+        {/* ESTADO DE LA SOLICITUD - SOLO SI HAY SOLICITUD ACTIVA */}
+        {solicitudActiva && (
+          <div style={{ marginTop: '10px' }}>
+            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>
+              📋 Estado de Solicitud
+            </label>
+            <div style={{
+              padding: '10px',
+              borderRadius: '8px',
+              backgroundColor: solicitudDescuento.estado === 'pendiente' ? '#fff3e0' :
+                              solicitudDescuento.estado === 'aprobado' ? '#e8f5e9' : '#ffebee',
+              border: `1px solid ${
+                solicitudDescuento.estado === 'pendiente' ? '#ff9800' :
+                solicitudDescuento.estado === 'aprobado' ? '#4CAF50' : '#f44336'
+              }`
+            }}>
+              {solicitudDescuento.estado === 'pendiente' && (
+                <span style={{ color: '#e65100' }}>⏳ Pendiente de aprobación</span>
+              )}
+              {solicitudDescuento.estado === 'aprobado' && (
+                <span style={{ color: '#1b5e20' }}>✅ Aprobado - Código: {solicitudDescuento.codigo}</span>
+              )}
+              {solicitudDescuento.estado === 'rechazado' && (
+                <span style={{ color: '#c62828' }}>❌ Rechazado</span>
+              )}
+              {solicitudDescuento.estado === 'pendiente' && !esAdmin && (
+                <button
+                  onClick={cancelarSolicitud}
+                  style={{
+                    marginLeft: '10px',
+                    padding: '2px 10px',
+                    backgroundColor: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  Cancelar
+                </button>
+              )}
+              {solicitudDescuento.codigo && solicitudDescuento.estado === 'aprobado' && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(solicitudDescuento.codigo)
+                    alert('📋 Código copiado: ' + solicitudDescuento.codigo)
+                  }}
+                  style={{
+                    marginLeft: '10px',
+                    padding: '2px 10px',
+                    backgroundColor: '#003b6f',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  📋 Copiar
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         
-        {/* 👇 BOTONES DE ACCIÓN */}
+        {/* BOTONES DE ACCIÓN */}
         {mostrarSolicitud && solicitudDescuento.estado === 'pendiente' && !esAdmin && (
           <button
             onClick={solicitarDescuento}
@@ -1226,6 +1284,7 @@ function POS() {
           <h4 style={{ margin: '0 0 10px 0', color: '#003b6f' }}>📊 Resumen de la Venta</h4>
           <p style={{ margin: '5px 0' }}><strong>Subtotal:</strong> RD$ {subtotal.toFixed(2)}</p>
           {parseFloat(costoEnvio) > 0 && <p style={{ margin: '5px 0' }}><strong>Envío:</strong> RD$ {parseFloat(costoEnvio).toFixed(2)}</p>}
+          {parseFloat(costoInstalacion) > 0 && <p style={{ margin: '5px 0' }}><strong>Instalación:</strong> RD$ {parseFloat(costoInstalacion).toFixed(2)}</p>}
           {solicitudDescuento.estado === 'aprobado' && solicitudDescuento.monto > 0 && <p style={{ margin: '5px 0', color: '#d32f2f' }}><strong>Descuento:</strong> -RD$ {solicitudDescuento.monto.toFixed(2)}</p>}
           {cliente.es_mayorista && <p style={{ margin: '5px 0', color: '#4CAF50', fontWeight: 'bold' }}>👑 Cliente Mayorista - Precio especial aplicado</p>}
           <p style={{ margin: '5px 0', fontSize: '1.3rem', fontWeight: 'bold', color: '#003b6f' }}><strong>Total a pagar:</strong> RD$ {total.toFixed(2)}</p>
@@ -1366,18 +1425,26 @@ function POS() {
               </div>
               <div style={{ marginTop: '15px', display: 'flex', gap: '10px', flexDirection: 'column' }}>
                 <button onClick={limpiarCarrito} style={{ backgroundColor: '#ff9800', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', cursor: 'pointer', fontSize: '0.9rem' }}>🗑️ Limpiar Carrito</button>
-                <button onClick={cobrar} disabled={cargando || carrito.length === 0 || solicitudDescuento.estado === 'pendiente'} style={{
-                  backgroundColor: solicitudDescuento.estado === 'pendiente' ? '#FF9800' : '#4CAF50',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '12px',
-                  fontSize: '1.1rem',
-                  fontWeight: 'bold',
-                  cursor: cargando || carrito.length === 0 || solicitudDescuento.estado === 'pendiente' ? 'not-allowed' : 'pointer',
-                  opacity: cargando || carrito.length === 0 || solicitudDescuento.estado === 'pendiente' ? 0.6 : 1
-                }}>
-                  {solicitudDescuento.estado === 'pendiente' ? '⏳ Esperando aprobación...' : cargando ? 'Procesando...' : '💳 Cobrar'}
+                <button
+                  onClick={cobrar}
+                  disabled={cargando || carrito.length === 0 || (solicitudActiva && solicitudDescuento.estado === 'pendiente')}
+                  style={{
+                    backgroundColor: (solicitudActiva && solicitudDescuento.estado === 'pendiente') ? '#FF9800' : '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '12px',
+                    fontSize: '1.1rem',
+                    fontWeight: 'bold',
+                    cursor: cargando || carrito.length === 0 || (solicitudActiva && solicitudDescuento.estado === 'pendiente') ? 'not-allowed' : 'pointer',
+                    opacity: cargando || carrito.length === 0 || (solicitudActiva && solicitudDescuento.estado === 'pendiente') ? 0.6 : 1
+                  }}
+                >
+                  {(solicitudActiva && solicitudDescuento.estado === 'pendiente') 
+                    ? '⏳ Esperando aprobación...' 
+                    : cargando 
+                      ? 'Procesando...' 
+                      : '💳 Cobrar'}
                 </button>
               </div>
             </>

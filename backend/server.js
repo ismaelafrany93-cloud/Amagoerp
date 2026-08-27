@@ -80,6 +80,51 @@ try {
 }
 
 // ============================================
+// RUTA DE DIAGNÓSTICO
+// ============================================
+app.get('/debug', (req, res) => {
+    const resultado = {
+        cwd: process.cwd(),
+        __dirname: __dirname,
+        frontendPath: null,
+        carpetas: {}
+    };
+    
+    const carpetasBuscar = [
+        __dirname,
+        path.join(__dirname, '..'),
+        path.join(__dirname, '..', 'frontend'),
+        path.join(__dirname, '..', 'frontend', 'dist'),
+        process.cwd(),
+        path.join(process.cwd(), 'frontend'),
+        path.join(process.cwd(), 'frontend', 'dist'),
+        '/opt/render/project/src/frontend',
+        '/opt/render/project/src/frontend/dist'
+    ];
+    
+    for (const carpeta of carpetasBuscar) {
+        try {
+            if (fs.existsSync(carpeta)) {
+                const contenido = fs.readdirSync(carpeta);
+                resultado.carpetas[carpeta] = {
+                    existe: true,
+                    contenido: contenido.slice(0, 15)
+                };
+                if (contenido.includes('dist') || contenido.includes('index.html')) {
+                    resultado.frontendPath = carpeta;
+                }
+            } else {
+                resultado.carpetas[carpeta] = { existe: false };
+            }
+        } catch (e) {
+            resultado.carpetas[carpeta] = { existe: false, error: e.message };
+        }
+    }
+    
+    res.json(resultado);
+});
+
+// ============================================
 // SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND)
 // ============================================
 const posiblesPaths = [
@@ -88,8 +133,7 @@ const posiblesPaths = [
     path.join(process.cwd(), 'frontend', 'dist'),
     path.join(process.cwd(), 'dist'),
     path.join(__dirname, '..', 'dist'),
-    path.join(__dirname, '..', '..', 'frontend', 'dist'), // En Render puede estar aquí
-    path.join('/opt/render/project/src/frontend/dist'), // Ruta absoluta en Render
+    '/opt/render/project/src/frontend/dist',
 ];
 
 console.log('🔍 Buscando frontend...');
@@ -114,8 +158,6 @@ if (frontendPath) {
     const frontendDir = path.join(__dirname, '..', 'frontend');
     if (fs.existsSync(frontendDir)) {
         console.log(`📁 Contenido de frontend:`, fs.readdirSync(frontendDir));
-    } else {
-        console.log('❌ Carpeta frontend no existe en:', frontendDir);
     }
 }
 
@@ -123,16 +165,16 @@ if (frontendPath) {
 // MANEJADOR DE RUTAS DE REACT - VA AL FINAL
 // ============================================
 app.get('*', (req, res) => {
-    // Excluir rutas de API
-    const apiPaths = ['/auth', '/productos', '/ventas', '/inventario', '/clientes', 
-                      '/produccion', '/entregas', '/reportes', '/materiales', '/usuarios',
-                      '/creditos', '/operarios', '/recetas', '/sucursales', '/historial',
-                      '/dashboard', '/transferencias', '/cambios', '/nomina', '/empleados',
-                      '/cuentas-pagar', '/gastos', '/costos-productos', '/pedidos', '/uploads',
-                      '/solicitudes-descuento', '/api'];
+    // Excluir rutas de API y debug
+    const excludePaths = ['/auth', '/productos', '/ventas', '/inventario', '/clientes', 
+                          '/produccion', '/entregas', '/reportes', '/materiales', '/usuarios',
+                          '/creditos', '/operarios', '/recetas', '/sucursales', '/historial',
+                          '/dashboard', '/transferencias', '/cambios', '/nomina', '/empleados',
+                          '/cuentas-pagar', '/gastos', '/costos-productos', '/pedidos', '/uploads',
+                          '/solicitudes-descuento', '/api', '/debug'];
     
-    for (const apiPath of apiPaths) {
-        if (req.path.startsWith(apiPath)) {
+    for (const excludePath of excludePaths) {
+        if (req.path.startsWith(excludePath)) {
             return res.status(404).json({ error: 'Ruta no encontrada' });
         }
     }
@@ -150,59 +192,12 @@ app.get('*', (req, res) => {
         }
     }
     
-    // Fallback: servir el index.html si está en la raíz
-    const rootIndex = path.join(__dirname, '..', 'index.html');
-    if (fs.existsSync(rootIndex)) {
-        return res.sendFile(rootIndex);
-    }
-    
+    // Fallback
     res.status(404).json({ 
         error: 'Frontend no disponible',
         message: 'El frontend no se ha construido correctamente',
-        path: req.path,
-        frontendPath: frontendPath,
-        cwd: process.cwd(),
-        dirname: __dirname
+        path: req.path
     });
-});
-
-// ============================================
-// RUTA DE DIAGNÓSTICO
-// ============================================
-app.get('/debug', (req, res) => {
-    const fs = require('fs');
-    const path = require('path');
-    
-    const directorios = [
-        __dirname,
-        path.join(__dirname, '..'),
-        path.join(__dirname, '..', 'frontend'),
-        path.join(__dirname, '..', 'frontend', 'dist'),
-        process.cwd(),
-        path.join(process.cwd(), 'frontend'),
-        path.join(process.cwd(), 'frontend', 'dist'),
-        '/opt/render/project/src/frontend',
-        '/opt/render/project/src/frontend/dist'
-    ];
-    
-    const resultado = {};
-    for (const dir of directorios) {
-        try {
-            if (fs.existsSync(dir)) {
-                const contenido = fs.readdirSync(dir);
-                resultado[dir] = {
-                    existe: true,
-                    contenido: contenido.slice(0, 20)
-                };
-            } else {
-                resultado[dir] = { existe: false };
-            }
-        } catch (e) {
-            resultado[dir] = { existe: false, error: e.message };
-        }
-    }
-    
-    res.json(resultado);
 });
 
 // ============================================
@@ -236,6 +231,4 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📁 Frontend path: ${frontendPath || 'No encontrado'}`);
-    console.log(`📁 __dirname: ${__dirname}`);
-    console.log(`📁 process.cwd(): ${process.cwd()}`);
 });

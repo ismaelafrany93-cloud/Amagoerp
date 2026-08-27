@@ -34,7 +34,7 @@ function Sidebar() {
 
   // 👇 VERIFICAR SI HAY SOLICITUDES PENDIENTES
   const [solicitudesPendientes, setSolicitudesPendientes] = useState(0)
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+  const API_URL = 'https://amagoerp-backend.onrender.com'
   
   useEffect(() => {
     const verificarSolicitudes = async () => {

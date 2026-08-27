@@ -190,9 +190,10 @@ useEffect(() => {
     }
   }
 
-  // ============================================
+// ============================================
 // FUNCIONES DE SOLICITUD DE DESCUENTO
 // ============================================
+
 const verificarSolicitudPendiente = async () => {
     const ventaPendiente = localStorage.getItem('venta_pendiente_aprobacion');
     if (ventaPendiente) {
@@ -308,11 +309,69 @@ const solicitarDescuento = async () => {
     }
 };
 
-// ============================================
-// FUNCIONES DE SOLICITUD DE DESCUENTO
-// ============================================
+const cancelarSolicitud = async () => {
+    if (!solicitudDescuento.id) {
+        alert('⚠️ No hay solicitud activa para cancelar');
+        return;
+    }
+    
+    if (!window.confirm('¿Estás seguro de que quieres cancelar esta solicitud de descuento?')) {
+        return;
+    }
+    
+    try {
+        setCargando(true);
+        
+        const response = await fetch(`${API_URL}/solicitudes-descuento/${solicitudDescuento.id}`, {
+            method: 'DELETE'
+        });
 
-// ... (verificarSolicitudPendiente y verificarEstadoSolicitud) ...
+        const data = await response.json();
+
+        if (data.success) {
+            setDescuentoMonto(0);
+            setSolicitudDescuento({ 
+                monto: 0, 
+                motivo: '', 
+                estado: 'ninguna', 
+                codigo: '', 
+                id: null, 
+                venta_id: null 
+            });
+            setSolicitudActiva(false);
+            setMostrarSolicitud(false);
+            localStorage.removeItem('venta_pendiente_aprobacion');
+            alert('✅ Solicitud de descuento cancelada exitosamente');
+        } else {
+            alert('❌ Error al cancelar: ' + (data.error || 'Desconocido'));
+        }
+    } catch (error) {
+        console.error('Error al cancelar solicitud:', error);
+        alert('❌ Error al cancelar la solicitud: ' + error.message);
+    } finally {
+        setCargando(false);
+    }
+};
+
+const aplicarDescuentoDirecto = () => {
+    if (descuentoMonto <= 0) {
+        alert('⚠️ Ingresa un monto de descuento válido');
+        return;
+    }
+    
+    setSolicitudDescuento({
+        monto: descuentoMonto,
+        motivo: `Descuento directo de RD$ ${descuentoMonto.toFixed(2)}`,
+        estado: 'aprobado',
+        codigo: `DIRECTO-${Date.now().toString().slice(-6)}`,
+        id: null,
+        venta_id: null
+    });
+    setSolicitudActiva(true);
+    setMostrarSolicitud(false);
+    
+    alert(`✅ Descuento de RD$ ${descuentoMonto.toFixed(2)} aplicado`);
+};
 
 // ============================================
 // SOLICITAR DESCUENTO

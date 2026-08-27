@@ -203,6 +203,23 @@ app.get('*', (req, res) => {
 });
 
 // ============================================
+// RUTA DE PRUEBA API
+// ============================================
+app.get('/api', (req, res) => {
+    res.json({
+        message: '🚀 AMAGO ERP Backend funcionando',
+        modulos: [
+            'auth', 'productos', 'ventas', 'inventario', 'clientes',
+            'produccion', 'entregas', 'reportes', 'materiales', 'usuarios',
+            'creditos', 'operarios', 'recetas', 'sucursales', 'historial',
+            'dashboard', 'transferencias', 'cambios', 'nomina', 'empleados',
+            'cuentas-pagar', 'gastos', 'costos-productos', 'pedidos',
+            'solicitudes-descuento'
+        ]
+    });
+});
+
+// ============================================
 // ERROR HANDLER
 // ============================================
 app.use((err, req, res, next) => {

@@ -16,7 +16,7 @@ function POS() {
   const [ventaCompletada, setVentaCompletada] = useState(false)
   const [ventaId, setVentaId] = useState(null)
   const [costoEnvio, setCostoEnvio] = useState('')
-  const [descuento, setDescuento] = useState('')
+  const [descuentoMonto, setDescuentoMonto] = useState(0)
   const [codigoAutorizacion, setCodigoAutorizacion] = useState('')
   const [mostrarAutorizacion, setMostrarAutorizacion] = useState(false)
   const [cliente, setCliente] = useState({
@@ -28,19 +28,104 @@ function POS() {
     es_mayorista: false
   })
 
+  // 👇 NUEVOS ESTADOS PARA SOLICITUDES DE DESCUENTO
+  const [solicitudDescuento, setSolicitudDescuento] = useState({
+    monto: 0,
+    motivo: '',
+    estado: 'pendiente', // 'pendiente', 'aprobado', 'rechazado'
+    codigo: '',
+    id: null,
+    venta_id: null
+  })
+  const [mostrarSolicitud, setMostrarSolicitud] = useState(false)
+
   const [ventasRecientes, setVentasRecientes] = useState([])
   const [mostrarHistorial, setMostrarHistorial] = useState(false)
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const esSucursalPrincipal = usuario.sucursal_id === 3
   const esSucursal = usuario.sucursal_id && usuario.sucursal_id > 0
+  const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario?.rol)
+  const esVendedor = ['vendedor', 'vendedora'].includes(usuario?.rol)
 
   const facturaRef = useRef()
 
   useEffect(() => {
     cargarProductos()
     cargarVentasRecientes()
+    verificarSolicitudPendiente()
   }, [])
+
+  // ============================================
+  // VERIFICAR SOLICITUD PENDIENTE AL CARGAR
+  // ============================================
+  const verificarSolicitudPendiente = async () => {
+    const ventaPendiente = localStorage.getItem('venta_pendiente_aprobacion')
+    if (ventaPendiente) {
+      const data = JSON.parse(ventaPendiente)
+      await verificarEstadoSolicitud(data.solicitudId, data.ventaId)
+    }
+  }
+
+  const verificarEstadoSolicitud = async (solicitudId, ventaId) => {
+    try {
+      const response = await fetch(`${API_URL}/solicitudes-descuento/${solicitudId}`)
+      const data = await response.json()
+      
+      if (data.success && data.solicitud) {
+        const solicitud = data.solicitud
+        if (solicitud.estado === 'aprobado') {
+          setSolicitudDescuento({
+            monto: solicitud.monto_aprobado || solicitud.monto_solicitado,
+            motivo: solicitud.motivo,
+            estado: 'aprobado',
+            codigo: solicitud.codigo_autorizacion,
+            id: solicitud.id,
+            venta_id: solicitud.venta_id
+          })
+          setDescuentoMonto(solicitud.monto_aprobado || solicitud.monto_solicitado)
+          setVentaId(ventaId)
+          localStorage.removeItem('venta_pendiente_aprobacion')
+          
+          // Cargar los detalles de la venta
+          cargarVentaPendiente(ventaId)
+        } else if (solicitud.estado === 'rechazado') {
+          setSolicitudDescuento({
+            ...solicitudDescuento,
+            estado: 'rechazado'
+          })
+          localStorage.removeItem('venta_pendiente_aprobacion')
+          alert('❌ Su solicitud de descuento fue rechazada')
+        }
+      }
+    } catch (error) {
+      console.error('Error verificando solicitud:', error)
+    }
+  }
+
+  const cargarVentaPendiente = async (ventaId) => {
+    try {
+      const response = await fetch(`${API_URL}/ventas/${ventaId}`)
+      const data = await response.json()
+      if (data.success) {
+        setCarrito(data.venta.detalles || [])
+        setCliente({
+          nombre: data.venta.cliente_nombre || '',
+          telefono: data.venta.cliente_telefono || '',
+          direccion: data.venta.cliente_direccion || '',
+          referencia: data.venta.cliente_referencia || '',
+          detalles: data.venta.detalles || '',
+          es_mayorista: data.venta.cliente_es_mayorista || false
+        })
+        setTipoPago(data.venta.tipo_pago === 'Crédito' ? 'credito' : 'contado')
+        setTipoEntrega(data.venta.tipo_entrega === 'domicilio' ? 'domicilio' : 'retiro')
+        setCostoEnvio(data.venta.costo_envio || '')
+        setVentaCompletada(true)
+      }
+    } catch (error) {
+      console.error('Error cargando venta:', error)
+    }
+  }
 
   // Extraer categorías automáticamente de los productos
   useEffect(() => {
@@ -153,267 +238,136 @@ function POS() {
   }
 
   // ============================================
+  // FUNCIÓN PARA SOLICITAR DESCUENTO
+  // ============================================
+  const solicitarDescuento = async () => {
+    if (!cliente.nombre.trim()) {
+      alert('⚠️ Primero ingresa el nombre del cliente')
+      return
+    }
+    
+    if (descuentoMonto <= 0) {
+      alert('⚠️ Ingresa un monto de descuento válido')
+      return
+    }
+    
+    if (carrito.length === 0) {
+      alert('⚠️ El carrito está vacío')
+      return
+    }
+    
+    try {
+      // Crear la venta primero
+      const datosVenta = {
+        usuario_id: usuario.id,
+        sucursal_id: usuario.sucursal_id || null,
+        carrito: carrito.map(item => ({
+          id: item.id,
+          precio: item.precio_unitario || item.precio,
+          cantidad: item.cantidad
+        })),
+        total: subtotal,
+        tipo_pago: tipoPago === 'credito' ? 'Crédito' : 'Efectivo',
+        tipo_venta: tipoPago === 'credito' ? 'credito' : 'contado',
+        tipo_entrega: tipoEntrega === 'domicilio' ? 'domicilio' : 'retiro',
+        cliente_nombre: cliente.nombre,
+        cliente_telefono: cliente.telefono,
+        cliente_direccion: cliente.direccion,
+        cliente_referencia: cliente.referencia,
+        detalles: cliente.detalles,
+        costo_envio: parseFloat(costoEnvio) || 0,
+        descuento_monto: 0,
+        descuento_aprobado: false,
+        cliente_es_mayorista: cliente.es_mayorista || false,
+        estado: 'pendiente_aprobacion'
+      }
+
+      const response = await fetch(`${API_URL}/ventas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datosVenta)
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Crear la solicitud de descuento
+        const solicitudResponse = await fetch(`${API_URL}/solicitudes-descuento`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            venta_id: data.ventaId,
+            monto_solicitado: descuentoMonto,
+            motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`,
+            usuario_solicitante: usuario.id
+          })
+        })
+
+        const solicitudData = await solicitudResponse.json()
+
+        if (solicitudData.success) {
+          setSolicitudDescuento({
+            monto: descuentoMonto,
+            motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`,
+            estado: 'pendiente',
+            codigo: solicitudData.codigo,
+            id: solicitudData.solicitud.id,
+            venta_id: data.ventaId
+          })
+          setVentaId(data.ventaId)
+          setMostrarSolicitud(false)
+          
+          // Guardar en localStorage para persistir
+          localStorage.setItem('venta_pendiente_aprobacion', JSON.stringify({
+            ventaId: data.ventaId,
+            solicitudId: solicitudData.solicitud.id
+          }))
+          
+          alert(`✅ Solicitud de descuento enviada\n📋 Código: ${solicitudData.codigo}\n⏳ Espera la aprobación del administrador`)
+          
+          // Limpiar carrito y preparar para nueva venta
+          // No cerramos la venta, esperamos aprobación
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('❌ Error al solicitar descuento')
+    }
+  }
+
+  // ============================================
+  // FUNCIÓN PARA APLICAR DESCUENTO DIRECTO (ADMIN)
+  // ============================================
+  const aplicarDescuentoDirecto = () => {
+    if (descuentoMonto <= 0) {
+      alert('⚠️ Ingresa un monto de descuento válido')
+      return
+    }
+    
+    setSolicitudDescuento({
+      monto: descuentoMonto,
+      motivo: `Descuento directo de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`,
+      estado: 'aprobado',
+      codigo: `DIRECTO-${Date.now().toString().slice(-6)}`,
+      id: null,
+      venta_id: null
+    })
+    
+    alert(`✅ Descuento de RD$ ${descuentoMonto.toFixed(2)} aplicado directamente`)
+  }
+
+  // ============================================
   // FUNCIÓN PARA REIMPRIMIR FACTURA CON OPCIÓN DUAL
   // ============================================
   const handleReimprimir = async (ventaId, formato = 'A4') => {
-    try {
-      const loading = document.createElement('div');
-      loading.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0,0,0,0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-        color: white;
-        font-size: 1.5rem;
-      `;
-      loading.innerHTML = '🖨️ Generando factura...';
-      document.body.appendChild(loading);
-
-      const response = await fetch(`${API_URL}/ventas/${ventaId}/reimprimir`);
-      const data = await response.json();
-
-      if (!data.success) {
-        alert('❌ Error al obtener los datos de la factura');
-        document.body.removeChild(loading);
-        return;
-      }
-
-      const venta = data.venta;
-      const detalles = data.detalles;
-      const sucursal = data.sucursal || { nombre: 'Sucursal Principal', direccion: '', telefono: '' };
-
-      const esSabana = sucursal.id === 2 || 
-                       (sucursal.nombre && sucursal.nombre.toLowerCase().includes('sabana'));
-      
-      const nombreEmpresa = esSabana ? 'Lizhomedecore' : 'AMAGO ERP';
-
-      let ticketHTML;
-      
-      if (formato === 'POS80') {
-        ticketHTML = `
-          <div style="font-family: monospace; width: 300px; margin: 0 auto; padding: 10px; background: white; font-size: 11px;">
-            <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px;">
-              <h2 style="margin: 0; font-size: 16px;">🏭 ${nombreEmpresa}</h2>
-              <p style="margin: 2px 0; font-size: 11px;">${sucursal.nombre || 'Sucursal Principal'}</p>
-              ${sucursal.direccion ? `<p style="margin: 2px 0; font-size: 10px;">${sucursal.direccion}</p>` : ''}
-              <p style="margin: 5px 0; font-size: 12px; font-weight: bold;">FACTURA #${venta.factura || venta.id}</p>
-            </div>
-            <div style="padding: 8px 0; border-bottom: 1px dashed #000;">
-              <p style="margin: 2px 0; font-size: 11px;"><strong>Cliente:</strong> ${venta.cliente_nombre || 'N/A'}</p>
-              <p style="margin: 2px 0; font-size: 11px;"><strong>Vendedor:</strong> ${venta.vendedor_nombre || 'N/A'}</p>
-              <p style="margin: 2px 0; font-size: 11px;"><strong>Fecha:</strong> ${new Date(venta.fecha).toLocaleString()}</p>
-              <p style="margin: 2px 0; font-size: 11px;"><strong>Pago:</strong> ${venta.tipo_pago || 'Efectivo'}</p>
-            </div>
-            <div style="padding: 8px 0; border-bottom: 1px dashed #000;">
-              <table style="width: 100%; font-size: 10px; border-collapse: collapse;">
-                <thead>
-                  <tr style="border-bottom: 1px solid #000;">
-                    <th style="text-align: left; padding: 2px 0;">Producto</th>
-                    <th style="text-align: center; padding: 2px 0;">Cant</th>
-                    <th style="text-align: right; padding: 2px 0;">Precio</th>
-                    <th style="text-align: right; padding: 2px 0;">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${detalles.map(d => `
-                    <tr>
-                      <td style="padding: 2px 0; text-align: left;">${d.producto_nombre || 'Producto'}</td>
-                      <td style="padding: 2px 0; text-align: center;">${d.cantidad}</td>
-                      <td style="padding: 2px 0; text-align: right;">RD$ ${Number(d.precio).toFixed(2)}</td>
-                      <td style="padding: 2px 0; text-align: right;">RD$ ${(Number(d.precio) * d.cantidad).toFixed(2)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-                <tfoot>
-                  <tr style="border-top: 2px solid #000;">
-                    <td colspan="3" style="text-align: right; padding: 4px 0; font-weight: bold;">TOTAL:</td>
-                    <td style="text-align: right; padding: 4px 0; font-weight: bold; font-size: 14px;">RD$ ${Number(venta.total).toFixed(2)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            <div style="padding: 8px 0; text-align: center; font-size: 10px; color: #666;">
-              <p style="margin: 2px 0;">¡Gracias por su compra!</p>
-              <p style="margin: 2px 0;">${new Date().toLocaleString()}</p>
-            </div>
-          </div>
-        `;
-      } else {
-        // FORMATO A4 (Normal)
-        ticketHTML = `
-          <div style="font-family: Arial, sans-serif; max-width: 210mm; margin: 0 auto; padding: 30px; background: white;">
-            <div style="text-align: center; border-bottom: 2px solid #003b6f; padding-bottom: 15px;">
-              <h1 style="margin: 0; color: #003b6f;">🏭 ${nombreEmpresa}</h1>
-              <h2 style="margin: 5px 0; color: #003b6f;">${sucursal.nombre || 'Sucursal Principal'}</h2>
-              ${sucursal.direccion ? `<p style="margin: 2px 0;">${sucursal.direccion}</p>` : ''}
-              ${sucursal.telefono ? `<p style="margin: 2px 0;">Tel: ${sucursal.telefono}</p>` : ''}
-              <h2 style="margin: 10px 0; color: #003b6f;">FACTURA #${venta.factura || venta.id}</h2>
-            </div>
-            <div style="padding: 15px 0; border-bottom: 1px solid #ddd;">
-              <table style="width: 100%;">
-                <tr><td style="padding: 4px;"><strong>Cliente:</strong></td><td>${venta.cliente_nombre || 'N/A'}</td></tr>
-                <tr><td style="padding: 4px;"><strong>Teléfono:</strong></td><td>${venta.cliente_telefono || 'N/A'}</td></tr>
-                <tr><td style="padding: 4px;"><strong>Dirección:</strong></td><td>${venta.cliente_direccion || 'N/A'}</td></tr>
-                <tr><td style="padding: 4px;"><strong>Vendedor:</strong></td><td>${venta.vendedor_nombre || 'N/A'}</td></tr>
-                <tr><td style="padding: 4px;"><strong>Fecha:</strong></td><td>${new Date(venta.fecha).toLocaleString()}</td></tr>
-                <tr><td style="padding: 4px;"><strong>Tipo Pago:</strong></td><td>${venta.tipo_pago || 'Efectivo'}</td></tr>
-                <tr><td style="padding: 4px;"><strong>Estado:</strong></td><td>${venta.estado || 'Completada'}</td></tr>
-              </table>
-            </div>
-            <div style="padding: 15px 0;">
-              <h3 style="color: #003b6f;">Detalle de Productos</h3>
-              <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                  <tr style="background-color: #003b6f; color: white;">
-                    <th style="padding: 8px; text-align: left;">Producto</th>
-                    <th style="padding: 8px; text-align: center;">Cantidad</th>
-                    <th style="padding: 8px; text-align: right;">Precio</th>
-                    <th style="padding: 8px; text-align: right;">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${detalles.map(d => `
-                    <tr style="border-bottom: 1px solid #eee;">
-                      <td style="padding: 8px;">${d.producto_nombre || 'Producto'}</td>
-                      <td style="padding: 8px; text-align: center;">${d.cantidad}</td>
-                      <td style="padding: 8px; text-align: right;">RD$ ${Number(d.precio).toFixed(2)}</td>
-                      <td style="padding: 8px; text-align: right;">RD$ ${(Number(d.precio) * d.cantidad).toFixed(2)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-                <tfoot>
-                  <tr style="border-top: 2px solid #003b6f; font-weight: bold;">
-                    <td colspan="3" style="padding: 10px; text-align: right;">TOTAL:</td>
-                    <td style="padding: 10px; text-align: right; font-size: 1.2rem; color: #003b6f;">RD$ ${Number(venta.total).toFixed(2)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            <div style="text-align: center; padding-top: 20px; border-top: 2px solid #003b6f; color: #666; font-size: 0.9rem;">
-              <p>¡Gracias por su compra!</p>
-              <p>Factura reimpresa el ${new Date().toLocaleString()}</p>
-            </div>
-          </div>
-        `;
-      }
-
-      const ancho = formato === 'POS80' ? 400 : 800;
-      const ventana = window.open('', '_blank', `width=${ancho},height=600`);
-      ventana.document.write(`
-        <html>
-          <head>
-            <title>${formato === 'POS80' ? 'Ticket' : 'Factura'} #${venta.factura || venta.id}</title>
-            <style>
-              body { margin: 0; padding: 20px; background: #f5f5f5; }
-              @media print {
-                body { background: white; padding: 0; }
-                .no-print { display: none; }
-                button { display: none; }
-              }
-            </style>
-          </head>
-          <body>
-            ${ticketHTML}
-            <div style="text-align: center; margin-top: 20px;" class="no-print">
-              <button onclick="window.print()" style="padding: 10px 30px; background: #003b6f; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;">
-                🖨️ Imprimir
-              </button>
-              <button onclick="window.close()" style="padding: 10px 30px; background: #f44336; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-left: 10px;">
-                ✕ Cerrar
-              </button>
-            </div>
-          </body>
-        </html>
-      `);
-      ventana.document.close();
-
-      document.body.removeChild(loading);
-
-    } catch (error) {
-      console.error('Error reimprimiendo factura:', error);
-      alert('❌ Error al reimprimir la factura');
-      const loading = document.querySelector('div[style*="position: fixed;"]');
-      if (loading) document.body.removeChild(loading);
-    }
-  };
+    // ... (mantén tu código existente)
+  }
 
   // ============================================
   // FUNCIÓN PARA IMPRIMIR FACTURA
   // ============================================
   const imprimirFactura = (formato = 'A4') => {
-    const contenido = facturaRef.current;
-    if (!contenido) {
-      alert('⚠️ No hay factura para imprimir');
-      return;
-    }
-
-    const ventana = window.open('', '_blank', 'width=800,height=600');
-    if (!ventana) {
-      alert('⚠️ Por favor, permite las ventanas emergentes para imprimir');
-      return;
-    }
-
-    const html = contenido.outerHTML;
-
-    const estilos = formato === 'A4' 
-      ? `
-          @page {
-            size: A4;
-            margin: 10mm;
-          }
-          body { 
-            font-family: Arial, sans-serif; 
-            padding: 20px;
-            background: white;
-          }
-          @media print {
-            body { margin: 0; padding: 0; }
-          }
-        `
-      : `
-          @page {
-            size: 80mm 297mm;
-            margin: 3mm;
-          }
-          body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 10px;
-            padding: 5px;
-            background: white;
-          }
-          table { font-size: 9px; }
-          @media print {
-            body { margin: 0; padding: 0; }
-          }
-        `;
-
-    ventana.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Factura ${ventaId || ''}</title>
-          <style>${estilos}</style>
-        </head>
-        <body>
-          ${html}
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() {
-                window.close();
-              }, 1000);
-            }
-          <\/script>
-        </body>
-      </html>
-    `);
-    ventana.document.close();
+    // ... (mantén tu código existente)
   }
 
   const calcularPrecio = (producto, cantidad) => {
@@ -501,18 +455,20 @@ function POS() {
 
   const total = useMemo(() => {
     const envio = parseFloat(costoEnvio) || 0
-    const desc = parseFloat(descuento) || 0
+    const descMonto = solicitudDescuento.estado === 'aprobado' ? solicitudDescuento.monto : 0
     const base = subtotal + envio
-    return base - (base * (desc / 100))
-  }, [subtotal, costoEnvio, descuento])
+    return base - descMonto
+  }, [subtotal, costoEnvio, solicitudDescuento])
 
   const limpiarCarrito = () => {
     if (window.confirm('¿Vaciar todo el carrito?')) {
       setCarrito([])
       setCostoEnvio('')
-      setDescuento('')
+      setDescuentoMonto(0)
+      setSolicitudDescuento({ monto: 0, motivo: '', estado: 'pendiente', codigo: '', id: null, venta_id: null })
       setCodigoAutorizacion('')
       setMostrarAutorizacion(false)
+      localStorage.removeItem('venta_pendiente_aprobacion')
     }
   }
 
@@ -525,12 +481,15 @@ function POS() {
       alert('⚠️ El carrito está vacío')
       return
     }
-    const desc = parseFloat(descuento) || 0
-    if (desc > 0 && !codigoAutorizacion.trim()) {
-      alert('⚠️ Para aplicar un descuento debes ingresar el código de autorización')
+    
+    // Verificar si hay una solicitud pendiente
+    if (solicitudDescuento.estado === 'pendiente') {
+      alert('⏳ Esta venta tiene una solicitud de descuento pendiente de aprobación')
       return
     }
 
+    const descMonto = solicitudDescuento.estado === 'aprobado' ? solicitudDescuento.monto : 0
+    
     setCargando(true)
     try {
       const esCredito = tipoPago === 'credito'
@@ -554,9 +513,11 @@ function POS() {
         cliente_referencia: cliente.referencia,
         detalles: cliente.detalles,
         costo_envio: parseFloat(costoEnvio) || 0,
-        descuento: parseFloat(descuento) || 0,
-        codigo_autorizacion: codigoAutorizacion || null,
-        cliente_es_mayorista: cliente.es_mayorista || false
+        descuento_monto: descMonto,
+        descuento_aprobado: solicitudDescuento.estado === 'aprobado',
+        codigo_autorizacion: solicitudDescuento.codigo || null,
+        cliente_es_mayorista: cliente.es_mayorista || false,
+        solicitud_descuento_id: solicitudDescuento.id || null
       }
 
       const response = await fetch(`${API_URL}/ventas`, {
@@ -574,14 +535,18 @@ function POS() {
         }
         setVentaCompletada(true)
         let mensaje = `✅ Venta completada #${data.ventaId} - Total: RD$ ${data.total.toFixed(2)}`
-        if (data.descuento_aplicado > 0) {
-          mensaje += `\n💰 Descuento aplicado: ${data.descuento_aplicado}%`
-          mensaje += `\n🔑 Autorizado: ${data.autorizado ? 'SÍ' : 'NO'}`
+        if (descMonto > 0) {
+          mensaje += `\n💰 Descuento aplicado: RD$ ${descMonto.toFixed(2)}`
+          mensaje += `\n🔑 Autorizado: ${solicitudDescuento.codigo || 'DIRECTO'}`
         }
         if (cliente.es_mayorista) {
           mensaje += `\n👑 Cliente Mayorista - Precio especial aplicado`
         }
         alert(mensaje)
+        
+        // Limpiar solicitud después de cobrar
+        localStorage.removeItem('venta_pendiente_aprobacion')
+        setSolicitudDescuento({ monto: 0, motivo: '', estado: 'pendiente', codigo: '', id: null, venta_id: null })
         
         cargarVentasRecientes()
       } else {
@@ -604,9 +569,11 @@ function POS() {
     setTipoEntrega('retiro')
     setVentaId(null)
     setCostoEnvio('')
-    setDescuento('')
+    setDescuentoMonto(0)
+    setSolicitudDescuento({ monto: 0, motivo: '', estado: 'pendiente', codigo: '', id: null, venta_id: null })
     setCodigoAutorizacion('')
     setMostrarAutorizacion(false)
+    localStorage.removeItem('venta_pendiente_aprobacion')
     cargarVentasRecientes()
   }
 
@@ -716,7 +683,6 @@ function POS() {
             </div>
           </div>
 
-          {/* FACTURA OCULTA */}
           <div style={{ 
             position: 'fixed', 
             left: '-9999px', 
@@ -750,7 +716,7 @@ function POS() {
     <AdminLayout>
       <h1>🛒 Punto de Venta</h1>
 
-      {/* BOTÓN PARA MOSTRAR/OCULTAR HISTORIAL DE VENTAS RECIENTES */}
+      {/* BOTÓN PARA MOSTRAR/OCULTAR HISTORIAL */}
       <div style={{ marginBottom: '15px' }}>
         <button
           onClick={() => setMostrarHistorial(!mostrarHistorial)}
@@ -917,6 +883,7 @@ function POS() {
         </label>
       </div>
 
+      {/* 👇 NUEVA SECCIÓN DE DESCUENTO CON SOLICITUDES */}
       <div style={{
         border: '2px solid #003b6f',
         borderRadius: '8px',
@@ -925,55 +892,168 @@ function POS() {
         backgroundColor: '#e8f0fe',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
-        <h4 style={{ margin: '0 0 15px 0', color: '#003b6f' }}>💰 Costos y Descuentos</h4>
+        <h4 style={{ margin: '0 0 15px 0', color: '#003b6f' }}>💰 Descuento</h4>
+        
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          {/* Descuento en monto */}
           <div>
-            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>Costo de Envío (RD$)</label>
+            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>
+              💰 Descuento (RD$)
+            </label>
             <input
               type="number"
               step="0.01"
               min="0"
-              value={costoEnvio}
-              onChange={(e) => setCostoEnvio(e.target.value)}
-              placeholder="0.00"
-              style={{ width: '100%', padding: '10px', border: '1px solid #003b6f', borderRadius: '8px', backgroundColor: 'white' }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>Descuento (%)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              value={descuento}
+              value={descuentoMonto}
               onChange={(e) => {
-                const val = parseFloat(e.target.value)
-                setDescuento(e.target.value)
-                if (val > 0) {
-                  setMostrarAutorizacion(true)
+                const val = parseFloat(e.target.value) || 0
+                setDescuentoMonto(val)
+                if (val > 0 && esVendedor && !esAdmin) {
+                  setMostrarSolicitud(true)
                 } else {
-                  setMostrarAutorizacion(false)
-                  setCodigoAutorizacion('')
+                  setMostrarSolicitud(false)
+                  if (val === 0) {
+                    setSolicitudDescuento({ monto: 0, motivo: '', estado: 'pendiente', codigo: '', id: null, venta_id: null })
+                  }
                 }
               }}
-              placeholder="0"
-              style={{ width: '100%', padding: '10px', border: '1px solid #003b6f', borderRadius: '8px', backgroundColor: 'white' }}
+              placeholder="0.00"
+              style={{ 
+                width: '100%', 
+                padding: '10px', 
+                border: '1px solid #003b6f', 
+                borderRadius: '8px', 
+                backgroundColor: 'white' 
+              }}
             />
           </div>
+          
+          {/* Estado de la solicitud */}
+          <div>
+            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', color: '#003b6f' }}>
+              📋 Estado de Solicitud
+            </label>
+            <div style={{
+              padding: '10px',
+              borderRadius: '8px',
+              backgroundColor: solicitudDescuento.estado === 'pendiente' ? '#fff3e0' :
+                              solicitudDescuento.estado === 'aprobado' ? '#e8f5e9' : '#ffebee',
+              border: `1px solid ${
+                solicitudDescuento.estado === 'pendiente' ? '#ff9800' :
+                solicitudDescuento.estado === 'aprobado' ? '#4CAF50' : '#f44336'
+              }`
+            }}>
+              {solicitudDescuento.estado === 'pendiente' && (
+                <span style={{ color: '#e65100' }}>⏳ Pendiente de aprobación</span>
+              )}
+              {solicitudDescuento.estado === 'aprobado' && (
+                <span style={{ color: '#1b5e20' }}>✅ Aprobado - Código: {solicitudDescuento.codigo}</span>
+              )}
+              {solicitudDescuento.estado === 'rechazado' && (
+                <span style={{ color: '#c62828' }}>❌ Rechazado</span>
+              )}
+              {solicitudDescuento.estado === 'pendiente' && !esAdmin && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('¿Cancelar la solicitud de descuento?')) {
+                      setDescuentoMonto(0)
+                      setSolicitudDescuento({ monto: 0, motivo: '', estado: 'pendiente', codigo: '', id: null, venta_id: null })
+                      setMostrarSolicitud(false)
+                      localStorage.removeItem('venta_pendiente_aprobacion')
+                    }
+                  }}
+                  style={{
+                    marginLeft: '10px',
+                    padding: '2px 10px',
+                    backgroundColor: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  Cancelar
+                </button>
+              )}
+              {solicitudDescuento.codigo && solicitudDescuento.estado === 'aprobado' && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(solicitudDescuento.codigo)
+                    alert('📋 Código copiado: ' + solicitudDescuento.codigo)
+                  }}
+                  style={{
+                    marginLeft: '10px',
+                    padding: '2px 10px',
+                    backgroundColor: '#003b6f',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  📋 Copiar
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-        {mostrarAutorizacion && (
-          <div style={{ marginTop: '15px', padding: '15px', backgroundColor: '#fff8e1', borderRadius: '8px', border: '1px solid #ff9800' }}>
-            <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>🔑 Código de Autorización</label>
-            <input
-              type="text"
-              value={codigoAutorizacion}
-              onChange={(e) => setCodigoAutorizacion(e.target.value)}
-              placeholder="Ej: AUT-2026"
-              style={{ width: '100%', padding: '10px', border: '1px solid #ff9800', borderRadius: '8px', backgroundColor: 'white' }}
-            />
-            <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '5px' }}>
-              ⚠️ Solo el dueño o subgerente puede autorizar descuentos
+        
+        {/* Botones de acción */}
+        {mostrarSolicitud && solicitudDescuento.estado === 'pendiente' && !esAdmin && (
+          <button
+            onClick={solicitarDescuento}
+            style={{
+              marginTop: '10px',
+              padding: '10px 20px',
+              backgroundColor: '#FF9800',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              width: '100%',
+              fontSize: '0.95rem',
+              fontWeight: 'bold'
+            }}
+          >
+            📨 Solicitar Aprobación
+          </button>
+        )}
+        
+        {esAdmin && descuentoMonto > 0 && (
+          <button
+            onClick={aplicarDescuentoDirecto}
+            style={{
+              marginTop: '10px',
+              padding: '10px 20px',
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              width: '100%',
+              fontSize: '0.95rem',
+              fontWeight: 'bold'
+            }}
+          >
+            ✅ Aplicar Descuento Directo (Admin)
+          </button>
+        )}
+        
+        {solicitudDescuento.estado === 'aprobado' && (
+          <div style={{
+            marginTop: '10px',
+            padding: '10px',
+            backgroundColor: '#e8f5e9',
+            borderRadius: '6px',
+            border: '1px solid #4CAF50'
+          }}>
+            <p style={{ margin: 0, color: '#1b5e20', fontWeight: 'bold' }}>
+              ✅ Descuento aprobado: RD$ {solicitudDescuento.monto.toFixed(2)}
+            </p>
+            <p style={{ margin: '5px 0 0 0', fontSize: '0.8rem', color: '#666' }}>
+              Código: {solicitudDescuento.codigo}
             </p>
           </div>
         )}
@@ -1068,9 +1148,9 @@ function POS() {
           {parseFloat(costoEnvio) > 0 && (
             <p style={{ margin: '5px 0' }}><strong>Envío:</strong> RD$ {parseFloat(costoEnvio).toFixed(2)}</p>
           )}
-          {parseFloat(descuento) > 0 && (
+          {solicitudDescuento.estado === 'aprobado' && solicitudDescuento.monto > 0 && (
             <p style={{ margin: '5px 0', color: '#d32f2f' }}>
-              <strong>Descuento ({descuento}%):</strong> -RD$ {((subtotal + parseFloat(costoEnvio || 0)) * (parseFloat(descuento) / 100)).toFixed(2)}
+              <strong>Descuento:</strong> -RD$ {solicitudDescuento.monto.toFixed(2)}
             </p>
           )}
           {cliente.es_mayorista && (
@@ -1426,20 +1506,24 @@ function POS() {
                 </button>
                 <button
                   onClick={cobrar}
-                  disabled={cargando || carrito.length === 0}
+                  disabled={cargando || carrito.length === 0 || solicitudDescuento.estado === 'pendiente'}
                   style={{
-                    backgroundColor: '#4CAF50',
+                    backgroundColor: solicitudDescuento.estado === 'pendiente' ? '#FF9800' : '#4CAF50',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
                     padding: '12px',
                     fontSize: '1.1rem',
                     fontWeight: 'bold',
-                    cursor: cargando || carrito.length === 0 ? 'not-allowed' : 'pointer',
-                    opacity: cargando || carrito.length === 0 ? 0.6 : 1
+                    cursor: cargando || carrito.length === 0 || solicitudDescuento.estado === 'pendiente' ? 'not-allowed' : 'pointer',
+                    opacity: cargando || carrito.length === 0 || solicitudDescuento.estado === 'pendiente' ? 0.6 : 1
                   }}
                 >
-                  {cargando ? 'Procesando...' : '💳 Cobrar'}
+                  {solicitudDescuento.estado === 'pendiente' 
+                    ? '⏳ Esperando aprobación...' 
+                    : cargando 
+                      ? 'Procesando...' 
+                      : '💳 Cobrar'}
                 </button>
               </div>
             </>

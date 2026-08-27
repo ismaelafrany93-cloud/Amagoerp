@@ -15,12 +15,7 @@ app.use(express.json());
 // ============================================
 // CREAR CARPETAS SI NO EXISTEN
 // ============================================
-const carpetas = [
-    './uploads',
-    './uploads/pedidos',
-    './uploads/productos'
-];
-
+const carpetas = ['./uploads', './uploads/pedidos', './uploads/productos'];
 for (const carpeta of carpetas) {
     if (!fs.existsSync(carpeta)) {
         try {
@@ -38,47 +33,32 @@ for (const carpeta of carpetas) {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================================
-// RUTAS DE LA API - CON VERIFICACIÓN DE EXISTENCIA
+// 👇 RUTAS DE LA API - DEBEN IR ANTES DE EXPRESS.STATIC Y DEL MANEJADOR DE * 
 // ============================================
-const cargarRuta = (path, ruta) => {
-    try {
-        const fullPath = path.join(__dirname, ruta);
-        if (fs.existsSync(fullPath)) {
-            app.use(path, require(fullPath));
-            console.log(`✅ Ruta cargada: ${path}`);
-        } else {
-            console.log(`⚠️ Ruta no encontrada: ${ruta}`);
-        }
-    } catch (error) {
-        console.log(`⚠️ Error cargando ruta ${path}:`, error.message);
-    }
-};
-
-// Cargar todas las rutas
-cargarRuta('/auth', './routes/auth');
-cargarRuta('/productos', './routes/productos');
-cargarRuta('/ventas', './routes/ventas');
-cargarRuta('/inventario', './routes/inventario');
-cargarRuta('/clientes', './routes/clientes');
-cargarRuta('/produccion', './routes/produccion');
-cargarRuta('/entregas', './routes/entregas');
-cargarRuta('/reportes', './routes/reportes');
-cargarRuta('/materiales', './routes/materiales');
-cargarRuta('/usuarios', './routes/usuarios');
-cargarRuta('/creditos', './routes/creditos');
-cargarRuta('/operarios', './routes/operarios');
-cargarRuta('/recetas', './routes/recetas');
-cargarRuta('/sucursales', './routes/sucursales');
-cargarRuta('/historial', './routes/historial');
-cargarRuta('/dashboard', './routes/dashboard');
-cargarRuta('/transferencias', './routes/transferencias');
-cargarRuta('/cambios', './routes/cambios');
-cargarRuta('/nomina', './routes/nomina');
-cargarRuta('/empleados', './routes/empleados');
-cargarRuta('/cuentas-pagar', './routes/cuentasPagar');
-cargarRuta('/gastos', './routes/gastos');
-cargarRuta('/costos-productos', './routes/costosProductos');
-cargarRuta('/pedidos', './routes/pedidos');
+app.use('/auth', require('./routes/auth'));
+app.use('/productos', require('./routes/productos'));
+app.use('/ventas', require('./routes/ventas'));
+app.use('/inventario', require('./routes/inventario'));
+app.use('/clientes', require('./routes/clientes'));
+app.use('/produccion', require('./routes/produccion'));
+app.use('/entregas', require('./routes/entregas'));
+app.use('/reportes', require('./routes/reportes'));
+app.use('/materiales', require('./routes/materiales'));
+app.use('/usuarios', require('./routes/usuarios'));
+app.use('/creditos', require('./routes/creditos'));
+app.use('/operarios', require('./routes/operarios'));
+app.use('/recetas', require('./routes/recetas'));
+app.use('/sucursales', require('./routes/sucursales'));
+app.use('/historial', require('./routes/historial'));
+app.use('/dashboard', require('./routes/dashboard'));
+app.use('/transferencias', require('./routes/transferencias'));
+app.use('/cambios', require('./routes/cambios'));
+app.use('/nomina', require('./routes/nomina'));
+app.use('/empleados', require('./routes/empleados'));
+app.use('/cuentas-pagar', require('./routes/cuentasPagar'));
+app.use('/gastos', require('./routes/gastos'));
+app.use('/costos-productos', require('./routes/costosProductos'));
+app.use('/pedidos', require('./routes/pedidos'));
 
 // 👇 RUTA DE SOLICITUDES DE DESCUENTO - CON VERIFICACIÓN
 try {
@@ -88,53 +68,20 @@ try {
         console.log('✅ Ruta cargada: /solicitudes-descuento');
     } else {
         console.log('⚠️ Ruta no encontrada: ./routes/solicitudesDescuento.js');
-        console.log('📁 Creando archivo de respaldo...');
-        
-        // Crear un archivo de respaldo con el código mínimo
-        const fs = require('fs');
-        const backupPath = path.join(__dirname, './routes/solicitudesDescuento.js');
-        const backupContent = `
-const express = require('express');
-const router = express.Router();
-const pool = require('../db');
-
-// Ruta de respaldo - solicitudes de descuento
-router.get('/', async (req, res) => {
-    res.json({ message: 'Solicitudes de descuento - módulo en construcción' });
-});
-
-router.get('/contador', async (req, res) => {
-    res.json({ pendientes: 0 });
-});
-
-router.get('/pendientes', async (req, res) => {
-    res.json([]);
-});
-
-router.get('/:id', async (req, res) => {
-    res.json({ success: true, solicitud: { id: req.params.id, estado: 'pendiente' } });
-});
-
-router.post('/', async (req, res) => {
-    res.json({ success: true, message: 'Solicitud creada', codigo: 'DESC-TEMP' });
-});
-
-router.put('/:id', async (req, res) => {
-    res.json({ success: true, message: 'Solicitud procesada' });
-});
-
-module.exports = router;
-        `;
-        fs.writeFileSync(backupPath, backupContent);
-        app.use('/solicitudes-descuento', require(backupPath));
-        console.log('✅ Ruta de respaldo creada para /solicitudes-descuento');
+        // Ruta de respaldo
+        app.use('/solicitudes-descuento', (req, res) => {
+            res.json({ message: 'Solicitudes de descuento - módulo en construcción' });
+        });
     }
 } catch (error) {
     console.log('⚠️ Error con /solicitudes-descuento:', error.message);
+    app.use('/solicitudes-descuento', (req, res) => {
+        res.json({ message: 'Solicitudes de descuento - módulo en construcción' });
+    });
 }
 
 // ============================================
-// SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND)
+// 👇 SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND) - DESPUÉS DE LAS API
 // ============================================
 const posiblesPaths = [
     path.join(__dirname, '..', 'frontend', 'dist'),
@@ -161,27 +108,15 @@ if (frontendPath) {
 }
 
 // ============================================
-// MANEJAR RUTAS - REACT ROUTER
+// 👇 MANEJADOR DE RUTAS DE REACT - DEBE IR AL FINAL
 // ============================================
 app.get('*', (req, res) => {
-    // Excluir rutas de API
-    const apiPaths = ['/auth', '/productos', '/ventas', '/inventario', '/clientes', 
-                      '/produccion', '/entregas', '/reportes', '/materiales', '/usuarios',
-                      '/creditos', '/operarios', '/recetas', '/sucursales', '/historial',
-                      '/dashboard', '/transferencias', '/cambios', '/nomina', '/empleados',
-                      '/cuentas-pagar', '/gastos', '/costos-productos', '/pedidos', '/uploads',
-                      '/solicitudes-descuento'];
-    
-    for (const apiPath of apiPaths) {
-        if (req.path.startsWith(apiPath)) {
-            return res.status(404).json({ error: 'Ruta no encontrada' });
-        }
-    }
-    
+    // Si es un asset (js, css, etc.), no hacer nada
     if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf)$/)) {
         return res.status(404).send('Archivo no encontrado');
     }
     
+    // Si hay frontend, enviar index.html
     if (frontendPath) {
         const indexPath = path.join(frontendPath, 'index.html');
         if (fs.existsSync(indexPath)) {
@@ -189,9 +124,10 @@ app.get('*', (req, res) => {
         }
     }
     
-    res.status(404).json({
-        error: 'Frontend no disponible',
-        message: 'El frontend no se ha construido correctamente'
+    // Si es una ruta de API no encontrada
+    res.status(404).json({ 
+        error: 'Ruta no encontrada',
+        path: req.path
     });
 });
 

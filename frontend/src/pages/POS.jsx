@@ -145,16 +145,21 @@ function POS() {
   // ============================================
   const cargarProductos = async () => {
     try {
+      console.log('📡 Cargando productos...')
       let url = `${API_URL}/productos`
       if (usuario?.sucursal_id && usuario.sucursal_id > 0) {
         url = `${API_URL}/productos?sucursal_id=${usuario.sucursal_id}`
       }
+      console.log('📡 URL:', url)
+      
       const response = await fetch(url)
       if (!response.ok) throw new Error(`Error ${response.status}`)
+      
       const data = await response.json()
+      console.log('📊 Productos cargados:', data?.length || 0)
       setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
-      console.error('Error cargando productos:', error)
+      console.error('❌ Error cargando productos:', error)
       setProductos([])
     }
   }
@@ -229,9 +234,6 @@ function POS() {
     }
   }
 
-  // ============================================
-  // SOLICITAR DESCUENTO - CORREGIDO
-  // ============================================
   const solicitarDescuento = async () => {
     if (!cliente.nombre || !cliente.nombre.trim()) {
       alert('⚠️ Primero ingresa el nombre del cliente')
@@ -249,12 +251,6 @@ function POS() {
     try {
       setCargando(true)
       
-      console.log('📡 Enviando solicitud de descuento:', {
-        usuario_solicitante: usuario?.id || 1,
-        monto_solicitado: descuentoMonto,
-        motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`
-      })
-      
       const solicitudResponse = await fetch(`${API_URL}/solicitudes-descuento`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -267,7 +263,6 @@ function POS() {
       })
 
       const solicitudData = await solicitudResponse.json()
-      console.log('📊 Respuesta del servidor:', solicitudData)
 
       if (solicitudData.success) {
         setSolicitudDescuento({
@@ -298,9 +293,6 @@ function POS() {
     }
   }
 
-  // ============================================
-  // CANCELAR SOLICITUD
-  // ============================================
   const cancelarSolicitud = async () => {
     if (!solicitudDescuento.id) {
       alert('⚠️ No hay solicitud activa')
@@ -336,9 +328,6 @@ function POS() {
     }
   }
 
-  // ============================================
-  // APLICAR DESCUENTO DIRECTO (SOLO ADMIN)
-  // ============================================
   const aplicarDescuentoDirecto = () => {
     if (descuentoMonto <= 0) {
       alert('⚠️ Ingresa un monto de descuento válido')
@@ -443,21 +432,28 @@ function POS() {
   }, [subtotal, costoEnvio, costoInstalacion, solicitudDescuento])
 
   // ============================================
-  // FILTRO DE PRODUCTOS
+  // FILTRO DE PRODUCTOS - CORREGIDO
   // ============================================
   const productosFiltrados = useMemo(() => {
+    // Si no hay productos, retornar array vacío
     if (!productos || productos.length === 0) return []
     
-    let filtrados = productos
+    let filtrados = [...productos] // Copiar para no modificar el original
+    
+    // Filtrar por categoría
     if (categoriaSeleccionada) {
       filtrados = filtrados.filter(p => p.categoria === categoriaSeleccionada)
     }
+    
+    // Filtrar por búsqueda
     if (busqueda && busqueda.trim()) {
       const searchTerm = busqueda.toLowerCase().trim()
       filtrados = filtrados.filter(p => 
         p.nombre && p.nombre.toLowerCase().includes(searchTerm)
       )
     }
+    
+    console.log(`📊 Productos filtrados: ${filtrados.length} de ${productos.length}`)
     return filtrados
   }, [productos, categoriaSeleccionada, busqueda])
 
@@ -474,13 +470,11 @@ function POS() {
       return
     }
     
-    // 👇 BLOQUEAR COBRO SI HAY SOLICITUD PENDIENTE
     if (solicitudActiva && solicitudDescuento.estado === 'pendiente') {
       alert('⏳ Esta venta tiene una solicitud de descuento pendiente de aprobación.\n\nEspera a que el administrador la apruebe o cancela la solicitud.')
       return
     }
 
-    // 👇 VERIFICAR QUE EL DESCUENTO ESTÉ APROBADO
     if (solicitudActiva && solicitudDescuento.estado !== 'aprobado' && descuentoMonto > 0) {
       alert('⏳ El descuento no ha sido aprobado. Espera la autorización del administrador.')
       return
@@ -520,8 +514,6 @@ function POS() {
         cliente_es_mayorista: cliente.es_mayorista || false,
         solicitud_descuento_id: solicitudDescuento.id || null
       }
-
-      console.log('📝 Enviando venta:', datosVenta)
 
       const response = await fetch(`${API_URL}/ventas`, {
         method: 'POST',
@@ -677,6 +669,7 @@ function POS() {
             </p>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
               <button onClick={() => imprimirFactura('A4')} style={{ padding: '12px 30px', backgroundColor: '#003b6f', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🖨️ Factura A4</button>
+              <button onClick={() => imprimirFactura('POS80')} style={{ padding: '12px 30px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🧾 Ticket POS80</button>
               <button onClick={nuevaVenta} style={{ padding: '12px 30px', backgroundColor: '#ff9800', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Nueva Venta</button>
             </div>
           </div>
@@ -1147,10 +1140,36 @@ function POS() {
         <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
           {/* LISTA DE PRODUCTOS */}
           <div style={{ flex: 2, maxHeight: '70vh', overflowY: 'auto', paddingRight: '10px' }}>
-            {productosFiltrados.length === 0 ? (
+            {cargando ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <p>⏳ Cargando productos...</p>
+              </div>
+            ) : productosFiltrados.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: '#f9f9f9', borderRadius: '12px', color: '#999' }}>
-                <p style={{ fontSize: '1.5rem' }}>🔍</p>
-                <p>{busqueda ? 'No se encontraron productos' : 'No hay productos en esta categoría'}</p>
+                <p style={{ fontSize: '2rem' }}>📭</p>
+                <p style={{ fontSize: '1.1rem' }}>
+                  {productos.length === 0 
+                    ? 'No hay productos disponibles' 
+                    : busqueda 
+                      ? 'No se encontraron productos con esa búsqueda' 
+                      : 'No hay productos en esta categoría'}
+                </p>
+                {productos.length === 0 && (
+                  <button 
+                    onClick={cargarProductos}
+                    style={{
+                      marginTop: '15px',
+                      padding: '10px 20px',
+                      backgroundColor: '#003b6f',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🔄 Recargar productos
+                  </button>
+                )}
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px' }}>

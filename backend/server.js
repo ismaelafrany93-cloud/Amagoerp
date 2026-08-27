@@ -33,51 +33,58 @@ for (const carpeta of carpetas) {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================================
-// RUTAS DE LA API
+// RUTAS DE LA API - CON /api
 // ============================================
-app.use('/auth', require('./routes/auth'));
-app.use('/productos', require('./routes/productos'));
-app.use('/ventas', require('./routes/ventas'));
-app.use('/inventario', require('./routes/inventario'));
-app.use('/clientes', require('./routes/clientes'));
-app.use('/produccion', require('./routes/produccion'));
-app.use('/entregas', require('./routes/entregas'));
-app.use('/reportes', require('./routes/reportes'));
-app.use('/materiales', require('./routes/materiales'));
-app.use('/usuarios', require('./routes/usuarios'));
-app.use('/creditos', require('./routes/creditos'));
-app.use('/operarios', require('./routes/operarios'));
-app.use('/recetas', require('./routes/recetas'));
-app.use('/sucursales', require('./routes/sucursales'));
-app.use('/historial', require('./routes/historial'));
-app.use('/dashboard', require('./routes/dashboard'));
-app.use('/transferencias', require('./routes/transferencias'));
-app.use('/cambios', require('./routes/cambios'));
-app.use('/nomina', require('./routes/nomina'));
-app.use('/empleados', require('./routes/empleados'));
-app.use('/cuentas-pagar', require('./routes/cuentasPagar'));
-app.use('/gastos', require('./routes/gastos'));
-app.use('/costos-productos', require('./routes/costosProductos'));
-app.use('/pedidos', require('./routes/pedidos'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/productos', require('./routes/productos'));
+app.use('/api/ventas', require('./routes/ventas'));
+app.use('/api/inventario', require('./routes/inventario'));
+app.use('/api/clientes', require('./routes/clientes'));
+app.use('/api/produccion', require('./routes/produccion'));
+app.use('/api/entregas', require('./routes/entregas'));
+app.use('/api/reportes', require('./routes/reportes'));
+app.use('/api/materiales', require('./routes/materiales'));
+app.use('/api/usuarios', require('./routes/usuarios'));
+app.use('/api/creditos', require('./routes/creditos'));
+app.use('/api/operarios', require('./routes/operarios'));
+app.use('/api/recetas', require('./routes/recetas'));
+app.use('/api/sucursales', require('./routes/sucursales'));
+app.use('/api/historial', require('./routes/historial'));
+app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/transferencias', require('./routes/transferencias'));
+app.use('/api/cambios', require('./routes/cambios'));
+app.use('/api/nomina', require('./routes/nomina'));
+app.use('/api/empleados', require('./routes/empleados'));
+app.use('/api/cuentas-pagar', require('./routes/cuentasPagar'));
+app.use('/api/gastos', require('./routes/gastos'));
+app.use('/api/costos-productos', require('./routes/costosProductos'));
+app.use('/api/pedidos', require('./routes/pedidos'));
 
 // Ruta de solicitudes de descuento
 try {
     const solicitudesPath = path.join(__dirname, './routes/solicitudesdescuento.js');
     if (fs.existsSync(solicitudesPath)) {
-        app.use('/solicitudes-descuento', require(solicitudesPath));
-        console.log('✅ Ruta cargada: /solicitudes-descuento');
+        app.use('/api/solicitudes-descuento', require(solicitudesPath));
+        console.log('✅ Ruta cargada: /api/solicitudes-descuento');
     } else {
         console.log('⚠️ Ruta no encontrada: ./routes/solicitudesdescuento.js');
-        app.use('/solicitudes-descuento', (req, res) => {
+        app.use('/api/solicitudes-descuento', (req, res) => {
             res.json({ message: 'Solicitudes de descuento - módulo en construcción' });
         });
     }
 } catch (error) {
-    console.log('⚠️ Error con /solicitudes-descuento:', error.message);
-    app.use('/solicitudes-descuento', (req, res) => {
+    console.log('⚠️ Error con /api/solicitudes-descuento:', error.message);
+    app.use('/api/solicitudes-descuento', (req, res) => {
         res.json({ message: 'Solicitudes de descuento - módulo en construcción' });
     });
 }
+
+// ============================================
+// RUTA DE PRUEBA
+// ============================================
+app.get('/api/test', (req, res) => {
+    res.json({ success: true, message: 'Backend funcionando' });
+});
 
 // ============================================
 // RUTA DE DIAGNÓSTICO
@@ -166,12 +173,7 @@ if (frontendPath) {
 // ============================================
 app.get('*', (req, res) => {
     // Excluir rutas de API y debug
-    const excludePaths = ['/auth', '/productos', '/ventas', '/inventario', '/clientes', 
-                          '/produccion', '/entregas', '/reportes', '/materiales', '/usuarios',
-                          '/creditos', '/operarios', '/recetas', '/sucursales', '/historial',
-                          '/dashboard', '/transferencias', '/cambios', '/nomina', '/empleados',
-                          '/cuentas-pagar', '/gastos', '/costos-productos', '/pedidos', '/uploads',
-                          '/solicitudes-descuento', '/api', '/debug'];
+    const excludePaths = ['/api', '/debug', '/uploads'];
     
     for (const excludePath of excludePaths) {
         if (req.path.startsWith(excludePath)) {
@@ -197,23 +199,6 @@ app.get('*', (req, res) => {
         error: 'Frontend no disponible',
         message: 'El frontend no se ha construido correctamente',
         path: req.path
-    });
-});
-
-// ============================================
-// RUTA DE PRUEBA
-// ============================================
-app.get('/api', (req, res) => {
-    res.json({
-        message: '🚀 AMAGO ERP Backend funcionando',
-        modulos: [
-            'auth', 'productos', 'ventas', 'inventario', 'clientes',
-            'produccion', 'entregas', 'reportes', 'materiales', 'usuarios',
-            'creditos', 'operarios', 'recetas', 'sucursales', 'historial',
-            'dashboard', 'transferencias', 'cambios', 'nomina', 'empleados',
-            'cuentas-pagar', 'gastos', 'costos-productos', 'pedidos',
-            'solicitudes-descuento'
-        ]
     });
 });
 

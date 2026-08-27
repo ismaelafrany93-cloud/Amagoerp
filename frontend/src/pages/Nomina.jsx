@@ -26,7 +26,7 @@ function Nomina() {
     fecha_contratacion: new Date().toISOString().split('T')[0]
   })
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+  const API_URL = 'https://amagoerp-backend.onrender.com'
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const sucursalId = usuario?.sucursal_id || 3
   const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario?.rol)

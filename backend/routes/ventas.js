@@ -3,11 +3,25 @@ const router = express.Router();
 const pool = require('../db');
 
 // ============================================
+// FUNCIÓN PARA GENERAR CÓDIGO
+// ============================================
+function generarCodigo() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let codigo = '';
+    for (let i = 0; i < 8; i++) {
+        codigo += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return 'AMG-' + codigo;
+}
+
+// ============================================
 // GET /ventas - Obtener todas las ventas
 // ============================================
 router.get('/', async (req, res) => {
     try {
         const { sucursal_id, limite } = req.query;
+        
+        console.log('📡 GET /ventas - Params:', { sucursal_id, limite });
         
         let query = `
             SELECT 
@@ -69,7 +83,57 @@ router.get('/', async (req, res) => {
         res.json(result.rows);
     } catch (error) {
         console.error('❌ Error en GET /ventas:', error.message);
-        res.status(200).json([]);
+        res.json([]);
+    }
+});
+
+// ============================================
+// GET /ventas/recientes - Obtener ventas recientes
+// ============================================
+router.get('/recientes', async (req, res) => {
+    try {
+        const { limit = 20 } = req.query;
+        
+        console.log('📡 GET /ventas/recientes - Limit:', limit);
+        
+        // Verificar si la tabla ventas existe
+        const tableCheck = await pool.query(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ventas')"
+        );
+        
+        if (!tableCheck.rows[0].exists) {
+            console.log('⚠️ Tabla ventas no existe');
+            return res.json([]);
+        }
+        
+        const query = `
+            SELECT 
+                v.id,
+                v.total,
+                v.cliente_nombre,
+                v.fecha,
+                v.created_at,
+                v.tipo_pago,
+                v.tipo_entrega,
+                v.estado,
+                v.codigo_entrega,
+                u.nombre as vendedor_nombre,
+                v.sucursal_id
+            FROM ventas v
+            LEFT JOIN usuarios u ON v.usuario_id = u.id
+            ORDER BY v.created_at DESC
+            LIMIT $1
+        `;
+        
+        const result = await pool.query(query, [parseInt(limit)]);
+        
+        console.log(`✅ Encontradas ${result.rows.length} ventas recientes`);
+        res.json(result.rows);
+        
+    } catch (error) {
+        console.error('❌ Error en GET /ventas/recientes:', error.message);
+        console.error('Stack:', error.stack);
+        res.json([]);
     }
 });
 
@@ -121,7 +185,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ============================================
-// POST /ventas - Crear venta (CON DESCUENTO EN MONTO Y SOLICITUDES)
+// POST /ventas - Crear venta (CON BLOQUEO DE SOLICITUD PENDIENTE)
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -148,7 +212,29 @@ router.post('/', async (req, res) => {
             solicitud_descuento_id
         } = req.body;
 
-        console.log('📝 Creando venta:', { cliente_nombre, total, tipo_pago, descuento_monto, solicitud_descuento_id });
+        console.log('📝 Creando venta:', { 
+            cliente_nombre, 
+            total, 
+            tipo_pago, 
+            descuento_monto: descuento_monto || 0,
+            descuento_aprobado: descuento_aprobado || false,
+            solicitud_descuento_id: solicitud_descuento_id || null
+        });
+
+        // 👇 VERIFICAR SI HAY UNA SOLICITUD PENDIENTE - BLOQUEO
+        if (solicitud_descuento_id && !descuento_aprobado) {
+            const solicitudCheck = await pool.query(
+                'SELECT estado FROM solicitudes_descuento WHERE id = $1',
+                [solicitud_descuento_id]
+            );
+            
+            if (solicitudCheck.rows.length > 0 && solicitudCheck.rows[0].estado === 'pendiente') {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Esta venta tiene una solicitud de descuento pendiente de aprobación. Espera la autorización del administrador.'
+                });
+            }
+        }
 
         const usuarioData = await pool.query(
             'SELECT sucursal_id, rol FROM usuarios WHERE id = $1',
@@ -190,7 +276,7 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // 👇 VALIDAR DESCUENTO EN MONTO
+        // Validar descuento
         let descuentoAplicado = 0;
         let autorizado = false;
         let descuentoPorcentaje = 0;
@@ -199,7 +285,6 @@ router.post('/', async (req, res) => {
         if (montoDescuento > 0) {
             // Si hay una solicitud de descuento aprobada
             if (solicitud_descuento_id && descuento_aprobado) {
-                // Verificar que la solicitud existe y está aprobada
                 const solicitudCheck = await pool.query(
                     'SELECT estado, monto_aprobado FROM solicitudes_descuento WHERE id = $1',
                     [solicitud_descuento_id]
@@ -236,7 +321,6 @@ router.post('/', async (req, res) => {
                 }
             }
 
-            // Calcular porcentaje para compatibilidad
             if (autorizado && total > 0) {
                 descuentoPorcentaje = (descuentoAplicado / (parseFloat(total) + parseFloat(costo_envio || 0))) * 100;
             }
@@ -323,7 +407,7 @@ router.post('/', async (req, res) => {
                 [ventaId, item.id, item.cantidad || 1, item.precio]
             );
 
-            // Descontar stock (solo si es contado y retiro en tienda)
+            // Descontar stock
             if (tipo_venta === 'contado' && tipo_entrega === 'retiro') {
                 await pool.query(
                     `UPDATE producto_inventario 
@@ -902,17 +986,5 @@ router.delete('/:id', async (req, res) => {
         client.release();
     }
 });
-
-// ============================================
-// FUNCIÓN PARA GENERAR CÓDIGO
-// ============================================
-function generarCodigo() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let codigo = '';
-    for (let i = 0; i < 8; i++) {
-        codigo += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return 'AMG-' + codigo;
-}
 
 module.exports = router;

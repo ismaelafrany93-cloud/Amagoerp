@@ -167,6 +167,51 @@ router.get('/pendientes', async (req, res) => {
 });
 
 // ============================================
+// GET /solicitudes-descuento/contador - Contador de pendientes
+// ============================================
+router.get('/contador', async (req, res) => {
+    try {
+        const { sucursal_id } = req.query;
+        
+        console.log('📡 GET /solicitudes-descuento/contador - Sucursal:', sucursal_id);
+        
+        const tableCheck = await pool.query(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'solicitudes_descuento')"
+        );
+        
+        if (!tableCheck.rows[0].exists) {
+            console.log('⚠️ Tabla solicitudes_descuento no existe');
+            return res.json({ pendientes: 0 });
+        }
+        
+        let query = `
+            SELECT COUNT(*) as pendientes
+            FROM solicitudes_descuento s
+            LEFT JOIN ventas v ON s.venta_id = v.id
+            WHERE s.estado = 'pendiente'
+        `;
+        let params = [];
+        let paramCount = 1;
+        
+        if (sucursal_id) {
+            query += ` AND v.sucursal_id = $${paramCount}`;
+            params.push(parseInt(sucursal_id));
+            paramCount++;
+        }
+        
+        const result = await pool.query(query, params);
+        const pendientes = parseInt(result.rows[0]?.pendientes || 0);
+        console.log(`✅ Pendientes: ${pendientes}`);
+        
+        res.json({ pendientes });
+        
+    } catch (error) {
+        console.error('❌ Error en GET /solicitudes-descuento/contador:', error);
+        res.json({ pendientes: 0 });
+    }
+});
+
+// ============================================
 // GET /solicitudes-descuento/:id - Obtener una solicitud
 // ============================================
 router.get('/:id', async (req, res) => {

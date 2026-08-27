@@ -7,30 +7,19 @@ const pool = require('../db');
 // ============================================
 router.get('/', async (req, res) => {
     try {
+        const { estado, sucursal_id } = req.query;
+        
+        console.log('📡 GET /solicitudes-descuento - Estado:', estado, 'Sucursal:', sucursal_id);
+        
         // Verificar si la tabla existe
         const tableCheck = await pool.query(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'solicitudes_descuento')"
         );
         
-        const tableExists = tableCheck.rows[0].exists;
-        
-        if (!tableExists) {
-            // Si no existe la tabla, devolver datos de prueba
-            return res.json([
-                {
-                    id: 1,
-                    codigo_autorizacion: 'DESC-TEST-001',
-                    cliente_nombre: 'Cliente de prueba',
-                    solicitante_nombre: 'Vendedor Test',
-                    monto_solicitado: 500.00,
-                    venta_total: 5000.00,
-                    fecha_solicitud: new Date().toISOString(),
-                    estado: 'pendiente'
-                }
-            ]);
+        if (!tableCheck.rows[0].exists) {
+            console.log('⚠️ Tabla solicitudes_descuento no existe');
+            return res.json([]);
         }
-        
-        const { estado, sucursal_id } = req.query;
         
         let query = `
             SELECT 
@@ -63,12 +52,16 @@ router.get('/', async (req, res) => {
         
         query += ` ORDER BY s.fecha_solicitud DESC`;
         
+        console.log('📝 Query:', query);
+        console.log('📊 Params:', params);
+        
         const result = await pool.query(query, params);
+        console.log(`✅ Encontradas ${result.rows.length} solicitudes`);
+        
         res.json(result.rows);
         
     } catch (error) {
         console.error('❌ Error en GET /solicitudes-descuento:', error);
-        // Si hay error, devolver array vacío
         res.json([]);
     }
 });
@@ -78,19 +71,19 @@ router.get('/', async (req, res) => {
 // ============================================
 router.get('/contador', async (req, res) => {
     try {
+        const { sucursal_id } = req.query;
+        
+        console.log('📡 GET /solicitudes-descuento/contador - Sucursal:', sucursal_id);
+        
         // Verificar si la tabla existe
         const tableCheck = await pool.query(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'solicitudes_descuento')"
         );
         
-        const tableExists = tableCheck.rows[0].exists;
-        
-        if (!tableExists) {
-            // Si no existe la tabla, devolver 0
+        if (!tableCheck.rows[0].exists) {
+            console.log('⚠️ Tabla solicitudes_descuento no existe');
             return res.json({ pendientes: 0 });
         }
-        
-        const { sucursal_id } = req.query;
         
         let query = `
             SELECT COUNT(*) as pendientes
@@ -108,7 +101,10 @@ router.get('/contador', async (req, res) => {
         }
         
         const result = await pool.query(query, params);
-        res.json({ pendientes: parseInt(result.rows[0]?.pendientes || 0) });
+        const pendientes = parseInt(result.rows[0]?.pendientes || 0);
+        console.log(`✅ Pendientes: ${pendientes}`);
+        
+        res.json({ pendientes });
         
     } catch (error) {
         console.error('❌ Error en GET /solicitudes-descuento/contador:', error);
@@ -121,17 +117,18 @@ router.get('/contador', async (req, res) => {
 // ============================================
 router.get('/pendientes', async (req, res) => {
     try {
+        const { sucursal_id } = req.query;
+        
+        console.log('📡 GET /solicitudes-descuento/pendientes - Sucursal:', sucursal_id);
+        
         const tableCheck = await pool.query(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'solicitudes_descuento')"
         );
         
-        const tableExists = tableCheck.rows[0].exists;
-        
-        if (!tableExists) {
+        if (!tableCheck.rows[0].exists) {
+            console.log('⚠️ Tabla solicitudes_descuento no existe');
             return res.json([]);
         }
-        
-        const { sucursal_id } = req.query;
         
         let query = `
             SELECT 
@@ -156,7 +153,12 @@ router.get('/pendientes', async (req, res) => {
         
         query += ` ORDER BY s.fecha_solicitud ASC`;
         
+        console.log('📝 Query:', query);
+        console.log('📊 Params:', params);
+        
         const result = await pool.query(query, params);
+        console.log(`✅ Encontradas ${result.rows.length} solicitudes pendientes`);
+        
         res.json(result.rows);
         
     } catch (error) {
@@ -172,13 +174,14 @@ router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         
+        console.log('📡 GET /solicitudes-descuento/:id - ID:', id);
+        
         const tableCheck = await pool.query(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'solicitudes_descuento')"
         );
         
-        const tableExists = tableCheck.rows[0].exists;
-        
-        if (!tableExists) {
+        if (!tableCheck.rows[0].exists) {
+            console.log('⚠️ Tabla solicitudes_descuento no existe');
             return res.json({
                 success: true,
                 solicitud: {
@@ -235,24 +238,33 @@ router.post('/', async (req, res) => {
             usuario_solicitante
         } = req.body;
         
+        console.log('📡 POST /solicitudes-descuento - Venta:', venta_id, 'Monto:', monto_solicitado);
+        
         // Verificar si la tabla existe
         const tableCheck = await pool.query(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'solicitudes_descuento')"
         );
         
-        const tableExists = tableCheck.rows[0].exists;
-        
-        if (!tableExists) {
-            // Si no existe la tabla, simular creación
-            return res.json({
-                success: true,
-                message: '✅ Solicitud de descuento enviada correctamente (modo prueba)',
-                codigo: 'DESC-TEST-' + Date.now().toString().slice(-6),
-                solicitud: {
-                    id: Math.floor(Math.random() * 1000),
-                    estado: 'pendiente'
-                }
-            });
+        if (!tableCheck.rows[0].exists) {
+            console.log('⚠️ Tabla solicitudes_descuento no existe, creándola...');
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS solicitudes_descuento (
+                    id SERIAL PRIMARY KEY,
+                    venta_id INTEGER,
+                    usuario_solicitante INTEGER,
+                    usuario_autorizador INTEGER,
+                    monto_solicitado DECIMAL(12,2) NOT NULL,
+                    monto_aprobado DECIMAL(12,2),
+                    motivo TEXT,
+                    estado VARCHAR(20) DEFAULT 'pendiente',
+                    fecha_solicitud TIMESTAMP DEFAULT NOW(),
+                    fecha_respuesta TIMESTAMP,
+                    codigo_autorizacion VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            `);
+            console.log('✅ Tabla creada');
         }
         
         if (!venta_id || !monto_solicitado || !usuario_solicitante) {
@@ -307,6 +319,8 @@ router.post('/', async (req, res) => {
             [result.rows[0].id, parseInt(venta_id)]
         );
         
+        console.log('✅ Solicitud creada:', result.rows[0]);
+        
         res.json({
             success: true,
             message: '✅ Solicitud de descuento enviada correctamente',
@@ -332,13 +346,14 @@ router.put('/:id', async (req, res) => {
             monto_aprobado
         } = req.body;
         
+        console.log('📡 PUT /solicitudes-descuento/:id - ID:', id, 'Estado:', estado);
+        
         const tableCheck = await pool.query(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'solicitudes_descuento')"
         );
         
-        const tableExists = tableCheck.rows[0].exists;
-        
-        if (!tableExists) {
+        if (!tableCheck.rows[0].exists) {
+            console.log('⚠️ Tabla solicitudes_descuento no existe');
             return res.json({
                 success: true,
                 message: estado === 'aprobado' ? '✅ Descuento aprobado (modo prueba)' : '❌ Descuento rechazado (modo prueba)'
@@ -408,6 +423,8 @@ router.put('/:id', async (req, res) => {
                 [parseFloat(montoFinal), solicitud.codigo_autorizacion, solicitud.venta_id]
             );
         }
+        
+        console.log('✅ Solicitud actualizada:', result.rows[0]);
         
         res.json({
             success: true,

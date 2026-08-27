@@ -168,23 +168,31 @@ function POS() {
 
   const cargarVentasRecientes = async () => {
     try {
-      const response = await fetch(`${API_URL}/ventas?limite=10`)
-      const data = await response.json()
-      setVentasRecientes(Array.isArray(data) ? data.slice(0, 10) : [])
+      const url = usuario.sucursal_id 
+        ? `${API_URL}/ventas/recientes?sucursal_id=${usuario.sucursal_id}&limit=10`
+        : `${API_URL}/ventas/recientes?limit=10`;
+      const response = await fetch(url);
+      const data = await response.json();
+      setVentasRecientes(Array.isArray(data) ? data.slice(0, 10) : []);
     } catch (error) {
-      console.error('Error cargando ventas recientes:', error)
-      setVentasRecientes([])
+      console.error('Error cargando ventas recientes:', error);
+      setVentasRecientes([]);
     }
   }
 
   // ============================================
-  // FUNCIONES DE SOLICITUD DE DESCUENTO
+  // FUNCIONES DE SOLICITUD DE DESCUENTO - CORREGIDAS
   // ============================================
   const verificarSolicitudPendiente = async () => {
     const ventaPendiente = localStorage.getItem('venta_pendiente_aprobacion')
     if (ventaPendiente) {
-      const data = JSON.parse(ventaPendiente)
-      await verificarEstadoSolicitud(data.solicitudId, data.ventaId)
+      try {
+        const data = JSON.parse(ventaPendiente)
+        await verificarEstadoSolicitud(data.solicitudId, data.ventaId)
+      } catch (error) {
+        console.error('Error al verificar solicitud pendiente:', error)
+        localStorage.removeItem('venta_pendiente_aprobacion')
+      }
     }
   }
 
@@ -249,6 +257,7 @@ function POS() {
     }
   }
 
+  // CORREGIDO: solicitarDescuento - Guarda correctamente la solicitud
   const solicitarDescuento = async () => {
     if (!cliente.nombre.trim()) {
       alert('⚠️ Primero ingresa el nombre del cliente')
@@ -264,93 +273,105 @@ function POS() {
     }
     
     try {
-      const datosVenta = {
-        usuario_id: usuario.id,
-        sucursal_id: usuario.sucursal_id || null,
-        carrito: carrito.map(item => ({
-          id: item.id,
-          precio: item.precio_unitario || item.precio,
-          cantidad: item.cantidad
-        })),
-        total: subtotal,
-        tipo_pago: tipoPago === 'credito' ? 'Crédito' : 'Efectivo',
-        tipo_venta: tipoPago === 'credito' ? 'credito' : 'contado',
-        tipo_entrega: tipoEntrega === 'domicilio' ? 'domicilio' : 'retiro',
-        cliente_nombre: cliente.nombre,
-        cliente_telefono: cliente.telefono,
-        cliente_direccion: cliente.direccion,
-        cliente_referencia: cliente.referencia,
-        detalles: cliente.detalles,
-        costo_envio: parseFloat(costoEnvio) || 0,
-        costo_instalacion: parseFloat(costoInstalacion) || 0,
-        descuento_monto: 0,
-        descuento_aprobado: false,
-        cliente_es_mayorista: cliente.es_mayorista || false,
-        estado: 'pendiente_aprobacion'
-      }
-
-      const response = await fetch(`${API_URL}/ventas`, {
+      setCargando(true)
+      
+      // Crear la solicitud de descuento directamente
+      const solicitudResponse = await fetch(`${API_URL}/solicitudes-descuento`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(datosVenta)
+        body: JSON.stringify({
+          venta_id: null, // Se actualizará después de crear la venta
+          usuario_solicitante: usuario.id,
+          monto_solicitado: descuentoMonto,
+          motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`,
+          sucursal_id: usuario.sucursal_id || null
+        })
+      })
+
+      const solicitudData = await solicitudResponse.json()
+
+      if (solicitudData.success) {
+        setSolicitudDescuento({
+          monto: descuentoMonto,
+          motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`,
+          estado: 'pendiente',
+          codigo: solicitudData.solicitud.codigo || '',
+          id: solicitudData.solicitud.id,
+          venta_id: null
+        })
+        setSolicitudActiva(true)
+        setMostrarSolicitud(false)
+        
+        // Guardar en localStorage para recuperar después
+        localStorage.setItem('venta_pendiente_aprobacion', JSON.stringify({
+          ventaId: null,
+          solicitudId: solicitudData.solicitud.id
+        }))
+        
+        alert(`✅ Solicitud de descuento enviada\n⏳ Espera la aprobación del administrador\n📋 ID: ${solicitudData.solicitud.id}`)
+      } else {
+        alert('❌ Error al solicitar descuento: ' + (solicitudData.error || 'Desconocido'))
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('❌ Error al solicitar descuento')
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  // CORREGIDO: cancelarSolicitud - Elimina la solicitud correctamente
+  const cancelarSolicitud = async () => {
+    if (!solicitudDescuento.id) {
+      alert('⚠️ No hay solicitud activa para cancelar')
+      return
+    }
+    
+    if (!window.confirm('¿Cancelar la solicitud de descuento?')) return
+    
+    try {
+      setCargando(true)
+      
+      const response = await fetch(`${API_URL}/solicitudes-descuento/${solicitudDescuento.id}`, {
+        method: 'DELETE'
       })
 
       const data = await response.json()
 
       if (data.success) {
-        const solicitudResponse = await fetch(`${API_URL}/solicitudes-descuento`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            venta_id: data.ventaId,
-            monto_solicitado: descuentoMonto,
-            motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`,
-            usuario_solicitante: usuario.id
-          })
+        setDescuentoMonto(0)
+        setSolicitudDescuento({ 
+          monto: 0, 
+          motivo: '', 
+          estado: 'ninguna', 
+          codigo: '', 
+          id: null, 
+          venta_id: null 
         })
-
-        const solicitudData = await solicitudResponse.json()
-
-        if (solicitudData.success) {
-          setSolicitudDescuento({
-            monto: descuentoMonto,
-            motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`,
-            estado: 'pendiente',
-            codigo: solicitudData.codigo,
-            id: solicitudData.solicitud.id,
-            venta_id: data.ventaId
-          })
-          setSolicitudActiva(true)
-          setVentaId(data.ventaId)
-          setMostrarSolicitud(false)
-          
-          localStorage.setItem('venta_pendiente_aprobacion', JSON.stringify({
-            ventaId: data.ventaId,
-            solicitudId: solicitudData.solicitud.id
-          }))
-          
-          alert(`✅ Solicitud de descuento enviada\n📋 Código: ${solicitudData.codigo}\n⏳ Espera la aprobación del administrador`)
-        }
+        setSolicitudActiva(false)
+        setMostrarSolicitud(false)
+        localStorage.removeItem('venta_pendiente_aprobacion')
+        alert('✅ Solicitud cancelada exitosamente')
+      } else {
+        alert('❌ Error al cancelar: ' + (data.error || 'Desconocido'))
       }
     } catch (error) {
       console.error('Error:', error)
-      alert('❌ Error al solicitar descuento')
+      alert('❌ Error al cancelar la solicitud')
+    } finally {
+      setCargando(false)
     }
   }
 
-  const cancelarSolicitud = () => {
-    if (window.confirm('¿Cancelar la solicitud de descuento?')) {
-      setDescuentoMonto(0)
-      setSolicitudDescuento({ monto: 0, motivo: '', estado: 'ninguna', codigo: '', id: null, venta_id: null })
-      setSolicitudActiva(false)
-      setMostrarSolicitud(false)
-      localStorage.removeItem('venta_pendiente_aprobacion')
-    }
-  }
-
+  // CORREGIDO: aplicarDescuentoDirecto - Solo para admins
   const aplicarDescuentoDirecto = () => {
     if (descuentoMonto <= 0) {
       alert('⚠️ Ingresa un monto de descuento válido')
+      return
+    }
+    
+    if (descuentoMonto > subtotal) {
+      alert('⚠️ El descuento no puede ser mayor al subtotal')
       return
     }
     
@@ -363,6 +384,7 @@ function POS() {
       venta_id: null
     })
     setSolicitudActiva(true)
+    setMostrarSolicitud(false)
     
     alert(`✅ Descuento de RD$ ${descuentoMonto.toFixed(2)} aplicado directamente`)
   }
@@ -685,6 +707,9 @@ function POS() {
     }
   }
 
+  // ============================================
+  // FUNCIÓN COBRAR - CORREGIDA CON BLOQUEO
+  // ============================================
   const cobrar = async () => {
     if (!cliente.nombre.trim()) {
       alert('⚠️ Por favor ingresa el nombre del cliente')
@@ -695,9 +720,15 @@ function POS() {
       return
     }
     
-    // Solo verificar si hay una solicitud activa en pendiente
+    // 👇 BLOQUEAR COBRO SI HAY SOLICITUD PENDIENTE
     if (solicitudActiva && solicitudDescuento.estado === 'pendiente') {
-      alert('⏳ Esta venta tiene una solicitud de descuento pendiente de aprobación')
+      alert('⏳ Esta venta tiene una solicitud de descuento pendiente de aprobación.\n\nEspera a que el administrador la apruebe o cancela la solicitud.')
+      return
+    }
+
+    // 👇 VERIFICAR QUE EL DESCUENTO ESTÉ APROBADO SI HAY SOLICITUD
+    if (solicitudActiva && solicitudDescuento.estado !== 'aprobado' && descuentoMonto > 0) {
+      alert('⏳ El descuento no ha sido aprobado. Espera la autorización del administrador.')
       return
     }
 
@@ -736,6 +767,8 @@ function POS() {
         solicitud_descuento_id: solicitudDescuento.id || null
       }
 
+      console.log('📝 Enviando venta:', datosVenta)
+
       const response = await fetch(`${API_URL}/ventas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -772,8 +805,8 @@ function POS() {
         alert('❌ Error: ' + (data.error || data.message || 'No se pudo guardar'))
       }
     } catch (error) {
-      console.error(error)
-      alert('❌ Error guardando venta')
+      console.error('❌ Error en cobrar:', error)
+      alert('❌ Error guardando venta: ' + error.message)
     } finally {
       setCargando(false)
     }
@@ -1170,9 +1203,10 @@ function POS() {
         )}
         
         {/* BOTONES DE ACCIÓN */}
-        {mostrarSolicitud && solicitudDescuento.estado === 'pendiente' && !esAdmin && (
+        {mostrarSolicitud && solicitudDescuento.estado !== 'pendiente' && !esAdmin && (
           <button
             onClick={solicitarDescuento}
+            disabled={cargando}
             style={{
               marginTop: '10px',
               padding: '10px 20px',
@@ -1180,17 +1214,18 @@ function POS() {
               color: 'white',
               border: 'none',
               borderRadius: '8px',
-              cursor: 'pointer',
+              cursor: cargando ? 'not-allowed' : 'pointer',
               width: '100%',
               fontSize: '0.95rem',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              opacity: cargando ? 0.6 : 1
             }}
           >
-            📨 Solicitar Aprobación
+            {cargando ? '⏳ Enviando...' : '📨 Solicitar Aprobación'}
           </button>
         )}
         
-        {esAdmin && descuentoMonto > 0 && (
+        {esAdmin && descuentoMonto > 0 && solicitudDescuento.estado !== 'aprobado' && (
           <button
             onClick={aplicarDescuentoDirecto}
             style={{
@@ -1429,7 +1464,8 @@ function POS() {
                   onClick={cobrar}
                   disabled={cargando || carrito.length === 0 || (solicitudActiva && solicitudDescuento.estado === 'pendiente')}
                   style={{
-                    backgroundColor: (solicitudActiva && solicitudDescuento.estado === 'pendiente') ? '#FF9800' : '#4CAF50',
+                    backgroundColor: (solicitudActiva && solicitudDescuento.estado === 'pendiente') ? '#FF9800' : 
+                                    (solicitudActiva && solicitudDescuento.estado === 'aprobado') ? '#4CAF50' : '#4CAF50',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
@@ -1442,9 +1478,11 @@ function POS() {
                 >
                   {(solicitudActiva && solicitudDescuento.estado === 'pendiente') 
                     ? '⏳ Esperando aprobación...' 
-                    : cargando 
-                      ? 'Procesando...' 
-                      : '💳 Cobrar'}
+                    : (solicitudActiva && solicitudDescuento.estado === 'aprobado')
+                      ? '✅ Descuento aprobado - Cobrar'
+                      : cargando 
+                        ? 'Procesando...' 
+                        : '💳 Cobrar'}
                 </button>
               </div>
             </>

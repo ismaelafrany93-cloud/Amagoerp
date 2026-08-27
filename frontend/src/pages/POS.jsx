@@ -257,68 +257,71 @@ function POS() {
     }
   }
 
-  // CORREGIDO: solicitarDescuento - Guarda correctamente la solicitud
-  const solicitarDescuento = async () => {
-    if (!cliente.nombre.trim()) {
-      alert('⚠️ Primero ingresa el nombre del cliente')
-      return
+const solicitarDescuento = async () => {
+    if (!cliente.nombre || !cliente.nombre.trim()) {
+        alert('⚠️ Primero ingresa el nombre del cliente')
+        return
     }
     if (descuentoMonto <= 0) {
-      alert('⚠️ Ingresa un monto de descuento válido')
-      return
+        alert('⚠️ Ingresa un monto de descuento válido')
+        return
     }
-    if (carrito.length === 0) {
-      alert('⚠️ El carrito está vacío')
-      return
+    if (!carrito || carrito.length === 0) {
+        alert('⚠️ El carrito está vacío')
+        return
     }
     
     try {
-      setCargando(true)
-      
-      // Crear la solicitud de descuento directamente
-      const solicitudResponse = await fetch(`${API_URL}/solicitudes-descuento`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          venta_id: null, // Se actualizará después de crear la venta
-          usuario_solicitante: usuario.id,
-          monto_solicitado: descuentoMonto,
-          motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`,
-          sucursal_id: usuario.sucursal_id || null
-        })
-      })
-
-      const solicitudData = await solicitudResponse.json()
-
-      if (solicitudData.success) {
-        setSolicitudDescuento({
-          monto: descuentoMonto,
-          motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`,
-          estado: 'pendiente',
-          codigo: solicitudData.solicitud.codigo || '',
-          id: solicitudData.solicitud.id,
-          venta_id: null
-        })
-        setSolicitudActiva(true)
-        setMostrarSolicitud(false)
+        setCargando(true)
         
-        // Guardar en localStorage para recuperar después
-        localStorage.setItem('venta_pendiente_aprobacion', JSON.stringify({
-          ventaId: null,
-          solicitudId: solicitudData.solicitud.id
-        }))
+        console.log('📡 Enviando solicitud de descuento:', {
+            usuario_solicitante: usuario?.id || 1,
+            monto_solicitado: descuentoMonto,
+            motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`
+        })
         
-        alert(`✅ Solicitud de descuento enviada\n⏳ Espera la aprobación del administrador\n📋 ID: ${solicitudData.solicitud.id}`)
-      } else {
-        alert('❌ Error al solicitar descuento: ' + (solicitudData.error || 'Desconocido'))
-      }
+        const solicitudResponse = await fetch(`${API_URL}/solicitudes-descuento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                venta_id: null,  // ✅ Ahora el backend acepta null
+                usuario_solicitante: usuario?.id || 1,
+                monto_solicitado: descuentoMonto,
+                motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`
+            })
+        })
+
+        const solicitudData = await solicitudResponse.json()
+        console.log('📊 Respuesta del servidor:', solicitudData)
+
+        if (solicitudData.success) {
+            setSolicitudDescuento({
+                monto: descuentoMonto,
+                motivo: `Descuento de RD$ ${descuentoMonto.toFixed(2)} para cliente: ${cliente.nombre}`,
+                estado: 'pendiente',
+                codigo: solicitudData.codigo || '',
+                id: solicitudData.solicitud.id,
+                venta_id: null
+            })
+            setSolicitudActiva(true)
+            setMostrarSolicitud(false)
+            
+            localStorage.setItem('venta_pendiente_aprobacion', JSON.stringify({
+                ventaId: null,
+                solicitudId: solicitudData.solicitud.id
+            }))
+            
+            alert(`✅ Solicitud de descuento enviada\n📋 ID: ${solicitudData.solicitud.id}\n⏳ Espera la aprobación del administrador`)
+        } else {
+            alert('❌ Error al solicitar descuento: ' + (solicitudData.error || 'Desconocido'))
+        }
     } catch (error) {
-      console.error('Error:', error)
-      alert('❌ Error al solicitar descuento')
+        console.error('Error en solicitarDescuento:', error)
+        alert('❌ Error al solicitar descuento: ' + error.message)
     } finally {
-      setCargando(false)
+        setCargando(false)
     }
-  }
+}
 
   // CORREGIDO: cancelarSolicitud - Elimina la solicitud correctamente
   const cancelarSolicitud = async () => {

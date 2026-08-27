@@ -75,7 +75,6 @@ router.get('/contador', async (req, res) => {
         
         console.log('📡 GET /solicitudes-descuento/contador - Sucursal:', sucursal_id);
         
-        // Verificar si la tabla existe
         const tableCheck = await pool.query(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'solicitudes_descuento')"
         );
@@ -227,7 +226,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ============================================
-// POST /solicitudes-descuento - Crear solicitud de descuento
+// POST /solicitudes-descuento - Crear solicitud de descuento (CORREGIDO)
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -238,7 +237,26 @@ router.post('/', async (req, res) => {
             usuario_solicitante
         } = req.body;
         
-        console.log('📡 POST /solicitudes-descuento - Venta:', venta_id, 'Monto:', monto_solicitado);
+        console.log('📡 POST /solicitudes-descuento - Datos:', { 
+            venta_id, 
+            monto_solicitado, 
+            usuario_solicitante 
+        });
+        
+        // Validar campos requeridos
+        if (!monto_solicitado || monto_solicitado <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Monto solicitado es requerido y debe ser mayor a 0'
+            });
+        }
+        
+        if (!usuario_solicitante) {
+            return res.status(400).json({
+                success: false,
+                error: 'Usuario solicitante es requerido'
+            });
+        }
         
         // Verificar si la tabla existe
         const tableCheck = await pool.query(
@@ -267,36 +285,34 @@ router.post('/', async (req, res) => {
             console.log('✅ Tabla creada');
         }
         
-        if (!venta_id || !monto_solicitado || !usuario_solicitante) {
-            return res.status(400).json({
-                success: false,
-                error: 'Venta, monto y usuario solicitante son requeridos'
-            });
-        }
-        
-        const ventaCheck = await pool.query(
-            'SELECT id, total, cliente_nombre FROM ventas WHERE id = $1',
-            [parseInt(venta_id)]
-        );
-        
-        if (ventaCheck.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Venta no encontrada'
-            });
-        }
-        
-        const venta = ventaCheck.rows[0];
-        
-        if (parseFloat(monto_solicitado) > parseFloat(venta.total)) {
-            return res.status(400).json({
-                success: false,
-                error: 'El descuento no puede ser mayor al total de la venta'
-            });
+        // Si hay venta_id, verificar que existe (opcional)
+        let ventaTotal = 0;
+        if (venta_id) {
+            const ventaCheck = await pool.query(
+                'SELECT id, total, cliente_nombre FROM ventas WHERE id = $1',
+                [parseInt(venta_id)]
+            );
+            
+            if (ventaCheck.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Venta no encontrada'
+                });
+            }
+            
+            ventaTotal = parseFloat(ventaCheck.rows[0].total);
+            
+            if (parseFloat(monto_solicitado) > ventaTotal) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'El descuento no puede ser mayor al total de la venta'
+                });
+            }
         }
         
         const codigo = `DESC-${Date.now().toString().slice(-8)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
         
+        // Insertar solicitud (venta_id puede ser null)
         const result = await pool.query(
             `INSERT INTO solicitudes_descuento (
                 venta_id,
@@ -304,20 +320,24 @@ router.post('/', async (req, res) => {
                 monto_solicitado,
                 motivo,
                 codigo_autorizacion,
-                estado
-            ) VALUES ($1, $2, $3, $4, $5, 'pendiente')
+                estado,
+                fecha_solicitud
+            ) VALUES ($1, $2, $3, $4, $5, 'pendiente', NOW())
             RETURNING *`,
-            [parseInt(venta_id), parseInt(usuario_solicitante), parseFloat(monto_solicitado), motivo || '', codigo]
+            [venta_id || null, parseInt(usuario_solicitante), parseFloat(monto_solicitado), motivo || '', codigo]
         );
         
-        await pool.query(
-            `UPDATE ventas 
-             SET solicitud_descuento_id = $1,
-                 descuento_monto = 0,
-                 descuento_aprobado = false
-             WHERE id = $2`,
-            [result.rows[0].id, parseInt(venta_id)]
-        );
+        // Si hay venta_id, actualizar la venta
+        if (venta_id) {
+            await pool.query(
+                `UPDATE ventas 
+                 SET solicitud_descuento_id = $1,
+                     descuento_monto = 0,
+                     descuento_aprobado = false
+                 WHERE id = $2`,
+                [result.rows[0].id, parseInt(venta_id)]
+            );
+        }
         
         console.log('✅ Solicitud creada:', result.rows[0]);
         
@@ -330,7 +350,10 @@ router.post('/', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Error en POST /solicitudes-descuento:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
     }
 });
 
@@ -354,9 +377,9 @@ router.put('/:id', async (req, res) => {
         
         if (!tableCheck.rows[0].exists) {
             console.log('⚠️ Tabla solicitudes_descuento no existe');
-            return res.json({
-                success: true,
-                message: estado === 'aprobado' ? '✅ Descuento aprobado (modo prueba)' : '❌ Descuento rechazado (modo prueba)'
+            return res.status(404).json({
+                success: false,
+                error: 'Tabla solicitudes_descuento no existe'
             });
         }
         
@@ -409,7 +432,8 @@ router.put('/:id', async (req, res) => {
             [estado, parseInt(usuario_autorizador), parseFloat(montoFinal), parseInt(id)]
         );
         
-        if (estado === 'aprobado') {
+        // Si la solicitud tiene venta_id y fue aprobada, actualizar la venta
+        if (estado === 'aprobado' && solicitud.venta_id) {
             await pool.query(
                 `UPDATE ventas 
                  SET descuento_monto = $1,
@@ -433,8 +457,64 @@ router.put('/:id', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Error en PUT /solicitudes-descuento:', error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en PUT /solicitudes-descuento/:id:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// ============================================
+// DELETE /solicitudes-descuento/:id - Cancelar solicitud
+// ============================================
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log('📡 DELETE /solicitudes-descuento/:id - ID:', id);
+        
+        const tableCheck = await pool.query(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'solicitudes_descuento')"
+        );
+        
+        if (!tableCheck.rows[0].exists) {
+            return res.status(404).json({
+                success: false,
+                error: 'Tabla solicitudes_descuento no existe'
+            });
+        }
+        
+        const solicitudCheck = await pool.query(
+            'SELECT * FROM solicitudes_descuento WHERE id = $1 AND estado = $2',
+            [parseInt(id), 'pendiente']
+        );
+        
+        if (solicitudCheck.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Solicitud no encontrada o ya fue procesada'
+            });
+        }
+        
+        await pool.query(
+            'DELETE FROM solicitudes_descuento WHERE id = $1',
+            [parseInt(id)]
+        );
+        
+        console.log('✅ Solicitud eliminada:', id);
+        
+        res.json({
+            success: true,
+            message: '✅ Solicitud cancelada exitosamente'
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en DELETE /solicitudes-descuento/:id:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
     }
 });
 

@@ -6,12 +6,11 @@ const SolicitudesDescuento = ({ usuario }) => {
     const [pendientes, setPendientes] = useState([]);
     const [cargando, setCargando] = useState(false);
     const [error, setError] = useState('');
-    const [filtro, setFiltro] = useState('pendientes'); // 'pendientes', 'todas', 'aprobadas', 'rechazadas'
+    const [filtro, setFiltro] = useState('pendientes');
     const [sucursalId, setSucursalId] = useState(usuario?.sucursal_id || null);
 
     useEffect(() => {
         cargarSolicitudes();
-        // Recargar cada 30 segundos
         const interval = setInterval(cargarSolicitudes, 30000);
         return () => clearInterval(interval);
     }, [filtro, sucursalId]);
@@ -51,60 +50,80 @@ const SolicitudesDescuento = ({ usuario }) => {
         }
     };
 
-    const aprobarSolicitud = async (id, montoAprobado) => {
-        if (!window.confirm('¿Aprobar esta solicitud de descuento?')) return;
-        
+    // ============================================
+    // APROBAR SOLICITUD - CORREGIDO
+    // ============================================
+    const aprobarSolicitud = async (solicitud) => {
+        if (!solicitud || !solicitud.id) {
+            console.error('❌ Error: solicitud sin ID', solicitud);
+            alert('Error: La solicitud no tiene ID');
+            return;
+        }
+
+        const monto = prompt('Monto a aprobar:', solicitud.monto_solicitado || 0);
+        if (monto === null) return;
+
         try {
             setCargando(true);
-            const response = await fetch(`${API_URL}/solicitudes-descuento/${id}`, {
+            const response = await fetch(`${API_URL}/solicitudes-descuento/${solicitud.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     estado: 'aprobado',
-                    usuario_autorizador: usuario.id,
-                    monto_aprobado: montoAprobado,
-                    codigo_autorizacion: `AUT-${Date.now().toString().slice(-6)}`
+                    usuario_autorizador: usuario?.id || 1,
+                    monto_aprobado: parseFloat(monto)
                 })
             });
-            
+
             const data = await response.json();
+
             if (data.success) {
                 alert('✅ Solicitud aprobada');
                 cargarSolicitudes();
             } else {
-                alert('❌ Error: ' + data.error);
+                alert('❌ Error: ' + (data.error || 'Desconocido'));
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error al aprobar:', error);
             alert('❌ Error al aprobar solicitud');
         } finally {
             setCargando(false);
         }
     };
 
-    const rechazarSolicitud = async (id) => {
+    // ============================================
+    // RECHAZAR SOLICITUD - CORREGIDO
+    // ============================================
+    const rechazarSolicitud = async (solicitud) => {
+        if (!solicitud || !solicitud.id) {
+            console.error('❌ Error: solicitud sin ID', solicitud);
+            alert('Error: La solicitud no tiene ID');
+            return;
+        }
+
         if (!window.confirm('¿Rechazar esta solicitud de descuento?')) return;
-        
+
         try {
             setCargando(true);
-            const response = await fetch(`${API_URL}/solicitudes-descuento/${id}`, {
+            const response = await fetch(`${API_URL}/solicitudes-descuento/${solicitud.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     estado: 'rechazado',
-                    usuario_autorizador: usuario.id
+                    usuario_autorizador: usuario?.id || 1
                 })
             });
-            
+
             const data = await response.json();
+
             if (data.success) {
                 alert('❌ Solicitud rechazada');
                 cargarSolicitudes();
             } else {
-                alert('❌ Error: ' + data.error);
+                alert('❌ Error: ' + (data.error || 'Desconocido'));
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error al rechazar:', error);
             alert('❌ Error al rechazar solicitud');
         } finally {
             setCargando(false);
@@ -289,7 +308,7 @@ const SolicitudesDescuento = ({ usuario }) => {
                         </thead>
                         <tbody>
                             {solicitudesMostrar.map((solicitud, index) => (
-                                <tr key={solicitud.id} style={{
+                                <tr key={solicitud.id || index} style={{
                                     backgroundColor: index % 2 === 0 ? '#fafafa' : 'white',
                                     borderBottom: '1px solid #eee'
                                 }}>
@@ -335,12 +354,7 @@ const SolicitudesDescuento = ({ usuario }) => {
                                         {solicitud.estado === 'pendiente' && (
                                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
                                                 <button
-                                                    onClick={() => {
-                                                        const monto = prompt('Monto a aprobar:', solicitud.monto_solicitado);
-                                                        if (monto) {
-                                                            aprobarSolicitud(solicitud.id, parseFloat(monto));
-                                                        }
-                                                    }}
+                                                    onClick={() => aprobarSolicitud(solicitud)}
                                                     style={{
                                                         padding: '6px 14px',
                                                         backgroundColor: '#4CAF50',
@@ -354,7 +368,7 @@ const SolicitudesDescuento = ({ usuario }) => {
                                                     ✅ Aprobar
                                                 </button>
                                                 <button
-                                                    onClick={() => rechazarSolicitud(solicitud.id)}
+                                                    onClick={() => rechazarSolicitud(solicitud)}
                                                     style={{
                                                         padding: '6px 14px',
                                                         backgroundColor: '#f44336',

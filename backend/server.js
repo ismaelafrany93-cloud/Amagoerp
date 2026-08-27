@@ -80,6 +80,34 @@ try {
 }
 
 // ============================================
+// RUTAS SIN /api - PARA COMPATIBILIDAD CON EL FRONTEND
+// ============================================
+app.use('/solicitudes-descuento', require('./routes/solicitudesdescuento'));
+app.use('/ventas', require('./routes/ventas'));
+app.use('/entregas', require('./routes/entregas'));
+app.use('/historial', require('./routes/historial'));
+app.use('/productos', require('./routes/productos'));
+app.use('/clientes', require('./routes/clientes'));
+app.use('/inventario', require('./routes/inventario'));
+app.use('/produccion', require('./routes/produccion'));
+app.use('/reportes', require('./routes/reportes'));
+app.use('/materiales', require('./routes/materiales'));
+app.use('/usuarios', require('./routes/usuarios'));
+app.use('/creditos', require('./routes/creditos'));
+app.use('/operarios', require('./routes/operarios'));
+app.use('/recetas', require('./routes/recetas'));
+app.use('/sucursales', require('./routes/sucursales'));
+app.use('/dashboard', require('./routes/dashboard'));
+app.use('/transferencias', require('./routes/transferencias'));
+app.use('/cambios', require('./routes/cambios'));
+app.use('/nomina', require('./routes/nomina'));
+app.use('/empleados', require('./routes/empleados'));
+app.use('/cuentas-pagar', require('./routes/cuentasPagar'));
+app.use('/gastos', require('./routes/gastos'));
+app.use('/costos-productos', require('./routes/costosProductos'));
+app.use('/pedidos', require('./routes/pedidos'));
+
+// ============================================
 // RUTA DE PRUEBA
 // ============================================
 app.get('/api/test', (req, res) => {
@@ -173,7 +201,7 @@ if (frontendPath) {
 // ============================================
 app.get('*', (req, res) => {
     // Excluir rutas de API y debug
-    const excludePaths = ['/api', '/debug', '/uploads'];
+    const excludePaths = ['/api', '/debug', '/uploads', '/solicitudes-descuento', '/ventas', '/entregas', '/historial'];
     
     for (const excludePath of excludePaths) {
         if (req.path.startsWith(excludePath)) {

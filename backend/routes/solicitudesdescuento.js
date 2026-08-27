@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
         
         if (sucursal_id) {
             query += ` AND v.sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
+            params.push(parseInt(sucursal_id));
             paramCount++;
         }
         
@@ -50,42 +50,33 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// GET /solicitudes-descuento/:id - Obtener una solicitud
+// GET /solicitudes-descuento/contador - Contador de pendientes
 // ============================================
-router.get('/:id', async (req, res) => {
+router.get('/contador', async (req, res) => {
     try {
-        const { id } = req.params;
+        const { sucursal_id } = req.query;
         
-        const result = await pool.query(
-            `SELECT 
-                s.*,
-                u_solicitante.nombre as solicitante_nombre,
-                u_autorizador.nombre as autorizador_nombre,
-                v.total as venta_total,
-                v.cliente_nombre
+        let query = `
+            SELECT COUNT(*) as pendientes
             FROM solicitudes_descuento s
-            LEFT JOIN usuarios u_solicitante ON s.usuario_solicitante = u_solicitante.id
-            LEFT JOIN usuarios u_autorizador ON s.usuario_autorizador = u_autorizador.id
             LEFT JOIN ventas v ON s.venta_id = v.id
-            WHERE s.id = $1`,
-            [id]
-        );
+            WHERE s.estado = 'pendiente'
+        `;
+        let params = [];
+        let paramCount = 1;
         
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Solicitud no encontrada'
-            });
+        if (sucursal_id) {
+            query += ` AND v.sucursal_id = $${paramCount}`;
+            params.push(parseInt(sucursal_id));
+            paramCount++;
         }
         
-        res.json({
-            success: true,
-            solicitud: result.rows[0]
-        });
+        const result = await pool.query(query, params);
+        res.json({ pendientes: parseInt(result.rows[0]?.pendientes || 0) });
         
     } catch (error) {
-        console.error('❌ Error en GET /solicitudes-descuento/:id:', error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Error en GET /solicitudes-descuento/contador:', error);
+        res.json({ pendientes: 0 });
     }
 });
 
@@ -113,7 +104,7 @@ router.get('/pendientes', async (req, res) => {
         
         if (sucursal_id) {
             query += ` AND v.sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
+            params.push(parseInt(sucursal_id));
             paramCount++;
         }
         
@@ -124,6 +115,46 @@ router.get('/pendientes', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Error en GET /solicitudes-descuento/pendientes:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// GET /solicitudes-descuento/:id - Obtener una solicitud
+// ============================================
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const result = await pool.query(
+            `SELECT 
+                s.*,
+                u_solicitante.nombre as solicitante_nombre,
+                u_autorizador.nombre as autorizador_nombre,
+                v.total as venta_total,
+                v.cliente_nombre
+            FROM solicitudes_descuento s
+            LEFT JOIN usuarios u_solicitante ON s.usuario_solicitante = u_solicitante.id
+            LEFT JOIN usuarios u_autorizador ON s.usuario_autorizador = u_autorizador.id
+            LEFT JOIN ventas v ON s.venta_id = v.id
+            WHERE s.id = $1`,
+            [parseInt(id)]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Solicitud no encontrada'
+            });
+        }
+        
+        res.json({
+            success: true,
+            solicitud: result.rows[0]
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en GET /solicitudes-descuento/:id:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -149,7 +180,7 @@ router.post('/', async (req, res) => {
         
         const ventaCheck = await pool.query(
             'SELECT id, total, cliente_nombre FROM ventas WHERE id = $1',
-            [venta_id]
+            [parseInt(venta_id)]
         );
         
         if (ventaCheck.rows.length === 0) {
@@ -180,7 +211,7 @@ router.post('/', async (req, res) => {
                 estado
             ) VALUES ($1, $2, $3, $4, $5, 'pendiente')
             RETURNING *`,
-            [venta_id, usuario_solicitante, monto_solicitado, motivo || '', codigo]
+            [parseInt(venta_id), parseInt(usuario_solicitante), parseFloat(monto_solicitado), motivo || '', codigo]
         );
         
         await pool.query(
@@ -189,7 +220,7 @@ router.post('/', async (req, res) => {
                  descuento_monto = 0,
                  descuento_aprobado = false
              WHERE id = $2`,
-            [result.rows[0].id, venta_id]
+            [result.rows[0].id, parseInt(venta_id)]
         );
         
         res.json({
@@ -233,7 +264,7 @@ router.put('/:id', async (req, res) => {
         
         const solicitudCheck = await pool.query(
             'SELECT * FROM solicitudes_descuento WHERE id = $1',
-            [id]
+            [parseInt(id)]
         );
         
         if (solicitudCheck.rows.length === 0) {
@@ -263,7 +294,7 @@ router.put('/:id', async (req, res) => {
                  updated_at = NOW()
              WHERE id = $4
              RETURNING *`,
-            [estado, usuario_autorizador, montoFinal, id]
+            [estado, parseInt(usuario_autorizador), parseFloat(montoFinal), parseInt(id)]
         );
         
         if (estado === 'aprobado') {
@@ -277,7 +308,7 @@ router.put('/:id', async (req, res) => {
                      END,
                      codigo_autorizacion = $2
                  WHERE id = $3`,
-                [montoFinal, solicitud.codigo_autorizacion, solicitud.venta_id]
+                [parseFloat(montoFinal), solicitud.codigo_autorizacion, solicitud.venta_id]
             );
         }
         
@@ -289,37 +320,6 @@ router.put('/:id', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Error en PUT /solicitudes-descuento:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// ============================================
-// GET /solicitudes-descuento/contador - Contador de pendientes
-// ============================================
-router.get('/contador', async (req, res) => {
-    try {
-        const { sucursal_id } = req.query;
-        
-        let query = `
-            SELECT COUNT(*) as pendientes
-            FROM solicitudes_descuento s
-            LEFT JOIN ventas v ON s.venta_id = v.id
-            WHERE s.estado = 'pendiente'
-        `;
-        let params = [];
-        let paramCount = 1;
-        
-        if (sucursal_id) {
-            query += ` AND v.sucursal_id = $${paramCount}`;
-            params.push(sucursal_id);
-            paramCount++;
-        }
-        
-        const result = await pool.query(query, params);
-        res.json({ pendientes: parseInt(result.rows[0]?.pendientes || 0) });
-        
-    } catch (error) {
-        console.error('❌ Error en GET /solicitudes-descuento/contador:', error);
         res.status(500).json({ error: error.message });
     }
 });

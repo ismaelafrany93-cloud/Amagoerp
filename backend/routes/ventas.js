@@ -7,7 +7,7 @@ const pool = require('../db');
 // ============================================
 router.get('/', async (req, res) => {
     try {
-        const { sucursal_id } = req.query;
+        const { sucursal_id, limite } = req.query;
         
         let query = `
             SELECT 
@@ -28,6 +28,8 @@ router.get('/', async (req, res) => {
                 v.detalles,
                 v.costo_envio,
                 v.descuento,
+                v.descuento_monto,
+                v.descuento_aprobado,
                 v.codigo_autorizacion,
                 v.autorizado,
                 v.cliente_es_mayorista,
@@ -36,6 +38,7 @@ router.get('/', async (req, res) => {
                 v.fecha_cancelacion,
                 v.cancelado_por,
                 v.motivo_cancelacion,
+                v.solicitud_descuento_id,
                 c.nombre as cliente,
                 u.nombre as vendedor,
                 s.nombre as sucursal_nombre
@@ -56,6 +59,12 @@ router.get('/', async (req, res) => {
 
         query += ` ORDER BY v.id DESC`;
 
+        if (limite) {
+            query += ` LIMIT $${paramIndex}`;
+            params.push(limite);
+            paramIndex++;
+        }
+
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error) {
@@ -65,7 +74,54 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// POST /ventas - Crear venta
+// GET /ventas/:id - Obtener venta por ID
+// ============================================
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const ventaResult = await pool.query(
+            `SELECT 
+                v.*,
+                u.nombre as vendedor_nombre,
+                s.nombre as sucursal_nombre
+            FROM ventas v
+            LEFT JOIN usuarios u ON v.usuario_id = u.id
+            LEFT JOIN sucursales s ON v.sucursal_id = s.id
+            WHERE v.id = $1`,
+            [id]
+        );
+
+        if (ventaResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Venta no encontrada'
+            });
+        }
+
+        const detallesResult = await pool.query(
+            `SELECT 
+                dv.*,
+                p.nombre as producto_nombre
+            FROM detalle_ventas dv
+            JOIN productos p ON dv.producto_id = p.id
+            WHERE dv.venta_id = $1`,
+            [id]
+        );
+
+        res.json({
+            success: true,
+            venta: ventaResult.rows[0],
+            detalles: detallesResult.rows
+        });
+    } catch (error) {
+        console.error('❌ Error en GET /ventas/:id:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// POST /ventas - Crear venta (CON DESCUENTO EN MONTO Y SOLICITUDES)
 // ============================================
 router.post('/', async (req, res) => {
     try {
@@ -84,9 +140,15 @@ router.post('/', async (req, res) => {
             detalles,
             costo_envio,
             descuento,
+            descuento_monto,
+            descuento_aprobado,
             codigo_autorizacion,
-            cliente_es_mayorista
+            cliente_es_mayorista,
+            estado,
+            solicitud_descuento_id
         } = req.body;
+
+        console.log('📝 Creando venta:', { cliente_nombre, total, tipo_pago, descuento_monto, solicitud_descuento_id });
 
         const usuarioData = await pool.query(
             'SELECT sucursal_id, rol FROM usuarios WHERE id = $1',
@@ -101,6 +163,7 @@ router.post('/', async (req, res) => {
         }
 
         const usuario = usuarioData.rows[0];
+        const esAdmin = ['dueno', 'dueño', 'subgerente', 'admin'].includes(usuario.rol);
 
         let clienteId = cliente_id;
 
@@ -127,21 +190,45 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // VERIFICAR AUTORIZACIÓN PARA DESCUENTO
+        // 👇 VALIDAR DESCUENTO EN MONTO
+        let descuentoAplicado = 0;
         let autorizado = false;
-        let descuentoAplicado = parseFloat(descuento) || 0;
+        let descuentoPorcentaje = 0;
+        const montoDescuento = parseFloat(descuento_monto) || 0;
 
-        if (descuentoAplicado > 0) {
-            const rolesPermitidos = ['dueno', 'dueño', 'subgerente', 'admin'];
-            if (rolesPermitidos.includes(usuario.rol)) {
+        if (montoDescuento > 0) {
+            // Si hay una solicitud de descuento aprobada
+            if (solicitud_descuento_id && descuento_aprobado) {
+                // Verificar que la solicitud existe y está aprobada
+                const solicitudCheck = await pool.query(
+                    'SELECT estado, monto_aprobado FROM solicitudes_descuento WHERE id = $1',
+                    [solicitud_descuento_id]
+                );
+                
+                if (solicitudCheck.rows.length > 0 && solicitudCheck.rows[0].estado === 'aprobado') {
+                    autorizado = true;
+                    descuentoAplicado = parseFloat(solicitudCheck.rows[0].monto_aprobado) || montoDescuento;
+                } else {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'La solicitud de descuento no está aprobada'
+                    });
+                }
+            } 
+            // Si es admin, puede aplicar descuento directo
+            else if (esAdmin) {
                 autorizado = true;
-            } else if (codigo_autorizacion) {
+                descuentoAplicado = montoDescuento;
+            } 
+            // Si hay código de autorización válido
+            else if (codigo_autorizacion) {
                 const codigoValido = await pool.query(
                     'SELECT * FROM codigos_autorizacion WHERE codigo = $1 AND activo = true AND usado = false AND fecha_expiracion > NOW()',
                     [codigo_autorizacion]
                 );
                 if (codigoValido.rows.length > 0) {
                     autorizado = true;
+                    descuentoAplicado = montoDescuento;
                     await pool.query(
                         'UPDATE codigos_autorizacion SET usado = true WHERE codigo = $1',
                         [codigo_autorizacion]
@@ -149,11 +236,9 @@ router.post('/', async (req, res) => {
                 }
             }
 
-            if (!autorizado) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Descuento requiere autorización. Contacta al dueño o subgerente.'
-                });
+            // Calcular porcentaje para compatibilidad
+            if (autorizado && total > 0) {
+                descuentoPorcentaje = (descuentoAplicado / (parseFloat(total) + parseFloat(costo_envio || 0))) * 100;
             }
         }
 
@@ -172,7 +257,7 @@ router.post('/', async (req, res) => {
 
         const estadoEntrega = (tipo_venta === 'credito' || tipo_entrega === 'domicilio') ? 'pendiente' : 'retirado';
         const costoEnvioFinal = parseFloat(costo_envio) || 0;
-        const totalFinal = parseFloat(total) + costoEnvioFinal - (parseFloat(total) * (descuentoAplicado / 100));
+        const totalFinal = (parseFloat(total) + costoEnvioFinal) - descuentoAplicado;
 
         const ventaResult = await pool.query(
             `INSERT INTO ventas (
@@ -192,11 +277,14 @@ router.post('/', async (req, res) => {
                 detalles,
                 costo_envio, 
                 descuento, 
+                descuento_monto,
+                descuento_aprobado,
                 codigo_autorizacion, 
                 autorizado,
                 cliente_es_mayorista,
-                estado
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'completada')
+                estado,
+                solicitud_descuento_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
             RETURNING *`,
             [
                 usuario_id, 
@@ -214,25 +302,29 @@ router.post('/', async (req, res) => {
                 estadoEntrega, 
                 detalles,
                 costoEnvioFinal, 
-                descuentoAplicado, 
+                descuentoPorcentaje || 0,
+                descuentoAplicado || 0,
+                descuento_aprobado || false,
                 codigo_autorizacion || null, 
-                autorizado,
-                cliente_es_mayorista || false
+                autorizado || false,
+                cliente_es_mayorista || false,
+                estado || 'completada',
+                solicitud_descuento_id || null
             ]
         );
 
         const ventaId = ventaResult.rows[0].id;
 
+        // Insertar detalles de la venta
         for (const item of carrito) {
             await pool.query(
                 `INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, precio)
                  VALUES ($1, $2, $3, $4)`,
                 [ventaId, item.id, item.cantidad || 1, item.precio]
             );
-        }
 
-        if (tipo_venta === 'contado' && tipo_entrega === 'retiro') {
-            for (const item of carrito) {
+            // Descontar stock (solo si es contado y retiro en tienda)
+            if (tipo_venta === 'contado' && tipo_entrega === 'retiro') {
                 await pool.query(
                     `UPDATE producto_inventario 
                      SET stock = stock - $1 
@@ -242,6 +334,7 @@ router.post('/', async (req, res) => {
             }
         }
 
+        // Si es crédito, crear la cuenta de crédito
         if (tipo_venta === 'credito') {
             await pool.query(
                 `INSERT INTO cuentas_por_cobrar (
@@ -258,6 +351,7 @@ router.post('/', async (req, res) => {
             );
         }
 
+        // Si es domicilio, crear la entrega
         if (tipo_entrega === 'domicilio') {
             await pool.query(
                 `INSERT INTO entregas (venta_id, direccion, estado, codigo, fecha_salida)
@@ -266,13 +360,28 @@ router.post('/', async (req, res) => {
             );
         }
 
+        // 👇 ACTUALIZAR SOLICITUD DE DESCUENTO SI EXISTE
+        if (solicitud_descuento_id && descuento_aprobado && autorizado) {
+            await pool.query(
+                `UPDATE solicitudes_descuento 
+                 SET estado = 'aprobado',
+                     monto_aprobado = $1,
+                     fecha_respuesta = NOW()
+                 WHERE id = $2`,
+                [descuentoAplicado, solicitud_descuento_id]
+            );
+        }
+
+        console.log(`✅ Venta #${ventaId} creada exitosamente`);
+
         res.json({
             success: true,
-            ventaId,
+            ventaId: ventaId,
             clienteId,
             codigo: codigo,
-            descuento_aplicado: descuentoAplicado,
-            autorizado,
+            descuento_aplicado: descuentoPorcentaje,
+            descuento_monto_aplicado: descuentoAplicado,
+            autorizado: autorizado,
             total: totalFinal
         });
 
@@ -333,7 +442,7 @@ router.get('/codigo/:codigo', async (req, res) => {
 });
 
 // ============================================
-// GET /ventas/:id/reimprimir - Obtener datos para reimprimir (CON DETECCIÓN DE SABANA)
+// GET /ventas/:id/reimprimir - Obtener datos para reimprimir
 // ============================================
 router.get('/:id/reimprimir', async (req, res) => {
     try {
@@ -370,7 +479,6 @@ router.get('/:id/reimprimir', async (req, res) => {
             [id]
         );
 
-        // 👇 BUSCAR LA SUCURSAL CORRECTA
         const sucursalResult = await pool.query(
             `SELECT id, nombre, direccion, telefono FROM sucursales WHERE id = $1`,
             [venta.sucursal_id || 3]
@@ -383,7 +491,6 @@ router.get('/:id/reimprimir', async (req, res) => {
             telefono: '' 
         };
 
-        // 👇 DETECTAR SI ES SABANA
         const esSabana = sucursal.id === 2 || 
                          (sucursal.nombre && sucursal.nombre.toLowerCase().includes('sabana'));
 

@@ -33,7 +33,7 @@ for (const carpeta of carpetas) {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================================
-// 👇 RUTAS DE LA API - DEBEN IR ANTES DE EXPRESS.STATIC Y DEL MANEJADOR DE * 
+// RUTAS DE LA API
 // ============================================
 app.use('/auth', require('./routes/auth'));
 app.use('/productos', require('./routes/productos'));
@@ -60,14 +60,14 @@ app.use('/gastos', require('./routes/gastos'));
 app.use('/costos-productos', require('./routes/costosProductos'));
 app.use('/pedidos', require('./routes/pedidos'));
 
-// 👇 RUTA DE SOLICITUDES DE DESCUENTO - CON VERIFICACIÓN
+// 👇 RUTA DE SOLICITUDES DE DESCUENTO - USANDO EL NOMBRE CORRECTO (MINÚSCULAS)
 try {
-    const solicitudesPath = path.join(__dirname, './routes/solicitudesDescuento.js');
+    const solicitudesPath = path.join(__dirname, './routes/solicitudesdescuento.js');
     if (fs.existsSync(solicitudesPath)) {
         app.use('/solicitudes-descuento', require(solicitudesPath));
         console.log('✅ Ruta cargada: /solicitudes-descuento');
     } else {
-        console.log('⚠️ Ruta no encontrada: ./routes/solicitudesDescuento.js');
+        console.log('⚠️ Ruta no encontrada: ./routes/solicitudesdescuento.js');
         // Ruta de respaldo
         app.use('/solicitudes-descuento', (req, res) => {
             res.json({ message: 'Solicitudes de descuento - módulo en construcción' });
@@ -81,7 +81,7 @@ try {
 }
 
 // ============================================
-// 👇 SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND) - DESPUÉS DE LAS API
+// SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND)
 // ============================================
 const posiblesPaths = [
     path.join(__dirname, '..', 'frontend', 'dist'),
@@ -108,7 +108,7 @@ if (frontendPath) {
 }
 
 // ============================================
-// 👇 MANEJADOR DE RUTAS DE REACT - DEBE IR AL FINAL
+// MANEJADOR DE RUTAS DE REACT - VA AL FINAL
 // ============================================
 app.get('*', (req, res) => {
     // Si es un asset (js, css, etc.), no hacer nada
@@ -124,7 +124,6 @@ app.get('*', (req, res) => {
         }
     }
     
-    // Si es una ruta de API no encontrada
     res.status(404).json({ 
         error: 'Ruta no encontrada',
         path: req.path
@@ -137,12 +136,14 @@ app.get('*', (req, res) => {
 app.get('/api', (req, res) => {
     res.json({
         message: '🚀 AMAGO ERP Backend funcionando',
-        modulos: ['auth', 'productos', 'ventas', 'inventario', 'clientes', 
-                  'produccion', 'entregas', 'reportes', 'materiales', 'usuarios',
-                  'creditos', 'operarios', 'recetas', 'sucursales', 'historial',
-                  'dashboard', 'transferencias', 'cambios', 'nomina', 'empleados',
-                  'cuentas-pagar', 'gastos', 'costos-productos', 'pedidos',
-                  'solicitudes-descuento']
+        modulos: [
+            'auth', 'productos', 'ventas', 'inventario', 'clientes',
+            'produccion', 'entregas', 'reportes', 'materiales', 'usuarios',
+            'creditos', 'operarios', 'recetas', 'sucursales', 'historial',
+            'dashboard', 'transferencias', 'cambios', 'nomina', 'empleados',
+            'cuentas-pagar', 'gastos', 'costos-productos', 'pedidos',
+            'solicitudes-descuento'
+        ]
     });
 });
 

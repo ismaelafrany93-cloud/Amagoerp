@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 
 function Sidebar() {
@@ -31,6 +31,29 @@ function Sidebar() {
   const esSupervisor = rol === 'supervisor'
 
   const esVendedorPrincipal = esVendedor && (esSucursalPrincipal || sucursalId === null)
+
+  // 👇 VERIFICAR SI HAY SOLICITUDES PENDIENTES
+  const [solicitudesPendientes, setSolicitudesPendientes] = useState(0)
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+  
+  useEffect(() => {
+    const verificarSolicitudes = async () => {
+      if (esSubgerente) {
+        try {
+          const response = await fetch(`${API_URL}/solicitudes-descuento/contador?sucursal_id=${sucursalId || 3}`)
+          const data = await response.json()
+          setSolicitudesPendientes(data.pendientes || 0)
+        } catch (error) {
+          console.error('Error verificando solicitudes:', error)
+        }
+      }
+    }
+    verificarSolicitudes()
+    
+    // Verificar cada 30 segundos
+    const interval = setInterval(verificarSolicitudes, 30000)
+    return () => clearInterval(interval)
+  }, [esSubgerente, sucursalId])
 
   const cerrarSesion = () => {
     if (window.confirm('¿Estás seguro de que quieres cerrar sesión?')) {
@@ -236,6 +259,45 @@ function Sidebar() {
             >
               <span>🛒</span>
               {!colapsado && <span>Ventas</span>}
+            </Link>
+
+            {/* 👇 SOLICITUDES DE DESCUENTO - CON CONTADOR */}
+            <Link 
+              to="/solicitudes-descuento" 
+              onClick={handleLinkClick}
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none', 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                justifyContent: colapsado ? 'center' : 'flex-start',
+                backgroundColor: location.pathname === '/solicitudes-descuento' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                fontSize: colapsado ? '1.2rem' : '0.9rem',
+                position: 'relative'
+              }}
+              title={colapsado ? 'Solicitudes' : ''}
+            >
+              <span>📋</span>
+              {!colapsado && <span>Solicitudes Descuento</span>}
+              {solicitudesPendientes > 0 && (
+                <span style={{
+                  backgroundColor: '#ff5722',
+                  color: 'white',
+                  borderRadius: '50%',
+                  padding: '2px 8px',
+                  fontSize: '0.7rem',
+                  fontWeight: 'bold',
+                  marginLeft: '5px',
+                  animation: 'pulse 2s infinite'
+                }}>
+                  {solicitudesPendientes}
+                </span>
+              )}
             </Link>
             
             <Link 
@@ -656,7 +718,7 @@ function Sidebar() {
             )}
 
             {/* ========================================== */}
-            {/* 👇 NUEVOS MÓDULOS CONTABLES */}
+            {/* NUEVOS MÓDULOS CONTABLES */}
             {/* ========================================== */}
             <Link 
               to="/cuentas-pagar" 
@@ -1250,6 +1312,15 @@ function Sidebar() {
       >
         🚪 {!colapsado && <span>Cerrar sesión</span>}
       </button>
+
+      {/* 👇 ESTILO PARA EL CONTADOR */}
+      <style>{`
+        @keyframes pulse {
+          0% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.1); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
     </div>
   )
 }

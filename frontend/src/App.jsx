@@ -26,6 +26,8 @@ import CuentasPagar from './pages/CuentasPagar'
 import Gastos from './pages/Gastos'
 import CostosProductos from './pages/CostosProductos'
 import Pedidos from './pages/Pedidos'
+import SolicitudesDescuento from './pages/Pedidos'
+
 
 function App() {
   return (
@@ -61,8 +63,9 @@ function App() {
         <Route path="/cuentas-pagar" element={<ProtectedRoute><CuentasPagar /></ProtectedRoute>} />
         <Route path="/pedidos" element={<ProtectedRoute><Pedidos /></ProtectedRoute>} />
         <Route path="/gastos" element={<ProtectedRoute><Gastos /></ProtectedRoute>} />
+                <Route path="/solicitudesdescuento" element={<ProtectedRoute><SolicitudesDescuento /></ProtectedRoute>} />
         <Route path="/costos-productos" element={<ProtectedRoute><CostosProductos /></ProtectedRoute>} />
-      </Routes>
+              </Routes>
     </HashRouter>
   )
 }

@@ -13,6 +13,9 @@ function Cambios() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [filtroEstado, setFiltroEstado] = useState('')
   const [cambiosFiltrados, setCambiosFiltrados] = useState([])
+  const [productosSeleccionados, setProductosSeleccionados] = useState([])
+  const [costoEnvioManual, setCostoEnvioManual] = useState(0)
+  const [productoNuevoSeleccionado, setProductoNuevoSeleccionado] = useState(null)
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
@@ -79,7 +82,7 @@ function Cambios() {
   }
 
   // ============================================
-  // BUSCAR FACTURA - CORREGIDA
+  // BUSCAR FACTURA - MEJORADA
   // ============================================
   const buscarFactura = async () => {
     if (!facturaBusqueda.trim()) {
@@ -95,9 +98,8 @@ function Cambios() {
       const response = await fetch(url)
       console.log('📊 Status:', response.status)
       
-      // Si es 500, mostrar mensaje más amigable
       if (response.status === 500) {
-        alert('❌ Error en el servidor. El código de factura puede ser válido pero el sistema está fallando. Intenta con otro código o contacta al administrador.')
+        alert('❌ Error en el servidor. Intenta con otro código o contacta al administrador.')
         setVentaEncontrada(null)
         setDetallesVenta([])
         setCargando(false)
@@ -110,17 +112,19 @@ function Cambios() {
       if (data.success) {
         setVentaEncontrada(data.venta)
         setDetallesVenta(data.detalles || [])
+        setProductosSeleccionados([]) // Resetear selecciones
+        setProductoNuevoSeleccionado(null)
+        setCostoEnvioManual(0)
         setMostrarFormulario(true)
-        // ✅ CORREGIDO: Usar codigo_entrega en lugar de factura
+        
         const numeroFactura = data.venta.codigo_entrega || data.venta.id
-        setMensaje(`✅ Factura ${numeroFactura} encontrada`)
+        setMensaje(`✅ Factura ${numeroFactura} encontrada - ${data.detalles?.length || 0} productos`)
         
         setForm(prev => ({
           ...prev,
           cliente_nombre: data.venta.cliente_nombre || '',
           cliente_telefono: data.venta.cliente_telefono || '',
           venta_id: data.venta.id,
-          // ✅ CORREGIDO: Usar codigo_entrega en lugar de factura
           factura_original: data.venta.codigo_entrega || data.venta.id
         }))
       } else {
@@ -134,6 +138,114 @@ function Cambios() {
     } finally {
       setCargando(false)
     }
+  }
+
+  // ============================================
+  // SELECCIONAR PRODUCTO DEVUELTO
+  // ============================================
+  const toggleSeleccionProducto = (producto) => {
+    const existe = productosSeleccionados.find(p => p.producto_id === producto.producto_id)
+    if (existe) {
+      // Si ya está seleccionado, lo quitamos
+      setProductosSeleccionados(productosSeleccionados.filter(p => p.producto_id !== producto.producto_id))
+    } else {
+      // Si no está seleccionado, lo agregamos
+      setProductosSeleccionados([
+        ...productosSeleccionados,
+        {
+          producto_id: producto.producto_id,
+          producto_nombre: producto.producto_nombre,
+          cantidad: 1,
+          precio: producto.producto_precio || producto.precio || 0,
+          total: (producto.producto_precio || producto.precio || 0) * 1
+        }
+      ])
+    }
+  }
+
+  // ============================================
+  // ACTUALIZAR CANTIDAD DE PRODUCTO DEVUELTO
+  // ============================================
+  const actualizarCantidadDevuelto = (productoId, nuevaCantidad) => {
+    if (nuevaCantidad < 1) return
+    setProductosSeleccionados(productosSeleccionados.map(p => {
+      if (p.producto_id === productoId) {
+        return {
+          ...p,
+          cantidad: nuevaCantidad,
+          total: p.precio * nuevaCantidad
+        }
+      }
+      return p
+    }))
+  }
+
+  // ============================================
+  // ELIMINAR PRODUCTO DEVUELTO SELECCIONADO
+  // ============================================
+  const eliminarProductoDevuelto = (productoId) => {
+    setProductosSeleccionados(productosSeleccionados.filter(p => p.producto_id !== productoId))
+  }
+
+  // ============================================
+  // SELECCIONAR PRODUCTO NUEVO
+  // ============================================
+  const seleccionarProductoNuevo = (productoId) => {
+    const producto = productos.find(p => p.id === parseInt(productoId))
+    if (producto) {
+      setProductoNuevoSeleccionado({
+        id: producto.id,
+        nombre: producto.nombre,
+        precio: producto.precio || 0,
+        cantidad: 1
+      })
+      setForm(prev => ({
+        ...prev,
+        producto_nuevo_id: producto.id,
+        producto_nuevo_nombre: producto.nombre,
+        precio_nuevo: producto.precio || 0
+      }))
+    }
+  }
+
+  // ============================================
+  // ACTUALIZAR CANTIDAD DE PRODUCTO NUEVO
+  // ============================================
+  const actualizarCantidadNuevo = (nuevaCantidad) => {
+    if (nuevaCantidad < 1) return
+    setProductoNuevoSeleccionado({
+      ...productoNuevoSeleccionado,
+      cantidad: nuevaCantidad
+    })
+    setForm(prev => ({
+      ...prev,
+      cantidad_nueva: nuevaCantidad
+    }))
+  }
+
+  // ============================================
+  // CALCULAR TOTAL DEVUELTO
+  // ============================================
+  const calcularTotalDevuelto = () => {
+    return productosSeleccionados.reduce((total, p) => total + (p.precio * p.cantidad), 0)
+  }
+
+  // ============================================
+  // CALCULAR TOTAL NUEVO
+  // ============================================
+  const calcularTotalNuevo = () => {
+    if (!productoNuevoSeleccionado) return 0
+    return productoNuevoSeleccionado.precio * productoNuevoSeleccionado.cantidad
+  }
+
+  // ============================================
+  // CALCULAR DIFERENCIA
+  // ============================================
+  const calcularDiferencia = () => {
+    const totalDevuelto = calcularTotalDevuelto()
+    const totalNuevo = calcularTotalNuevo()
+    const envio = parseFloat(costoEnvioManual) || 0
+    return (totalNuevo + envio) - totalDevuelto
   }
 
   // ============================================
@@ -299,33 +411,15 @@ function Cambios() {
     }))
   }
 
-  const seleccionarProductoNuevo = (productoId) => {
-    const producto = productos.find(p => p.id === parseInt(productoId))
-    if (producto) {
-      setForm(prev => ({
-        ...prev,
-        producto_nuevo_id: producto.id,
-        producto_nuevo_nombre: producto.nombre,
-        precio_nuevo: producto.precio || 0
-      }))
-    }
-  }
-
-  const calcularDiferencia = () => {
-    const totalDevuelto = form.precio_devuelto * form.cantidad_devuelta
-    const totalNuevo = form.precio_nuevo * (form.cantidad_nueva || 1)
-    return totalNuevo - totalDevuelto
-  }
-
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!form.producto_devuelto_id) {
-      alert('⚠️ Selecciona el producto devuelto')
+    if (productosSeleccionados.length === 0) {
+      alert('⚠️ Selecciona al menos un producto devuelto')
       return
     }
 
-    if (form.tipo === 'cambio' && !form.producto_nuevo_id) {
+    if (form.tipo === 'cambio' && !productoNuevoSeleccionado) {
       alert('⚠️ Selecciona el producto nuevo para el cambio')
       return
     }
@@ -333,27 +427,29 @@ function Cambios() {
     const diferencia = calcularDiferencia()
     
     if (diferencia > 0) {
-      const confirmar = confirm(`⚠️ El nuevo producto cuesta RD$ ${diferencia.toFixed(2)} más. ¿El cliente pagará la diferencia?`)
+      const confirmar = confirm(`⚠️ El cliente debe pagar RD$ ${diferencia.toFixed(2)} por la diferencia. ¿Confirmar?`)
       if (!confirmar) return
     }
 
     setCargando(true)
     try {
+      const totalDevuelto = calcularTotalDevuelto()
+      const totalNuevo = calcularTotalNuevo()
+      const envio = parseFloat(costoEnvioManual) || 0
+
       const dataEnvio = {
         venta_id: form.venta_id,
         factura_original: form.factura_original,
         cliente_nombre: form.cliente_nombre,
         cliente_telefono: form.cliente_telefono,
-        producto_devuelto_id: form.producto_devuelto_id,
-        producto_devuelto_nombre: form.producto_devuelto_nombre,
-        cantidad_devuelta: form.cantidad_devuelta,
-        precio_devuelto: form.precio_devuelto,
-        producto_nuevo_id: form.producto_nuevo_id || null,
-        producto_nuevo_nombre: form.producto_nuevo_nombre || '',
-        cantidad_nueva: form.cantidad_nueva || 1,
-        precio_nuevo: form.precio_nuevo || 0,
-        total_devuelto: form.precio_devuelto * form.cantidad_devuelta,
-        total_nuevo: form.precio_nuevo * (form.cantidad_nueva || 1),
+        productos_devueltos: productosSeleccionados,
+        producto_nuevo_id: productoNuevoSeleccionado?.id || null,
+        producto_nuevo_nombre: productoNuevoSeleccionado?.nombre || '',
+        cantidad_nueva: productoNuevoSeleccionado?.cantidad || 1,
+        precio_nuevo: productoNuevoSeleccionado?.precio || 0,
+        total_devuelto: totalDevuelto,
+        total_nuevo: totalNuevo,
+        envio: envio,
         diferencia: diferencia,
         tipo: form.tipo,
         motivo: form.motivo,
@@ -374,6 +470,9 @@ function Cambios() {
         setMostrarFormulario(false)
         setVentaEncontrada(null)
         setDetallesVenta([])
+        setProductosSeleccionados([])
+        setProductoNuevoSeleccionado(null)
+        setCostoEnvioManual(0)
         setFacturaBusqueda('')
         cargarCambios()
         setForm({
@@ -520,26 +619,61 @@ function Cambios() {
 
             <div style={{ marginTop: '10px' }}>
               <h4>📋 Productos de la venta:</h4>
-              <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                {detallesVenta.map((d, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => seleccionarProductoDevuelto(d)}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      padding: '8px 12px',
-                      borderBottom: '1px solid #eee',
-                      cursor: 'pointer',
-                      backgroundColor: form.producto_devuelto_id === d.producto_id ? '#e3f2fd' : 'transparent'
-                    }}
-                  >
-                    <span>{d.producto_nombre}</span>
-                    <span>Cantidad: {d.cantidad} | RD$ {Number(d.producto_precio).toFixed(2)}</span>
-                    <span style={{ color: '#2196F3', fontSize: '0.8rem' }}>Seleccionar</span>
-                  </div>
-                ))}
+              <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                {detallesVenta.map((d, idx) => {
+                  const seleccionado = productosSeleccionados.find(p => p.producto_id === d.producto_id)
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => toggleSeleccionProducto(d)}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        borderBottom: '1px solid #eee',
+                        cursor: 'pointer',
+                        backgroundColor: seleccionado ? '#e3f2fd' : 'transparent',
+                        borderLeft: seleccionado ? '4px solid #2196F3' : '4px solid transparent'
+                      }}
+                    >
+                      <span>{d.producto_nombre}</span>
+                      <span>Cantidad: {d.cantidad} | RD$ {Number(d.producto_precio).toFixed(2)}</span>
+                      <span style={{ color: seleccionado ? '#2196F3' : '#999', fontSize: '0.8rem' }}>
+                        {seleccionado ? '✅ Seleccionado' : 'Seleccionar'}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
+              {productosSeleccionados.length > 0 && (
+                <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
+                  <strong>Productos seleccionados: {productosSeleccionados.length}</strong>
+                  {productosSeleccionados.map((p, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px' }}>
+                      <span>{p.producto_nombre}</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={p.cantidad}
+                        onChange={(e) => actualizarCantidadDevuelto(p.producto_id, parseInt(e.target.value) || 1)}
+                        style={{ width: '60px', padding: '4px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                      <span>RD$ {Number(p.precio).toFixed(2)} c/u</span>
+                      <span>Total: RD$ {Number(p.total).toFixed(2)}</span>
+                      <button
+                        onClick={() => eliminarProductoDevuelto(p.producto_id)}
+                        style={{ backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <div style={{ marginTop: '5px', fontWeight: 'bold', color: '#003b6f' }}>
+                    Total devuelto: RD$ {calcularTotalDevuelto().toFixed(2)}
+                  </div>
+                </div>
+              )}
             </div>
 
             <button
@@ -613,31 +747,13 @@ function Cambios() {
 
             <hr style={{ margin: '20px 0' }} />
 
-            <h4 style={{ color: '#f44336' }}>📦 Producto Devuelto</h4>
+            <h4 style={{ color: '#4CAF50' }}>🆕 Producto Nuevo (Cambio)</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
               <div>
-                <label style={{ fontWeight: 'bold' }}>Producto Devuelto *</label>
-                <input
-                  type="text"
-                  value={form.producto_devuelto_nombre}
-                  readOnly
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    border: '1px solid #ddd',
-                    borderRadius: '8px',
-                    marginTop: '5px',
-                    backgroundColor: '#f5f5f5'
-                  }}
-                />
-              </div>
-              <div>
-                <label style={{ fontWeight: 'bold' }}>Cantidad</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={form.cantidad_devuelta}
-                  onChange={(e) => setForm({ ...form, cantidad_devuelta: parseInt(e.target.value) || 1 })}
+                <label style={{ fontWeight: 'bold' }}>Producto Nuevo *</label>
+                <select
+                  value={form.producto_nuevo_id}
+                  onChange={(e) => seleccionarProductoNuevo(e.target.value)}
                   style={{
                     width: '100%',
                     padding: '10px',
@@ -645,59 +761,23 @@ function Cambios() {
                     borderRadius: '8px',
                     marginTop: '5px'
                   }}
-                />
+                  required={form.tipo === 'cambio'}
+                >
+                  <option value="">Seleccionar producto</option>
+                  {productos.map(p => (
+                    <option key={p.id} value={p.id}>{p.nombre} - RD$ {Number(p.precio).toFixed(2)}</option>
+                  ))}
+                </select>
               </div>
-              <div>
-                <label style={{ fontWeight: 'bold' }}>Precio Devuelto</label>
-                <input
-                  type="number"
-                  value={form.precio_devuelto}
-                  readOnly
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    border: '1px solid #ddd',
-                    borderRadius: '8px',
-                    marginTop: '5px',
-                    backgroundColor: '#f5f5f5'
-                  }}
-                />
-              </div>
-            </div>
-
-            {form.tipo === 'cambio' && (
-              <>
-                <hr style={{ margin: '20px 0' }} />
-
-                <h4 style={{ color: '#4CAF50' }}>🆕 Producto Nuevo (Cambio)</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
-                  <div>
-                    <label style={{ fontWeight: 'bold' }}>Producto Nuevo *</label>
-                    <select
-                      value={form.producto_nuevo_id}
-                      onChange={(e) => seleccionarProductoNuevo(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '10px',
-                        border: '1px solid #ddd',
-                        borderRadius: '8px',
-                        marginTop: '5px'
-                      }}
-                      required={form.tipo === 'cambio'}
-                    >
-                      <option value="">Seleccionar producto</option>
-                      {productos.map(p => (
-                        <option key={p.id} value={p.id}>{p.nombre} - RD$ {Number(p.precio).toFixed(2)}</option>
-                      ))}
-                    </select>
-                  </div>
+              {productoNuevoSeleccionado && (
+                <>
                   <div>
                     <label style={{ fontWeight: 'bold' }}>Cantidad</label>
                     <input
                       type="number"
                       min="1"
-                      value={form.cantidad_nueva}
-                      onChange={(e) => setForm({ ...form, cantidad_nueva: parseInt(e.target.value) || 1 })}
+                      value={productoNuevoSeleccionado.cantidad}
+                      onChange={(e) => actualizarCantidadNuevo(parseInt(e.target.value) || 1)}
                       style={{
                         width: '100%',
                         padding: '10px',
@@ -711,7 +791,7 @@ function Cambios() {
                     <label style={{ fontWeight: 'bold' }}>Precio Nuevo</label>
                     <input
                       type="number"
-                      value={form.precio_nuevo}
+                      value={productoNuevoSeleccionado.precio}
                       readOnly
                       style={{
                         width: '100%',
@@ -723,38 +803,81 @@ function Cambios() {
                       }}
                     />
                   </div>
-                </div>
+                </>
+              )}
+            </div>
 
-                {form.producto_nuevo_id && form.producto_devuelto_id && (
-                  <div style={{
-                    marginTop: '15px',
-                    padding: '15px',
-                    backgroundColor: '#f0f4f8',
-                    borderRadius: '8px',
-                    textAlign: 'center'
-                  }}>
-                    <h4>💰 Diferencia a Pagar</h4>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: calcularDiferencia() > 0 ? '#f44336' : '#4CAF50' }}>
-                      RD$ {calcularDiferencia().toFixed(2)}
-                      {calcularDiferencia() > 0 && ' (Cliente paga)'}
-                      {calcularDiferencia() < 0 && ' (Crédito a favor)'}
-                      {calcularDiferencia() === 0 && ' (Mismo valor)'}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+            <hr style={{ margin: '20px 0' }} />
 
-            <div style={{ marginTop: '20px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+            <h4 style={{ color: '#003b6f' }}>🚚 Costo de Envío</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
+              <div>
+                <label style={{ fontWeight: 'bold' }}>Costo Envío (RD$)</label>
                 <input
-                  type="checkbox"
-                  checked={form.envio_opcional}
-                  onChange={(e) => setForm({ ...form, envio_opcional: e.target.checked })}
-                  style={{ width: '18px', height: '18px' }}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={costoEnvioManual}
+                  onChange={(e) => setCostoEnvioManual(parseFloat(e.target.value) || 0)}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '8px',
+                    marginTop: '5px'
+                  }}
+                  placeholder="0.00"
                 />
-                <span style={{ fontWeight: 'bold' }}>🚚 El cliente pagó envío</span>
-              </label>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', paddingTop: '5px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.envio_opcional}
+                    onChange={(e) => setForm({ ...form, envio_opcional: e.target.checked })}
+                    style={{ width: '18px', height: '18px' }}
+                  />
+                  <span>🚚 El cliente pagó envío</span>
+                </label>
+              </div>
+            </div>
+
+            <hr style={{ margin: '20px 0' }} />
+
+            {/* RESUMEN DEL CAMBIO */}
+            <div style={{
+              padding: '15px',
+              backgroundColor: '#f0f4f8',
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <h4>💰 Resumen del Cambio</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '10px' }}>
+                <div>
+                  <p style={{ margin: '5px 0', color: '#f44336' }}>
+                    <strong>Total Devuelto:</strong>
+                    <br />RD$ {calcularTotalDevuelto().toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '5px 0', color: '#4CAF50' }}>
+                    <strong>Total Nuevo:</strong>
+                    <br />RD$ {calcularTotalNuevo().toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '5px 0', color: '#003b6f' }}>
+                    <strong>Envío:</strong>
+                    <br />RD$ {Number(costoEnvioManual).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: calcularDiferencia() > 0 ? '#f44336' : '#4CAF50', marginTop: '15px' }}>
+                Diferencia a Pagar: RD$ {calcularDiferencia().toFixed(2)}
+                {calcularDiferencia() > 0 && ' (Cliente paga)'}
+                {calcularDiferencia() < 0 && ' (Crédito a favor)'}
+                {calcularDiferencia() === 0 && ' (Mismo valor)'}
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '15px', marginTop: '25px' }}>
@@ -780,6 +903,9 @@ function Cambios() {
                   setMostrarFormulario(false)
                   setVentaEncontrada(null)
                   setDetallesVenta([])
+                  setProductosSeleccionados([])
+                  setProductoNuevoSeleccionado(null)
+                  setCostoEnvioManual(0)
                 }}
                 style={{
                   flex: 1,

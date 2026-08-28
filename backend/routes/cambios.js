@@ -66,7 +66,6 @@ router.get('/venta/:codigo', async (req, res) => {
         
         console.log('📡 GET /cambios/venta/:codigo - Código:', codigo);
         
-        // Buscar la venta por codigo_entrega o por ID
         const venta = await pool.query(
             `SELECT 
                 v.*,
@@ -84,7 +83,6 @@ router.get('/venta/:codigo', async (req, res) => {
             });
         }
 
-        // Buscar los detalles de la venta
         const detalles = await pool.query(
             `SELECT 
                 d.*,
@@ -106,7 +104,6 @@ router.get('/venta/:codigo', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Error en GET /cambios/venta/:codigo:', error.message);
-        console.error('Stack:', error.stack);
         res.status(500).json({
             success: false,
             error: error.message
@@ -115,7 +112,7 @@ router.get('/venta/:codigo', async (req, res) => {
 });
 
 // ============================================
-// POST /cambios - Crear un cambio
+// POST /cambios - Crear un cambio (CON MÚLTIPLES PRODUCTOS)
 // ============================================
 router.post('/', async (req, res) => {
     const client = await pool.connect();
@@ -125,16 +122,14 @@ router.post('/', async (req, res) => {
             factura_original,
             cliente_nombre,
             cliente_telefono,
-            producto_devuelto_id,
-            producto_devuelto_nombre,
-            cantidad_devuelta,
-            precio_devuelto,
+            productos_devueltos,  // 👈 NUEVO: Array de productos
             producto_nuevo_id,
             producto_nuevo_nombre,
             cantidad_nueva,
             precio_nuevo,
             total_devuelto,
             total_nuevo,
+            envio,
             diferencia,
             tipo,
             motivo,
@@ -142,29 +137,29 @@ router.post('/', async (req, res) => {
             envio_opcional
         } = req.body;
 
-        if (!venta_id || !producto_devuelto_id || !tipo) {
+        if (!venta_id || !productos_devueltos || productos_devueltos.length === 0 || !tipo) {
             return res.status(400).json({
                 success: false,
-                error: 'Venta, producto devuelto y tipo son requeridos'
+                error: 'Venta, productos devueltos y tipo son requeridos'
             });
         }
 
         await client.query('BEGIN');
 
-        // Crear el cambio
+        // Crear el cambio con los productos devueltos en formato JSON
         const result = await client.query(
             `INSERT INTO cambios (
                 venta_id, factura_original, cliente_nombre, cliente_telefono,
-                producto_devuelto_id, producto_devuelto_nombre, cantidad_devuelta, precio_devuelto,
+                productos_devueltos,
                 producto_nuevo_id, producto_nuevo_nombre, cantidad_nueva, precio_nuevo,
-                total_devuelto, total_nuevo, diferencia, tipo, motivo, usuario_id, estado
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'completado')
+                total_devuelto, total_nuevo, envio, diferencia, tipo, motivo, usuario_id, estado
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'completado')
             RETURNING *`,
             [
                 venta_id, factura_original, cliente_nombre, cliente_telefono,
-                producto_devuelto_id, producto_devuelto_nombre, cantidad_devuelta, precio_devuelto,
+                JSON.stringify(productos_devueltos),
                 producto_nuevo_id, producto_nuevo_nombre, cantidad_nueva || 0, precio_nuevo || 0,
-                total_devuelto || 0, total_nuevo || 0, diferencia || 0,
+                total_devuelto || 0, total_nuevo || 0, envio || 0, diferencia || 0,
                 tipo, motivo, usuario_id
             ]
         );
@@ -177,32 +172,24 @@ router.post('/', async (req, res) => {
             [cambio.id, venta_id]
         );
 
-        // Si es un cambio por otro producto, actualizar inventario
-        if (tipo === 'cambio' && producto_nuevo_id) {
+        // Actualizar inventario para cada producto devuelto
+        for (const producto of productos_devueltos) {
             // Devolver el producto devuelto al inventario
             await client.query(
                 `UPDATE producto_inventario 
                  SET stock = stock + $1
                  WHERE producto_id = $2 AND sucursal_id = 3`,
-                [cantidad_devuelta, producto_devuelto_id]
+                [producto.cantidad, producto.producto_id]
             );
+        }
 
-            // Descontar el producto nuevo del inventario
+        // Si es un cambio por otro producto, descontar el nuevo del inventario
+        if (tipo === 'cambio' && producto_nuevo_id) {
             await client.query(
                 `UPDATE producto_inventario 
                  SET stock = stock - $1
                  WHERE producto_id = $2 AND sucursal_id = 3`,
                 [cantidad_nueva || 1, producto_nuevo_id]
-            );
-        }
-
-        // Si es devolución, devolver al inventario
-        if (tipo === 'devolucion') {
-            await client.query(
-                `UPDATE producto_inventario 
-                 SET stock = stock + $1
-                 WHERE producto_id = $2 AND sucursal_id = 3`,
-                [cantidad_devuelta, producto_devuelto_id]
             );
         }
 
@@ -217,6 +204,7 @@ router.post('/', async (req, res) => {
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('❌ Error en POST /cambios:', error.message);
+        console.error('Stack:', error.stack);
         res.status(500).json({
             success: false,
             error: error.message
@@ -250,7 +238,17 @@ router.get('/:id', async (req, res) => {
             });
         }
 
-        res.json(result.rows[0]);
+        // Parsear productos_devueltos si existe
+        const cambio = result.rows[0];
+        if (cambio.productos_devueltos && typeof cambio.productos_devueltos === 'string') {
+            try {
+                cambio.productos_devueltos = JSON.parse(cambio.productos_devueltos);
+            } catch (e) {
+                cambio.productos_devueltos = [];
+            }
+        }
+
+        res.json(cambio);
     } catch (error) {
         console.error('❌ Error en GET /cambios/:id:', error.message);
         res.status(500).json({

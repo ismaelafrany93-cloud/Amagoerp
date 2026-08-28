@@ -96,7 +96,6 @@ router.get('/recientes', async (req, res) => {
         
         console.log('📡 GET /ventas/recientes - Limit:', limit);
         
-        // Verificar si la tabla ventas existe
         const tableCheck = await pool.query(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ventas')"
         );
@@ -106,13 +105,13 @@ router.get('/recientes', async (req, res) => {
             return res.json([]);
         }
         
+        // ✅ CORREGIDO: Usar v.id en lugar de v.created_at
         const query = `
             SELECT 
                 v.id,
                 v.total,
                 v.cliente_nombre,
                 v.fecha,
-                v.created_at,
                 v.tipo_pago,
                 v.tipo_entrega,
                 v.estado,
@@ -121,7 +120,7 @@ router.get('/recientes', async (req, res) => {
                 v.sucursal_id
             FROM ventas v
             LEFT JOIN usuarios u ON v.usuario_id = u.id
-            ORDER BY v.created_at DESC
+            ORDER BY v.id DESC
             LIMIT $1
         `;
         
@@ -132,7 +131,6 @@ router.get('/recientes', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Error en GET /ventas/recientes:', error.message);
-        console.error('Stack:', error.stack);
         res.json([]);
     }
 });

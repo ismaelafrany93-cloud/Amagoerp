@@ -489,114 +489,135 @@ function POS() {
     return filtrados
   }, [productos, categoriaSeleccionada, busqueda])
 
- // ============================================
-// FUNCIÓN COBRAR - CORREGIDA
-// ============================================
-const cobrar = async () => {
-  if (!cliente.nombre || !cliente.nombre.trim()) {
-    alert('⚠️ Ingresa el nombre del cliente')
-    return
-  }
-  if (!carrito || carrito.length === 0) {
-    alert('⚠️ El carrito está vacío')
-    return
-  }
-  
-  if (solicitudActiva && solicitudDescuento.estado === 'pendiente') {
-    alert('⏳ Esta venta tiene una solicitud de descuento pendiente de aprobación.')
-    return
-  }
-
-  if (solicitudActiva && solicitudDescuento.estado !== 'aprobado' && descuentoMonto > 0) {
-    alert('⏳ El descuento no ha sido aprobado.')
-    return
-  }
-
-  const descMonto = solicitudDescuento.estado === 'aprobado' ? (solicitudDescuento.monto || 0) : 0
-  const envio = parseFloat(costoEnvio) || 0
-  const instalacion = parseFloat(costoInstalacion) || 0
-  
-  setCargando(true)
-  try {
-    const esCredito = tipoPago === 'credito'
-    const esDomicilio = tipoEntrega === 'domicilio'
-
-    const datosVenta = {
-      usuario_id: usuario?.id || 1,
-      sucursal_id: usuario?.sucursal_id || null,
-      carrito: carrito.map(item => ({
-        id: item.id,
-        precio: item.precio_unitario || item.precio || 0,
-        cantidad: item.cantidad || 1
-      })),
-      total: subtotal,
-      tipo_pago: esCredito ? 'Crédito' : 'Efectivo',
-      tipo_venta: esCredito ? 'credito' : 'contado',
-      tipo_entrega: esDomicilio ? 'domicilio' : 'retiro',
-      cliente_nombre: cliente.nombre,
-      cliente_telefono: cliente.telefono || '',
-      cliente_direccion: cliente.direccion || '',
-      cliente_referencia: cliente.referencia || '',
-      detalles: cliente.detalles || '',
-      costo_envio: envio,
-      costo_instalacion: instalacion,
-      descuento_monto: descMonto,
-      descuento_aprobado: solicitudDescuento.estado === 'aprobado',
-      codigo_autorizacion: solicitudDescuento.codigo || null,
-      cliente_es_mayorista: cliente.es_mayorista || false,
-      solicitud_descuento_id: solicitudDescuento.id || null
+  // ============================================
+  // FUNCIÓN COBRAR
+  // ============================================
+  const cobrar = async () => {
+    if (!cliente.nombre || !cliente.nombre.trim()) {
+      alert('⚠️ Ingresa el nombre del cliente')
+      return
+    }
+    if (!carrito || carrito.length === 0) {
+      alert('⚠️ El carrito está vacío')
+      return
+    }
+    
+    if (solicitudActiva && solicitudDescuento.estado === 'pendiente') {
+      alert('⏳ Esta venta tiene una solicitud de descuento pendiente de aprobación.')
+      return
     }
 
-    const response = await fetch(`${API_URL}/ventas`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(datosVenta)
-    })
+    if (solicitudActiva && solicitudDescuento.estado !== 'aprobado' && descuentoMonto > 0) {
+      alert('⏳ El descuento no ha sido aprobado.')
+      return
+    }
 
-    const data = await response.json()
+    const descMonto = solicitudDescuento.estado === 'aprobado' ? (solicitudDescuento.monto || 0) : 0
+    const envio = parseFloat(costoEnvio) || 0
+    const instalacion = parseFloat(costoInstalacion) || 0
+    
+    setCargando(true)
+    try {
+      const esCredito = tipoPago === 'credito'
+      const esDomicilio = tipoEntrega === 'domicilio'
 
-    if (data.success) {
-      setVentaId(data.ventaId)
-      if (esCredito || esDomicilio) {
-        setCodigoEntrega(data.codigo)
+      const datosVenta = {
+        usuario_id: usuario?.id || 1,
+        sucursal_id: usuario?.sucursal_id || null,
+        carrito: carrito.map(item => ({
+          id: item.id,
+          precio: item.precio_unitario || item.precio || 0,
+          cantidad: item.cantidad || 1
+        })),
+        total: subtotal,
+        tipo_pago: esCredito ? 'Crédito' : 'Efectivo',
+        tipo_venta: esCredito ? 'credito' : 'contado',
+        tipo_entrega: esDomicilio ? 'domicilio' : 'retiro',
+        cliente_nombre: cliente.nombre,
+        cliente_telefono: cliente.telefono || '',
+        cliente_direccion: cliente.direccion || '',
+        cliente_referencia: cliente.referencia || '',
+        detalles: cliente.detalles || '',
+        costo_envio: envio,
+        costo_instalacion: instalacion,
+        descuento_monto: descMonto,
+        descuento_aprobado: solicitudDescuento.estado === 'aprobado',
+        codigo_autorizacion: solicitudDescuento.codigo || null,
+        cliente_es_mayorista: cliente.es_mayorista || false,
+        solicitud_descuento_id: solicitudDescuento.id || null
       }
-      setVentaCompletada(true)
-      
-      // ✅ CORREGIDO: Convertir a número antes de usar toFixed()
-      let mensaje = `✅ Venta completada #${data.ventaId} - Total: RD$ ${Number(data.total).toFixed(2)}`
-      if (descMonto > 0) {
-        mensaje += `\n💰 Descuento aplicado: RD$ ${Number(descMonto).toFixed(2)}`
+
+      const response = await fetch(`${API_URL}/ventas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datosVenta)
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setVentaId(data.ventaId)
+        if (esCredito || esDomicilio) {
+          setCodigoEntrega(data.codigo)
+        }
+        setVentaCompletada(true)
+        
+        let mensaje = `✅ Venta completada #${data.ventaId} - Total: RD$ ${Number(data.total).toFixed(2)}`
+        if (descMonto > 0) {
+          mensaje += `\n💰 Descuento aplicado: RD$ ${Number(descMonto).toFixed(2)}`
+        }
+        if (instalacion > 0) {
+          mensaje += `\n🔧 Instalación: RD$ ${Number(instalacion).toFixed(2)}`
+        }
+        if (cliente.es_mayorista) {
+          mensaje += `\n👑 Cliente Mayorista - Precio especial aplicado`
+        }
+        alert(mensaje)
+        
+        localStorage.removeItem('venta_pendiente_aprobacion')
+        setSolicitudDescuento({ monto: 0, motivo: '', estado: 'ninguna', codigo: '', id: null, venta_id: null })
+        setSolicitudActiva(false)
+        
+        cargarVentasRecientes()
+      } else {
+        alert('❌ Error: ' + (data.error || data.message || 'No se pudo guardar'))
       }
-      if (instalacion > 0) {
-        mensaje += `\n🔧 Instalación: RD$ ${Number(instalacion).toFixed(2)}`
-      }
-      if (cliente.es_mayorista) {
-        mensaje += `\n👑 Cliente Mayorista - Precio especial aplicado`
-      }
-      alert(mensaje)
-      
-      localStorage.removeItem('venta_pendiente_aprobacion')
+    } catch (error) {
+      console.error('❌ Error en cobrar:', error)
+      alert('❌ Error guardando venta: ' + error.message)
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  // ============================================
+  // LIMPIAR CARRITO
+  // ============================================
+  const limpiarCarrito = () => {
+    if (window.confirm('¿Vaciar todo el carrito?')) {
+      setCarrito([])
+      setCostoEnvio('')
+      setCostoInstalacion('')
+      setDescuentoMonto(0)
       setSolicitudDescuento({ monto: 0, motivo: '', estado: 'ninguna', codigo: '', id: null, venta_id: null })
       setSolicitudActiva(false)
-      
-      cargarVentasRecientes()
-    } else {
-      alert('❌ Error: ' + (data.error || data.message || 'No se pudo guardar'))
+      setCodigoAutorizacion('')
+      setMostrarAutorizacion(false)
+      localStorage.removeItem('venta_pendiente_aprobacion')
     }
-  } catch (error) {
-    console.error('❌ Error en cobrar:', error)
-    alert('❌ Error guardando venta: ' + error.message)
-  } finally {
-    setCargando(false)
   }
-}
 
-// ============================================
-// LIMPIAR CARRITO
-// ============================================
-const limpiarCarrito = () => {
-  if (window.confirm('¿Vaciar todo el carrito?')) {
+  // ============================================
+  // NUEVA VENTA - ¡ESTA FUNCIÓN FALTABA!
+  // ============================================
+  const nuevaVenta = () => {
+    setVentaCompletada(false)
+    setCodigoEntrega('')
     setCarrito([])
+    setCliente({ nombre: '', telefono: '', direccion: '', referencia: '', detalles: '', es_mayorista: false })
+    setTipoPago('contado')
+    setTipoEntrega('retiro')
+    setVentaId(null)
     setCostoEnvio('')
     setCostoInstalacion('')
     setDescuentoMonto(0)
@@ -605,8 +626,8 @@ const limpiarCarrito = () => {
     setCodigoAutorizacion('')
     setMostrarAutorizacion(false)
     localStorage.removeItem('venta_pendiente_aprobacion')
+    cargarVentasRecientes()
   }
-}
 
   // ============================================
   // FUNCIONES DE IMPRESIÓN
@@ -1066,7 +1087,7 @@ const limpiarCarrito = () => {
           </div>
         </div>
 
-        {/* RESUMEN DE VENTA - CORREGIDO ✅ */}
+        {/* RESUMEN DE VENTA */}
         {carrito.length > 0 && (
           <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '1px solid #003b6f' }}>
             <h4 style={{ margin: '0 0 10px 0', color: '#003b6f' }}>📊 Resumen</h4>

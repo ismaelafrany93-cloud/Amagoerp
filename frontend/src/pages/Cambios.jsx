@@ -179,117 +179,6 @@ function Cambios() {
   const seleccionarProductoDevuelto = (detalle) => {
     if (!detalle) return
 
-    // ============================================
-// CAMBIO DE MERCANCÍA - FUNCIÓN PRINCIPAL
-// ============================================
-const realizarCambioMercancia = async () => {
-  if (!ventaEncontrada) {
-    mostrarError('No hay una venta seleccionada')
-    return
-  }
-
-  if (productosDevueltos.length === 0) {
-    mostrarError('Selecciona los productos que el cliente va a devolver')
-    return
-  }
-
-  if (!productoNuevoSeleccionado) {
-    mostrarError('Selecciona el producto nuevo para el cambio')
-    return
-  }
-
-  if (!form.motivo.trim()) {
-    mostrarError('Ingresa el motivo del cambio')
-    return
-  }
-
-  // Validar que la cantidad devuelta no supere la vendida
-  for (const producto of productosDevueltos) {
-    const vendido = detallesVenta.find(
-      d => Number(d.producto_id || d.id) === Number(producto.producto_id)
-    )
-    if (vendido && Number(producto.cantidad) > Number(vendido.cantidad)) {
-      mostrarError(
-        `No puedes devolver ${producto.cantidad} unidades de ${producto.producto_nombre}. Solo se vendieron ${vendido.cantidad}.`
-      )
-      return
-    }
-  }
-
-  // Validar stock del producto nuevo
-  if (productoNuevoSeleccionado.stock < productoNuevoSeleccionado.cantidad) {
-    mostrarError(
-      `Stock insuficiente de ${productoNuevoSeleccionado.nombre}. Disponible: ${productoNuevoSeleccionado.stock}, Requerido: ${productoNuevoSeleccionado.cantidad}`
-    )
-    return
-  }
-
-  const confirmar = confirm(
-    `🔄 CAMBIO DE MERCANCÍA\n\n` +
-    `📦 Producto(s) devuelto(s):\n${productosDevueltos.map(p => 
-      `  - ${p.producto_nombre} (x${p.cantidad}) = RD$ ${(p.precio * p.cantidad).toFixed(2)}`
-    ).join('\n')}\n\n` +
-    `🆕 Producto nuevo:\n  - ${productoNuevoSeleccionado.nombre} (x${productoNuevoSeleccionado.cantidad}) = RD$ ${(productoNuevoSeleccionado.precio * productoNuevoSeleccionado.cantidad).toFixed(2)}\n\n` +
-    `💰 Diferencia a pagar: RD$ ${Math.abs(diferencia).toFixed(2)}\n` +
-    `${diferencia > 0 ? '⚠️ El cliente debe pagar esta diferencia' : '✅ El cliente tiene crédito a favor'}\n\n` +
-    `¿Confirmar el cambio de mercancía?`
-  )
-
-  if (!confirmar) return
-
-  setCargando(true)
-  limpiarMensajes()
-
-  try {
-    const payload = {
-      venta_id: Number(form.venta_id),
-      factura_original: form.factura_original,
-      cliente_nombre: form.cliente_nombre,
-      cliente_telefono: form.cliente_telefono,
-      productos_devueltos: productosDevueltos.map(p => ({
-        producto_id: Number(p.producto_id),
-        producto_nombre: p.producto_nombre,
-        cantidad: Number(p.cantidad),
-        precio: Number(p.precio)
-      })),
-      producto_nuevo_id: Number(productoNuevoSeleccionado.id),
-      producto_nuevo_nombre: productoNuevoSeleccionado.nombre,
-      cantidad_nueva: Number(productoNuevoSeleccionado.cantidad),
-      precio_nuevo: Number(productoNuevoSeleccionado.precio),
-      total_devuelto: Number(totalDevuelto.toFixed(2)),
-      total_nuevo: Number(totalNuevo.toFixed(2)),
-      envio: Number(envio.toFixed(2)),
-      diferencia: Number(diferencia.toFixed(2)),
-      tipo: 'cambio',
-      motivo: form.motivo.trim(),
-      usuario_id: usuario.id ? Number(usuario.id) : null,
-      envio_opcional: Boolean(form.envio_opcional)
-    }
-
-    const response = await fetch(`${API_URL}/cambios`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await response.json()
-
-    if (!response.ok || !data.success) {
-      throw new Error(data.error || data.message || 'No se pudo registrar el cambio')
-    }
-
-    mostrarMensaje('✅ Cambio de mercancía registrado correctamente')
-    limpiarOperacion()
-    await cargarCambios()
-    await cargarProductos()
-  } catch (error) {
-    console.error('Error registrando cambio:', error)
-    mostrarError(error.message || 'Error registrando el cambio')
-  } finally {
-    setCargando(false)
-  }
-}
-
     const productoId = Number(
       detalle.producto_id || detalle.id
     )
@@ -403,7 +292,8 @@ const realizarCambioMercancia = async () => {
       id: Number(producto.id),
       nombre: producto.nombre || 'Producto',
       precio: Number(producto.precio || 0),
-      cantidad: 1
+      cantidad: 1,
+      stock: Number(producto.stock || 0)
     })
   }
 
@@ -420,6 +310,12 @@ const realizarCambioMercancia = async () => {
 
     if (nuevaCantidad < 1) {
       nuevaCantidad = 1
+    }
+
+    // Validar stock disponible
+    if (nuevaCantidad > productoNuevoSeleccionado.stock) {
+      mostrarError(`Stock insuficiente. Disponible: ${productoNuevoSeleccionado.stock}`)
+      nuevaCantidad = productoNuevoSeleccionado.stock
     }
 
     setProductoNuevoSeleccionado(prev => ({
@@ -553,55 +449,60 @@ const realizarCambioMercancia = async () => {
     })
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-
+  // ============================================
+  // FUNCIÓN PRINCIPAL: CAMBIO DE MERCANCÍA
+  // ============================================
+  const realizarCambioMercancia = async () => {
     if (!ventaEncontrada) {
-      mostrarError('No existe una venta seleccionada')
+      mostrarError('No hay una venta seleccionada')
       return
     }
 
     if (productosDevueltos.length === 0) {
-      mostrarError(
-        'Debes seleccionar al menos un producto devuelto'
-      )
+      mostrarError('Selecciona los productos que el cliente va a devolver')
+      return
+    }
+
+    if (!productoNuevoSeleccionado) {
+      mostrarError('Selecciona el producto nuevo para el cambio')
       return
     }
 
     if (!form.motivo.trim()) {
-      mostrarError('Debes indicar el motivo')
+      mostrarError('Ingresa el motivo del cambio')
       return
     }
 
-    if (
-      form.tipo === 'cambio' &&
-      !productoNuevoSeleccionado
-    ) {
+    // Validar que la cantidad devuelta no supere la vendida
+    for (const producto of productosDevueltos) {
+      const vendido = detallesVenta.find(
+        d => Number(d.producto_id || d.id) === Number(producto.producto_id)
+      )
+      if (vendido && Number(producto.cantidad) > Number(vendido.cantidad)) {
+        mostrarError(
+          `No puedes devolver ${producto.cantidad} unidades de ${producto.producto_nombre}. Solo se vendieron ${vendido.cantidad}.`
+        )
+        return
+      }
+    }
+
+    // Validar stock del producto nuevo
+    if (productoNuevoSeleccionado.stock < productoNuevoSeleccionado.cantidad) {
       mostrarError(
-        'Selecciona el producto nuevo para realizar el cambio'
+        `Stock insuficiente de ${productoNuevoSeleccionado.nombre}. Disponible: ${productoNuevoSeleccionado.stock}, Requerido: ${productoNuevoSeleccionado.cantidad}`
       )
       return
     }
 
-    if (
-      form.tipo === 'devolucion' &&
-      productoNuevoSeleccionado
-    ) {
-      setProductoNuevoSeleccionado(null)
-    }
-
-    const confirmar = window.confirm(
-      form.tipo === 'devolucion'
-        ? `¿Confirmar devolución por RD$ ${totalDevuelto.toFixed(
-            2
-          )}?\n\nEl inventario será actualizado en la sucursal de la venta.`
-        : `¿Confirmar cambio?\n\nProducto devuelto: RD$ ${totalDevuelto.toFixed(
-            2
-          )}\nProducto nuevo: RD$ ${totalNuevo.toFixed(
-            2
-          )}\nDiferencia: RD$ ${Math.abs(
-            diferencia
-          ).toFixed(2)}`
+    const confirmar = confirm(
+      `🔄 CAMBIO DE MERCANCÍA\n\n` +
+      `📦 Producto(s) devuelto(s):\n${productosDevueltos.map(p => 
+        `  - ${p.producto_nombre} (x${p.cantidad}) = RD$ ${(p.precio * p.cantidad).toFixed(2)}`
+      ).join('\n')}\n\n` +
+      `🆕 Producto nuevo:\n  - ${productoNuevoSeleccionado.nombre} (x${productoNuevoSeleccionado.cantidad}) = RD$ ${(productoNuevoSeleccionado.precio * productoNuevoSeleccionado.cantidad).toFixed(2)}\n\n` +
+      `💰 Diferencia a pagar: RD$ ${Math.abs(diferencia).toFixed(2)}\n` +
+      `${diferencia > 0 ? '⚠️ El cliente debe pagar esta diferencia' : '✅ El cliente tiene crédito a favor'}\n\n` +
+      `¿Confirmar el cambio de mercancía?`
     )
 
     if (!confirmar) return
@@ -621,90 +522,149 @@ const realizarCambioMercancia = async () => {
           cantidad: Number(p.cantidad),
           precio: Number(p.precio)
         })),
-        producto_nuevo_id:
-          form.tipo === 'cambio'
-            ? Number(
-                productoNuevoSeleccionado?.id || 0
-              )
-            : null,
-        producto_nuevo_nombre:
-          form.tipo === 'cambio'
-            ? productoNuevoSeleccionado?.nombre || ''
-            : '',
-        cantidad_nueva:
-          form.tipo === 'cambio'
-            ? Number(
-                productoNuevoSeleccionado?.cantidad || 0
-              )
-            : 0,
-        precio_nuevo:
-          form.tipo === 'cambio'
-            ? Number(
-                productoNuevoSeleccionado?.precio || 0
-              )
-            : 0,
-        total_devuelto: Number(
-          totalDevuelto.toFixed(2)
-        ),
-        total_nuevo: Number(
-          totalNuevo.toFixed(2)
-        ),
+        producto_nuevo_id: Number(productoNuevoSeleccionado.id),
+        producto_nuevo_nombre: productoNuevoSeleccionado.nombre,
+        cantidad_nueva: Number(productoNuevoSeleccionado.cantidad),
+        precio_nuevo: Number(productoNuevoSeleccionado.precio),
+        total_devuelto: Number(totalDevuelto.toFixed(2)),
+        total_nuevo: Number(totalNuevo.toFixed(2)),
         envio: Number(envio.toFixed(2)),
-        diferencia: Number(
-          diferencia.toFixed(2)
-        ),
-        tipo: form.tipo,
+        diferencia: Number(diferencia.toFixed(2)),
+        tipo: 'cambio',
         motivo: form.motivo.trim(),
-        usuario_id: usuario.id
-          ? Number(usuario.id)
-          : null,
-        envio_opcional: Boolean(
-          form.envio_opcional
-        )
+        usuario_id: usuario.id ? Number(usuario.id) : null,
+        envio_opcional: Boolean(form.envio_opcional)
       }
 
-      const response = await fetch(
-        `${API_URL}/cambios`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        }
-      )
+      const response = await fetch(`${API_URL}/cambios`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
 
       const data = await response.json()
 
       if (!response.ok || !data.success) {
-        throw new Error(
-          data.error ||
-            data.message ||
-            'No se pudo registrar la operación'
-        )
+        throw new Error(data.error || data.message || 'No se pudo registrar el cambio')
       }
 
-      mostrarMensaje(
-        form.tipo === 'devolucion'
-          ? 'Devolución registrada correctamente'
-          : 'Cambio registrado correctamente'
-      )
-
+      mostrarMensaje('✅ Cambio de mercancía registrado correctamente')
       limpiarOperacion()
       await cargarCambios()
       await cargarProductos()
     } catch (error) {
-      console.error(
-        'Error registrando cambio/devolución:',
-        error
-      )
-
-      mostrarError(
-        error.message ||
-          'Error registrando la operación'
-      )
+      console.error('Error registrando cambio:', error)
+      mostrarError(error.message || 'Error registrando el cambio')
     } finally {
       setCargando(false)
+    }
+  }
+
+  // ============================================
+  // FUNCIÓN: DEVOLUCIÓN
+  // ============================================
+  const realizarDevolucion = async () => {
+    if (!ventaEncontrada) {
+      mostrarError('No hay una venta seleccionada')
+      return
+    }
+
+    if (productosDevueltos.length === 0) {
+      mostrarError('Selecciona los productos que el cliente va a devolver')
+      return
+    }
+
+    if (!form.motivo.trim()) {
+      mostrarError('Ingresa el motivo de la devolución')
+      return
+    }
+
+    for (const producto of productosDevueltos) {
+      const vendido = detallesVenta.find(
+        d => Number(d.producto_id || d.id) === Number(producto.producto_id)
+      )
+      if (vendido && Number(producto.cantidad) > Number(vendido.cantidad)) {
+        mostrarError(
+          `No puedes devolver ${producto.cantidad} unidades de ${producto.producto_nombre}. Solo se vendieron ${vendido.cantidad}.`
+        )
+        return
+      }
+    }
+
+    const confirmar = confirm(
+      `↩️ DEVOLUCIÓN DE DINERO\n\n` +
+      `📦 Producto(s) a devolver:\n${productosDevueltos.map(p => 
+        `  - ${p.producto_nombre} (x${p.cantidad}) = RD$ ${(p.precio * p.cantidad).toFixed(2)}`
+      ).join('\n')}\n\n` +
+      `💰 Total a devolver: RD$ ${totalDevuelto.toFixed(2)}\n\n` +
+      `¿Confirmar la devolución?`
+    )
+
+    if (!confirmar) return
+
+    setCargando(true)
+    limpiarMensajes()
+
+    try {
+      const payload = {
+        venta_id: Number(form.venta_id),
+        factura_original: form.factura_original,
+        cliente_nombre: form.cliente_nombre,
+        cliente_telefono: form.cliente_telefono,
+        productos_devueltos: productosDevueltos.map(p => ({
+          producto_id: Number(p.producto_id),
+          producto_nombre: p.producto_nombre,
+          cantidad: Number(p.cantidad),
+          precio: Number(p.precio)
+        })),
+        producto_nuevo_id: null,
+        producto_nuevo_nombre: '',
+        cantidad_nueva: 0,
+        precio_nuevo: 0,
+        total_devuelto: Number(totalDevuelto.toFixed(2)),
+        total_nuevo: 0,
+        envio: 0,
+        diferencia: Number((-totalDevuelto).toFixed(2)),
+        tipo: 'devolucion',
+        motivo: form.motivo.trim(),
+        usuario_id: usuario.id ? Number(usuario.id) : null,
+        envio_opcional: Boolean(form.envio_opcional)
+      }
+
+      const response = await fetch(`${API_URL}/cambios`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || 'No se pudo registrar la devolución')
+      }
+
+      mostrarMensaje('✅ Devolución registrada correctamente')
+      limpiarOperacion()
+      await cargarCambios()
+      await cargarProductos()
+    } catch (error) {
+      console.error('Error registrando devolución:', error)
+      mostrarError(error.message || 'Error registrando la devolución')
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  // ============================================
+  // HANDLE SUBMIT - Redirige según el tipo
+  // ============================================
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+
+    if (form.tipo === 'devolucion') {
+      await realizarDevolucion()
+    } else {
+      await realizarCambioMercancia()
     }
   }
 
@@ -1055,28 +1015,6 @@ const realizarCambioMercancia = async () => {
         <body>
 
           ${ticketHTML}
-
-          <button
-  type="submit"
-  disabled={cargando}
-  style={{
-    flex: 1,
-    padding: '14px',
-    border: 0,
-    borderRadius: '9px',
-    background: '#16a34a',
-    color: '#fff',
-    fontWeight: 700,
-    cursor: cargando ? 'not-allowed' : 'pointer',
-    opacity: cargando ? 0.6 : 1
-  }}
->
-  {cargando
-    ? '⏳ Procesando...'
-    : form.tipo === 'devolucion'
-    ? '↩️ Confirmar devolución'
-    : '🔄 Confirmar cambio de mercancía'}
-</button>
 
           <div class="acciones">
             <button
@@ -1559,8 +1497,6 @@ const realizarCambioMercancia = async () => {
               </table>
             </div>
 
-            
-
             {productosDevueltos.length >
               0 && (
               <div
@@ -1911,6 +1847,7 @@ const realizarCambioMercancia = async () => {
                                 ).toFixed(
                                   2
                                 )}
+                                {producto.stock <= 0 && ' ❌ Sin stock'}
                               </option>
                             )
                           )}
@@ -1944,6 +1881,11 @@ const realizarCambioMercancia = async () => {
                             inputStyle
                           }
                         />
+                        {productoNuevoSeleccionado && (
+                          <small style={{ color: '#64748b' }}>
+                            Stock disponible: {productoNuevoSeleccionado.stock || 0}
+                          </small>
+                        )}
                       </div>
 
                       <div>
@@ -2182,16 +2124,16 @@ const realizarCambioMercancia = async () => {
                         '#16a34a',
                       color: '#fff',
                       fontWeight: 700,
-                      cursor:
-                        'pointer'
+                      cursor: cargando ? 'not-allowed' : 'pointer',
+                      opacity: cargando ? 0.6 : 1
                     }}
                   >
                     {cargando
-                      ? 'Procesando...'
+                      ? '⏳ Procesando...'
                       : form.tipo ===
                         'devolucion'
                       ? '↩️ Confirmar devolución'
-                      : '🔄 Confirmar cambio'}
+                      : '🔄 Confirmar cambio de mercancía'}
                   </button>
 
                   <button

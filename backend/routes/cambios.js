@@ -454,8 +454,7 @@ router.post(
             const nuevoProductoId =
                 producto_nuevo_id
                     ? entero(
-                          producto_nuevo_id
-                      )
+                          producto_nuevo_id                      )
                     : null
 
             const cantidadNueva =

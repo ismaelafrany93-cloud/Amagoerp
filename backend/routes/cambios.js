@@ -112,7 +112,7 @@ router.get('/venta/:codigo', async (req, res) => {
 });
 
 // ============================================
-// POST /cambios - Crear un cambio
+// POST /cambios - Crear un cambio o devolución
 // ============================================
 router.post('/', async (req, res) => {
     const client = await pool.connect();
@@ -137,10 +137,42 @@ router.post('/', async (req, res) => {
             envio_opcional
         } = req.body;
 
+        // Validaciones
         if (!venta_id || !productos_devueltos || productos_devueltos.length === 0 || !tipo) {
             return res.status(400).json({
                 success: false,
                 error: 'Venta, productos devueltos y tipo son requeridos'
+            });
+        }
+
+        if (tipo === 'cambio' && !producto_nuevo_id) {
+            return res.status(400).json({
+                success: false,
+                error: 'Para un cambio, el producto nuevo es requerido'
+            });
+        }
+
+        // Verificar que la venta existe
+        const ventaCheck = await client.query(
+            'SELECT id, codigo_entrega, cliente_nombre FROM ventas WHERE id = $1',
+            [venta_id]
+        );
+        if (ventaCheck.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Venta no encontrada'
+            });
+        }
+
+        // Verificar que no tenga un cambio previo
+        const cambioExistente = await client.query(
+            'SELECT id FROM cambios WHERE venta_id = $1 AND estado != $2',
+            [venta_id, 'cancelado']
+        );
+        if (cambioExistente.rows.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Esta venta ya tiene un cambio o devolución registrada'
             });
         }
 
@@ -173,22 +205,72 @@ router.post('/', async (req, res) => {
         );
 
         // Actualizar inventario para cada producto devuelto
+        const sucursalId = 3; // Sucursal principal (ajustar si es necesario)
+        
         for (const producto of productos_devueltos) {
+            // Verificar si el producto existe en inventario
+            const inventarioCheck = await client.query(
+                `SELECT stock FROM producto_inventario 
+                 WHERE producto_id = $1 AND sucursal_id = $2`,
+                [producto.producto_id, sucursalId]
+            );
+
+            if (inventarioCheck.rows.length === 0) {
+                // Crear el registro si no existe
+                await client.query(
+                    `INSERT INTO producto_inventario (producto_id, sucursal_id, stock) 
+                     VALUES ($1, $2, $3)`,
+                    [producto.producto_id, sucursalId, 0]
+                );
+            }
+
+            // Aumentar stock del producto devuelto
             await client.query(
                 `UPDATE producto_inventario 
-                 SET stock = stock + $1
-                 WHERE producto_id = $2 AND sucursal_id = 3`,
+                 SET stock = stock + $1, updated_at = NOW()
+                 WHERE producto_id = $2 AND sucursal_id = $3`,
+                [producto.cantidad, producto.producto_id, sucursalId]
+            );
+
+            // También actualizar la tabla productos si existe stock
+            await client.query(
+                `UPDATE productos 
+                 SET stock = COALESCE(stock, 0) + $1 
+                 WHERE id = $2`,
                 [producto.cantidad, producto.producto_id]
             );
         }
 
-        // Si es un cambio por otro producto, descontar el nuevo del inventario
+        // Si es un cambio, descontar el producto nuevo del inventario
         if (tipo === 'cambio' && producto_nuevo_id) {
+            // Verificar stock disponible
+            const stockCheck = await client.query(
+                `SELECT stock FROM producto_inventario 
+                 WHERE producto_id = $1 AND sucursal_id = $2`,
+                [producto_nuevo_id, sucursalId]
+            );
+
+            const stockDisponible = stockCheck.rows.length > 0 ? stockCheck.rows[0].stock : 0;
+            const cantidadADescontar = cantidad_nueva || 1;
+
+            if (stockDisponible < cantidadADescontar) {
+                throw new Error(`Stock insuficiente para el producto ${producto_nuevo_nombre}. Disponible: ${stockDisponible}, Requerido: ${cantidadADescontar}`);
+            }
+
+            // Descontar stock
             await client.query(
                 `UPDATE producto_inventario 
-                 SET stock = stock - $1
-                 WHERE producto_id = $2 AND sucursal_id = 3`,
-                [cantidad_nueva || 1, producto_nuevo_id]
+                 SET stock = stock - $1, updated_at = NOW()
+                 WHERE producto_id = $2 AND sucursal_id = $3`,
+                [cantidadADescontar, producto_nuevo_id, sucursalId]
+            );
+
+            // También actualizar la tabla productos
+            await client.query(
+                `UPDATE productos 
+                 SET stock = COALESCE(stock, 0) - $1 
+                 WHERE id = $2`,
+                [cantidadADescontar, producto_nuevo_id]
             );
         }
 
@@ -196,7 +278,7 @@ router.post('/', async (req, res) => {
 
         res.json({
             success: true,
-            message: '✅ Cambio registrado correctamente',
+            message: `✅ ${tipo === 'cambio' ? 'Cambio' : 'Devolución'} registrado correctamente`,
             cambio: cambio
         });
 

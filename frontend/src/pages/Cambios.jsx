@@ -15,16 +15,18 @@ function Cambios() {
   const [filtroEstado, setFiltroEstado] = useState('')
   const [cambiosFiltrados, setCambiosFiltrados] = useState([])
   
-  // 👇 ESTADOS PARA EL CAMBIO
+  // Estados para el cambio/devolución
   const [productosDevueltos, setProductosDevueltos] = useState([])
   const [productoNuevoSeleccionado, setProductoNuevoSeleccionado] = useState(null)
   const [costoEnvioManual, setCostoEnvioManual] = useState(0)
+  const [totalDevueltoCalculado, setTotalDevueltoCalculado] = useState(0)
+  const [totalNuevoCalculado, setTotalNuevoCalculado] = useState(0)
+  const [diferenciaCalculada, setDiferenciaCalculada] = useState(0)
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
   const tieneAcceso = ['dueno', 'dueño', 'subgerente', 'admin', 'vendedor', 'vendedora'].includes(rol)
 
-  // Formulario
   const [form, setForm] = useState({
     tipo: 'cambio',
     venta_id: '',
@@ -45,6 +47,18 @@ function Cambios() {
   useEffect(() => {
     filtrarCambios()
   }, [cambios, filtroEstado])
+
+  // Recalcular totales cuando cambien los productos seleccionados
+  useEffect(() => {
+    const totalDevuelto = calcularTotalDevuelto()
+    const totalNuevo = calcularTotalNuevo()
+    const envio = parseFloat(costoEnvioManual) || 0
+    const diferencia = (totalNuevo + envio) - totalDevuelto
+    
+    setTotalDevueltoCalculado(totalDevuelto)
+    setTotalNuevoCalculado(totalNuevo)
+    setDiferenciaCalculada(diferencia)
+  }, [productosDevueltos, productoNuevoSeleccionado, costoEnvioManual])
 
   const cargarCambios = async () => {
     try {
@@ -134,18 +148,16 @@ function Cambios() {
   }
 
   // ============================================
-  // ✅ SELECCIONAR PRODUCTO DEVUELTO (SIMPLE)
+  // SELECCIONAR PRODUCTO DEVUELTO
   // ============================================
   const seleccionarProductoDevuelto = (producto) => {
     console.log('🔄 CLICK en producto:', producto)
     
-    // Verificar que tenemos datos
     if (!producto) {
       console.error('❌ Producto es null o undefined')
       return
     }
 
-    // Obtener el ID del producto (puede estar en producto_id o id)
     const id = producto.producto_id || producto.id
     if (!id) {
       console.error('❌ Producto sin ID:', producto)
@@ -154,8 +166,9 @@ function Cambios() {
 
     const nombre = producto.producto_nombre || producto.nombre || 'Sin nombre'
     const precio = parseFloat(producto.producto_precio || producto.precio || 0)
+    const cantidadMaxima = producto.cantidad || 1
 
-    console.log(`📦 Producto: ${nombre} - ID: ${id} - Precio: ${precio}`)
+    console.log(`📦 Producto: ${nombre} - ID: ${id} - Precio: ${precio} - Cantidad Max: ${cantidadMaxima}`)
 
     // Verificar si ya está seleccionado
     const existe = productosDevueltos.find(p => p.producto_id === id)
@@ -169,6 +182,7 @@ function Cambios() {
         producto_id: id,
         producto_nombre: nombre,
         cantidad: 1,
+        cantidad_maxima: cantidadMaxima,
         precio: precio
       }
       setProductosDevueltos([...productosDevueltos, nuevoProducto])
@@ -179,7 +193,16 @@ function Cambios() {
   // ACTUALIZAR CANTIDAD DEVUELTO
   // ============================================
   const actualizarCantidadDevuelto = (productoId, nuevaCantidad) => {
+    // Buscar el producto original para validar cantidad máxima
+    const productoOriginal = detallesVenta.find(d => (d.producto_id || d.id) === productoId)
+    const cantidadMaxima = productoOriginal?.cantidad || 1
+    
     if (nuevaCantidad < 1) return
+    if (nuevaCantidad > cantidadMaxima) {
+      alert(`⚠️ No puedes devolver más de ${cantidadMaxima} unidades de este producto`)
+      return
+    }
+    
     setProductosDevueltos(productosDevueltos.map(p => {
       if (p.producto_id === productoId) {
         return { ...p, cantidad: nuevaCantidad }
@@ -205,7 +228,8 @@ function Cambios() {
         id: producto.id,
         nombre: producto.nombre,
         precio: parseFloat(producto.precio || 0),
-        cantidad: 1
+        cantidad: 1,
+        stock: producto.stock || 0
       })
     }
   }
@@ -215,6 +239,13 @@ function Cambios() {
   // ============================================
   const actualizarCantidadNuevo = (nuevaCantidad) => {
     if (nuevaCantidad < 1) return
+    
+    // Validar stock disponible
+    if (productoNuevoSeleccionado && nuevaCantidad > productoNuevoSeleccionado.stock) {
+      alert(`⚠️ Solo hay ${productoNuevoSeleccionado.stock} unidades disponibles en stock`)
+      return
+    }
+    
     setProductoNuevoSeleccionado({
       ...productoNuevoSeleccionado,
       cantidad: nuevaCantidad
@@ -225,9 +256,7 @@ function Cambios() {
   // CÁLCULOS
   // ============================================
   const calcularTotalDevuelto = () => {
-    const total = productosDevueltos.reduce((sum, p) => sum + (p.precio * p.cantidad), 0)
-    console.log('💰 Total devuelto:', total)
-    return total
+    return productosDevueltos.reduce((sum, p) => sum + (p.precio * p.cantidad), 0)
   }
 
   const calcularTotalNuevo = () => {
@@ -261,7 +290,10 @@ function Cambios() {
     const diferencia = calcularDiferencia()
     
     if (diferencia > 0) {
-      const confirmar = confirm(`⚠️ El cliente debe pagar RD$ ${diferencia.toFixed(2)}. ¿Confirmar?`)
+      const confirmar = confirm(`⚠️ El cliente debe pagar RD$ ${diferencia.toFixed(2)} por la diferencia. ¿Confirmar?`)
+      if (!confirmar) return
+    } else if (diferencia < 0) {
+      const confirmar = confirm(`💰 El cliente tiene crédito a favor de RD$ ${Math.abs(diferencia).toFixed(2)}. ¿Confirmar la devolución?`)
       if (!confirmar) return
     }
 
@@ -275,7 +307,7 @@ function Cambios() {
         productos_devueltos: productosDevueltos,
         producto_nuevo_id: productoNuevoSeleccionado?.id || null,
         producto_nuevo_nombre: productoNuevoSeleccionado?.nombre || '',
-        cantidad_nueva: productoNuevoSeleccionado?.cantidad || 1,
+        cantidad_nueva: productoNuevoSeleccionado?.cantidad || 0,
         precio_nuevo: productoNuevoSeleccionado?.precio || 0,
         total_devuelto: calcularTotalDevuelto(),
         total_nuevo: calcularTotalNuevo(),
@@ -287,7 +319,7 @@ function Cambios() {
         envio_opcional: form.envio_opcional
       }
 
-      console.log('📤 Enviando:', dataEnvio)
+      console.log('📤 Enviando cambio:', dataEnvio)
 
       const response = await fetch(`${API_URL}/cambios`, {
         method: 'POST',
@@ -298,7 +330,7 @@ function Cambios() {
       const data = await response.json()
 
       if (data.success) {
-        setMensaje('✅ Cambio registrado')
+        setMensaje('✅ Cambio registrado correctamente')
         setMostrarFormulario(false)
         setVentaEncontrada(null)
         setDetallesVenta([])
@@ -313,34 +345,48 @@ function Cambios() {
       }
     } catch (error) {
       console.error(error)
-      alert('❌ Error registrando cambio')
+      alert('❌ Error registrando cambio: ' + error.message)
     } finally {
       setCargando(false)
     }
   }
 
-  // ... funciones auxiliares getTipoLabel, getEstadoColor, getEstadoLabel
-
+  // ============================================
+  // FUNCIONES AUXILIARES
+  // ============================================
   const getTipoLabel = (tipo) => {
-    const tipos = { 'cambio': '🔄 Cambio', 'devolucion': '💰 Devolución', 'ajuste': '⚙️ Ajuste' }
+    const tipos = { 
+      'cambio': '🔄 Cambio', 
+      'devolucion': '💰 Devolución', 
+      'ajuste': '⚙️ Ajuste' 
+    }
     return tipos[tipo] || tipo
   }
 
   const getEstadoColor = (estado) => {
-    const colores = { 'pendiente': '#ff9800', 'completado': '#4CAF50', 'cancelado': '#f44336' }
+    const colores = { 
+      'pendiente': '#ff9800', 
+      'completado': '#4CAF50', 
+      'cancelado': '#f44336' 
+    }
     return colores[estado] || '#757575'
   }
 
   const getEstadoLabel = (estado) => {
-    const estados = { 'pendiente': '⏳ Pendiente', 'completado': '✅ Completado', 'cancelado': '❌ Cancelado' }
+    const estados = { 
+      'pendiente': '⏳ Pendiente', 
+      'completado': '✅ Completado', 
+      'cancelado': '❌ Cancelado' 
+    }
     return estados[estado] || estado
   }
 
-  // Reimprimir
+  // ============================================
+  // REIMPRIMIR FACTURA
+  // ============================================
   const handleReimprimir = async (ventaId) => {
-    // ... (código existente de reimprimir)
     if (!ventaId) {
-      alert('⚠️ No hay factura asociada');
+      alert('⚠️ No hay factura asociada')
       return;
     }
     try {
@@ -415,6 +461,9 @@ function Cambios() {
     }
   };
 
+  // ============================================
+  // RENDER
+  // ============================================
   if (!tieneAcceso) {
     return (
       <AdminLayout>
@@ -501,7 +550,7 @@ function Cambios() {
               <div><strong>Vendedor:</strong> {ventaEncontrada.vendedor_nombre || 'N/A'}</div>
             </div>
 
-            {/* 👇 LISTA DE PRODUCTOS */}
+            {/* LISTA DE PRODUCTOS */}
             <div style={{ marginTop: '10px' }}>
               <h4>📋 Productos de la venta <span style={{ fontSize: '0.8rem', color: '#666' }}>(Haz clic para seleccionar)</span></h4>
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
@@ -532,7 +581,7 @@ function Cambios() {
                 })}
               </div>
 
-              {/* 👇 PRODUCTOS SELECCIONADOS */}
+              {/* PRODUCTOS SELECCIONADOS */}
               {productosDevueltos.length > 0 && (
                 <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
                   <strong>📦 Productos devueltos seleccionados: {productosDevueltos.length}</strong>
@@ -543,10 +592,12 @@ function Cambios() {
                       <input
                         type="number"
                         min="1"
+                        max={p.cantidad_maxima || 1}
                         value={p.cantidad}
                         onChange={(e) => actualizarCantidadDevuelto(p.producto_id, parseInt(e.target.value) || 1)}
                         style={{ width: '60px', padding: '4px', border: '1px solid #ddd', borderRadius: '4px' }}
                       />
+                      <span style={{ fontSize: '0.7rem', color: '#666' }}>(max {p.cantidad_maxima || 1})</span>
                       <span>RD$ {Number(p.precio).toFixed(2)} c/u</span>
                       <span style={{ fontWeight: 'bold' }}>Total: RD$ {Number(p.precio * p.cantidad).toFixed(2)}</span>
                       <button
@@ -558,7 +609,7 @@ function Cambios() {
                     </div>
                   ))}
                   <div style={{ marginTop: '5px', fontWeight: 'bold', color: '#003b6f', fontSize: '1.1rem' }}>
-                    Total devuelto: RD$ {calcularTotalDevuelto().toFixed(2)}
+                    Total devuelto: RD$ {totalDevueltoCalculado.toFixed(2)}
                   </div>
                 </div>
               )}
@@ -597,7 +648,7 @@ function Cambios() {
           <form onSubmit={handleSubmit}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <div>
-                <label style={{ fontWeight: 'bold' }}>Tipo de Cambio *</label>
+                <label style={{ fontWeight: 'bold' }}>Tipo de Operación *</label>
                 <select
                   value={form.tipo}
                   onChange={(e) => setForm({ ...form, tipo: e.target.value })}
@@ -614,54 +665,60 @@ function Cambios() {
                   type="text"
                   value={form.motivo}
                   onChange={(e) => setForm({ ...form, motivo: e.target.value })}
-                  placeholder="Ej: Producto defectuoso..."
+                  placeholder="Ej: Producto defectuoso, falla de fábrica..."
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px' }}
                   required
                 />
               </div>
             </div>
 
-            <hr style={{ margin: '20px 0' }} />
+            {form.tipo === 'cambio' && (
+              <>
+                <hr style={{ margin: '20px 0' }} />
 
-            <h4 style={{ color: '#4CAF50' }}>🆕 Producto Nuevo (Cambio)</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
-              <div>
-                <label style={{ fontWeight: 'bold' }}>Producto Nuevo *</label>
-                <select
-                  value={productoNuevoSeleccionado?.id || ''}
-                  onChange={(e) => seleccionarProductoNuevo(e.target.value)}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px' }}
-                >
-                  <option value="">Seleccionar producto</option>
-                  {productos.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} - RD$ {Number(p.precio).toFixed(2)}</option>
-                  ))}
-                </select>
-              </div>
-              {productoNuevoSeleccionado && (
-                <>
+                <h4 style={{ color: '#4CAF50' }}>🆕 Producto Nuevo (Cambio)</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
                   <div>
-                    <label style={{ fontWeight: 'bold' }}>Cantidad</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={productoNuevoSeleccionado.cantidad}
-                      onChange={(e) => actualizarCantidadNuevo(parseInt(e.target.value) || 1)}
+                    <label style={{ fontWeight: 'bold' }}>Producto Nuevo *</label>
+                    <select
+                      value={productoNuevoSeleccionado?.id || ''}
+                      onChange={(e) => seleccionarProductoNuevo(e.target.value)}
                       style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px' }}
-                    />
+                    >
+                      <option value="">Seleccionar producto</option>
+                      {productos.map(p => (
+                        <option key={p.id} value={p.id}>{p.nombre} - RD$ {Number(p.precio).toFixed(2)} {p.stock <= 0 && '❌ (Sin stock)'}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div>
-                    <label style={{ fontWeight: 'bold' }}>Precio</label>
-                    <input
-                      type="number"
-                      value={productoNuevoSeleccionado.precio}
-                      readOnly
-                      style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px', backgroundColor: '#f5f5f5' }}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
+                  {productoNuevoSeleccionado && (
+                    <>
+                      <div>
+                        <label style={{ fontWeight: 'bold' }}>Cantidad</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max={productoNuevoSeleccionado.stock || 0}
+                          value={productoNuevoSeleccionado.cantidad}
+                          onChange={(e) => actualizarCantidadNuevo(parseInt(e.target.value) || 1)}
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px' }}
+                        />
+                        <span style={{ fontSize: '0.7rem', color: '#666' }}>Stock disponible: {productoNuevoSeleccionado.stock || 0}</span>
+                      </div>
+                      <div>
+                        <label style={{ fontWeight: 'bold' }}>Precio Unitario</label>
+                        <input
+                          type="number"
+                          value={productoNuevoSeleccionado.precio}
+                          readOnly
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px', backgroundColor: '#f5f5f5' }}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
 
             <hr style={{ margin: '20px 0' }} />
 
@@ -699,16 +756,16 @@ function Cambios() {
               borderRadius: '8px',
               textAlign: 'center'
             }}>
-              <h4>💰 Resumen del Cambio</h4>
+              <h4>💰 Resumen de la Operación</h4>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '10px' }}>
                 <div>
                   <p style={{ margin: '5px 0', color: '#f44336' }}>
-                    <strong>Total Devuelto:</strong><br />RD$ {calcularTotalDevuelto().toFixed(2)}
+                    <strong>Total Devuelto:</strong><br />RD$ {totalDevueltoCalculado.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p style={{ margin: '5px 0', color: '#4CAF50' }}>
-                    <strong>Total Nuevo:</strong><br />RD$ {calcularTotalNuevo().toFixed(2)}
+                    <strong>Total Nuevo:</strong><br />RD$ {totalNuevoCalculado.toFixed(2)}
                   </p>
                 </div>
                 <div>
@@ -717,11 +774,11 @@ function Cambios() {
                   </p>
                 </div>
               </div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: calcularDiferencia() > 0 ? '#f44336' : '#4CAF50', marginTop: '15px' }}>
-                Diferencia: RD$ {calcularDiferencia().toFixed(2)}
-                {calcularDiferencia() > 0 && ' (Cliente paga)'}
-                {calcularDiferencia() < 0 && ' (Crédito a favor)'}
-                {calcularDiferencia() === 0 && ' (Mismo valor)'}
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: diferenciaCalculada > 0 ? '#f44336' : '#4CAF50', marginTop: '15px' }}>
+                {form.tipo === 'cambio' ? 'Diferencia a Pagar' : 'Total a Reembolsar'}: RD$ {Math.abs(diferenciaCalculada).toFixed(2)}
+                {diferenciaCalculada > 0 && ' (Cliente paga)'}
+                {diferenciaCalculada < 0 && ' (Crédito a favor del cliente)'}
+                {diferenciaCalculada === 0 && ' (Sin diferencia)'}
               </div>
             </div>
 
@@ -740,7 +797,7 @@ function Cambios() {
                   fontSize: '1rem'
                 }}
               >
-                {cargando ? 'Guardando...' : '✅ Registrar Cambio'}
+                {cargando ? 'Guardando...' : '✅ Registrar'}
               </button>
               <button
                 type="button"
@@ -770,7 +827,7 @@ function Cambios() {
         </div>
       )}
 
-      {/* LISTA DE CAMBIOS */}
+      {/* HISTORIAL DE CAMBIOS */}
       <div style={{
         backgroundColor: 'white',
         borderRadius: '12px',

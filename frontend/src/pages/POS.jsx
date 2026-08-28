@@ -690,7 +690,7 @@ function POS() {
               </div>
             )}
             <p style={{ marginTop: '20px', color: '#666' }}>
-              Total: RD$ {total.toFixed(2)}
+              Total: RD$ {Number(total).toFixed(2)}
             </p>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
               <button onClick={() => imprimirFactura('A4')} style={{ padding: '12px 30px', backgroundColor: '#003b6f', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🖨️ Factura A4</button>
@@ -1075,18 +1075,18 @@ function POS() {
           </div>
         </div>
 
-        {/* RESUMEN DE VENTA */}
+        {/* RESUMEN DE VENTA - CORREGIDO ✅ */}
         {carrito.length > 0 && (
           <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '1px solid #003b6f' }}>
             <h4 style={{ margin: '0 0 10px 0', color: '#003b6f' }}>📊 Resumen</h4>
-            <p style={{ margin: '5px 0' }}><strong>Subtotal:</strong> RD$ {subtotal.toFixed(2)}</p>
-            {parseFloat(costoEnvio) > 0 && <p style={{ margin: '5px 0' }}><strong>Envío:</strong> RD$ {parseFloat(costoEnvio).toFixed(2)}</p>}
-            {parseFloat(costoInstalacion) > 0 && <p style={{ margin: '5px 0' }}><strong>Instalación:</strong> RD$ {parseFloat(costoInstalacion).toFixed(2)}</p>}
+            <p style={{ margin: '5px 0' }}><strong>Subtotal:</strong> RD$ {Number(subtotal).toFixed(2)}</p>
+            {parseFloat(costoEnvio) > 0 && <p style={{ margin: '5px 0' }}><strong>Envío:</strong> RD$ {Number(costoEnvio).toFixed(2)}</p>}
+            {parseFloat(costoInstalacion) > 0 && <p style={{ margin: '5px 0' }}><strong>Instalación:</strong> RD$ {Number(costoInstalacion).toFixed(2)}</p>}
             {solicitudDescuento.estado === 'aprobado' && solicitudDescuento.monto > 0 && (
-              <p style={{ margin: '5px 0', color: '#d32f2f' }}><strong>Descuento:</strong> -RD$ {solicitudDescuento.monto.toFixed(2)}</p>
+              <p style={{ margin: '5px 0', color: '#d32f2f' }}><strong>Descuento:</strong> -RD$ {Number(solicitudDescuento.monto).toFixed(2)}</p>
             )}
             <p style={{ margin: '5px 0', fontSize: '1.3rem', fontWeight: 'bold', color: '#003b6f' }}>
-              <strong>Total:</strong> RD$ {total.toFixed(2)}
+              <strong>Total:</strong> RD$ {Number(total).toFixed(2)}
             </p>
           </div>
         )}
@@ -1314,7 +1314,7 @@ function POS() {
                 </div>
                 <div style={{ borderTop: '2px solid #003b6f', paddingTop: '12px', marginTop: '10px' }}>
                   <h3 style={{ color: '#003b6f', fontSize: '1.2rem', margin: '0' }}>
-                    Total: RD$ {total.toFixed(2)}
+                    Total: RD$ {Number(total).toFixed(2)}
                   </h3>
                 </div>
                 <div style={{ marginTop: '15px', display: 'flex', gap: '10px', flexDirection: 'column' }}>

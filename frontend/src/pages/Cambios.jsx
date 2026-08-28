@@ -79,7 +79,7 @@ function Cambios() {
   }
 
   // ============================================
-  // BUSCAR FACTURA - CON LOGS AGREGADOS
+  // BUSCAR FACTURA - CORREGIDA
   // ============================================
   const buscarFactura = async () => {
     if (!facturaBusqueda.trim()) {
@@ -95,6 +95,15 @@ function Cambios() {
       const response = await fetch(url)
       console.log('📊 Status:', response.status)
       
+      // Si es 500, mostrar mensaje más amigable
+      if (response.status === 500) {
+        alert('❌ Error en el servidor. El código de factura puede ser válido pero el sistema está fallando. Intenta con otro código o contacta al administrador.')
+        setVentaEncontrada(null)
+        setDetallesVenta([])
+        setCargando(false)
+        return
+      }
+      
       const data = await response.json()
       console.log('📊 Datos recibidos:', data)
 
@@ -102,14 +111,17 @@ function Cambios() {
         setVentaEncontrada(data.venta)
         setDetallesVenta(data.detalles || [])
         setMostrarFormulario(true)
-        setMensaje(`✅ Factura ${data.venta.factura} encontrada`)
+        // ✅ CORREGIDO: Usar codigo_entrega en lugar de factura
+        const numeroFactura = data.venta.codigo_entrega || data.venta.id
+        setMensaje(`✅ Factura ${numeroFactura} encontrada`)
         
         setForm(prev => ({
           ...prev,
           cliente_nombre: data.venta.cliente_nombre || '',
           cliente_telefono: data.venta.cliente_telefono || '',
           venta_id: data.venta.id,
-          factura_original: data.venta.factura
+          // ✅ CORREGIDO: Usar codigo_entrega en lugar de factura
+          factura_original: data.venta.codigo_entrega || data.venta.id
         }))
       } else {
         alert('❌ Factura no encontrada: ' + (data.message || 'Código inválido'))
@@ -173,7 +185,7 @@ function Cambios() {
             ${sucursal.direccion ? `<p style="margin: 2px 0; font-size: 11px;">${sucursal.direccion}</p>` : ''}
             ${sucursal.telefono ? `<p style="margin: 2px 0; font-size: 11px;">Tel: ${sucursal.telefono}</p>` : ''}
             <p style="margin: 5px 0; font-size: 14px; font-weight: bold;">FACTURA</p>
-            <p style="margin: 2px 0; font-size: 12px;">#${venta.factura || venta.id}</p>
+            <p style="margin: 2px 0; font-size: 12px;">#${venta.codigo_entrega || venta.id}</p>
           </div>
 
           <div style="padding: 10px 0; border-bottom: 1px dashed #000;">
@@ -240,7 +252,7 @@ function Cambios() {
       ventana.document.write(`
         <html>
           <head>
-            <title>Reimpresión Factura #${venta.factura || venta.id}</title>
+            <title>Reimpresión Factura #${venta.codigo_entrega || venta.id}</title>
             <style>
               body { margin: 0; padding: 20px; background: #f5f5f5; }
               @media print {
@@ -498,7 +510,7 @@ function Cambios() {
             border: '1px solid #ddd'
           }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <div><strong>Factura:</strong> {ventaEncontrada.factura}</div>
+              <div><strong>Factura:</strong> {ventaEncontrada.codigo_entrega || ventaEncontrada.id}</div>
               <div><strong>Cliente:</strong> {ventaEncontrada.cliente_nombre}</div>
               <div><strong>Teléfono:</strong> {ventaEncontrada.cliente_telefono || 'N/A'}</div>
               <div><strong>Total:</strong> RD$ {Number(ventaEncontrada.total).toFixed(2)}</div>

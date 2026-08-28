@@ -138,21 +138,30 @@ function Cambios() {
   // SELECCIONAR PRODUCTO DEVUELTO (toggle)
   // ============================================
   const toggleSeleccionProductoDevuelto = (producto) => {
+    console.log('🔄 Seleccionando producto:', producto)
+    
+    // Verificar que el producto tenga los datos necesarios
+    if (!producto || !producto.producto_id) {
+      console.error('❌ Producto inválido:', producto)
+      return
+    }
+
     const existe = productosDevueltos.find(p => p.producto_id === producto.producto_id)
+    
     if (existe) {
       // Si ya está seleccionado, lo quitamos
+      console.log('❌ Quitando producto:', producto.producto_nombre)
       setProductosDevueltos(productosDevueltos.filter(p => p.producto_id !== producto.producto_id))
     } else {
       // Si no está seleccionado, lo agregamos
-      setProductosDevueltos([
-        ...productosDevueltos,
-        {
-          producto_id: producto.producto_id,
-          producto_nombre: producto.producto_nombre,
-          cantidad: 1,
-          precio: producto.producto_precio || producto.precio || 0
-        }
-      ])
+      const nuevoProducto = {
+        producto_id: producto.producto_id,
+        producto_nombre: producto.producto_nombre || producto.nombre || 'Producto sin nombre',
+        cantidad: 1,
+        precio: parseFloat(producto.producto_precio || producto.precio || 0)
+      }
+      console.log('✅ Agregando producto:', nuevoProducto)
+      setProductosDevueltos([...productosDevueltos, nuevoProducto])
     }
   }
 
@@ -185,7 +194,7 @@ function Cambios() {
       setProductoNuevoSeleccionado({
         id: producto.id,
         nombre: producto.nombre,
-        precio: producto.precio || 0,
+        precio: parseFloat(producto.precio || 0),
         cantidad: 1
       })
     }
@@ -206,7 +215,9 @@ function Cambios() {
   // CALCULAR TOTAL DEVUELTO
   // ============================================
   const calcularTotalDevuelto = () => {
-    return productosDevueltos.reduce((total, p) => total + (p.precio * p.cantidad), 0)
+    const total = productosDevueltos.reduce((total, p) => total + (p.precio * p.cantidad), 0)
+    console.log('💰 Total devuelto calculado:', total)
+    return total
   }
 
   // ============================================
@@ -606,7 +617,7 @@ function Cambios() {
                       }}
                     >
                       <span>{d.producto_nombre}</span>
-                      <span>Cantidad: {d.cantidad} | RD$ {Number(d.producto_precio).toFixed(2)}</span>
+                      <span>Cantidad: {d.cantidad} | RD$ {Number(d.producto_precio || d.precio || 0).toFixed(2)}</span>
                       <span style={{ 
                         color: seleccionado ? '#2196F3' : '#999', 
                         fontSize: '0.8rem',

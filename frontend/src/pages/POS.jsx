@@ -591,6 +591,23 @@ const cobrar = async () => {
   }
 }
 
+// ============================================
+// LIMPIAR CARRITO
+// ============================================
+const limpiarCarrito = () => {
+  if (window.confirm('¿Vaciar todo el carrito?')) {
+    setCarrito([])
+    setCostoEnvio('')
+    setCostoInstalacion('')
+    setDescuentoMonto(0)
+    setSolicitudDescuento({ monto: 0, motivo: '', estado: 'ninguna', codigo: '', id: null, venta_id: null })
+    setSolicitudActiva(false)
+    setCodigoAutorizacion('')
+    setMostrarAutorizacion(false)
+    localStorage.removeItem('venta_pendiente_aprobacion')
+  }
+}
+
   // ============================================
   // FUNCIONES DE IMPRESIÓN
   // ============================================

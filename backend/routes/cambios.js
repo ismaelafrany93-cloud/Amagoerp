@@ -58,27 +58,29 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// GET /cambios/venta/:factura - Buscar por factura
+// GET /cambios/venta/:codigo - Buscar por código de entrega
 // ============================================
-router.get('/venta/:factura', async (req, res) => {
+router.get('/venta/:codigo', async (req, res) => {
     try {
-        const { factura } = req.params;
+        const { codigo } = req.params;
         
-        // Buscar la venta
+        console.log('📡 GET /cambios/venta/:codigo - Código:', codigo);
+        
+        // Buscar la venta por codigo_entrega o por ID
         const venta = await pool.query(
             `SELECT 
                 v.*,
                 u.nombre as vendedor_nombre
             FROM ventas v
             LEFT JOIN usuarios u ON v.usuario_id = u.id
-            WHERE v.factura = $1 OR v.id::text = $1`,
-            [factura]
+            WHERE v.codigo_entrega = $1 OR v.id::text = $1`,
+            [codigo]
         );
 
         if (venta.rows.length === 0) {
-            return res.status(404).json({
+            return res.json({
                 success: false,
-                error: 'Factura no encontrada'
+                message: 'Factura no encontrada'
             });
         }
 
@@ -96,11 +98,15 @@ router.get('/venta/:factura', async (req, res) => {
 
         res.json({
             success: true,
-            venta: venta.rows[0],
+            venta: {
+                ...venta.rows[0],
+                factura: venta.rows[0].codigo_entrega || venta.rows[0].id
+            },
             detalles: detalles.rows || []
         });
     } catch (error) {
-        console.error('❌ Error en GET /cambios/venta/:factura:', error.message);
+        console.error('❌ Error en GET /cambios/venta/:codigo:', error.message);
+        console.error('Stack:', error.stack);
         res.status(500).json({
             success: false,
             error: error.message

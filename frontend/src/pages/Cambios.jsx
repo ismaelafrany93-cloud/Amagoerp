@@ -13,9 +13,11 @@ function Cambios() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [filtroEstado, setFiltroEstado] = useState('')
   const [cambiosFiltrados, setCambiosFiltrados] = useState([])
-  const [productosSeleccionados, setProductosSeleccionados] = useState([])
-  const [costoEnvioManual, setCostoEnvioManual] = useState(0)
+  
+  // 👇 ESTADO PARA PRODUCTOS DEVUELTOS SELECCIONADOS
+  const [productosDevueltos, setProductosDevueltos] = useState([])
   const [productoNuevoSeleccionado, setProductoNuevoSeleccionado] = useState(null)
+  const [costoEnvioManual, setCostoEnvioManual] = useState(0)
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
@@ -28,14 +30,6 @@ function Cambios() {
     factura_original: '',
     cliente_nombre: '',
     cliente_telefono: '',
-    producto_devuelto_id: '',
-    producto_devuelto_nombre: '',
-    cantidad_devuelta: 1,
-    precio_devuelto: 0,
-    producto_nuevo_id: '',
-    producto_nuevo_nombre: '',
-    cantidad_nueva: 1,
-    precio_nuevo: 0,
     motivo: '',
     envio_opcional: false
   })
@@ -82,7 +76,7 @@ function Cambios() {
   }
 
   // ============================================
-  // BUSCAR FACTURA - MEJORADA
+  // BUSCAR FACTURA
   // ============================================
   const buscarFactura = async () => {
     if (!facturaBusqueda.trim()) {
@@ -112,7 +106,7 @@ function Cambios() {
       if (data.success) {
         setVentaEncontrada(data.venta)
         setDetallesVenta(data.detalles || [])
-        setProductosSeleccionados([]) // Resetear selecciones
+        setProductosDevueltos([]) // Resetear selecciones
         setProductoNuevoSeleccionado(null)
         setCostoEnvioManual(0)
         setMostrarFormulario(true)
@@ -141,23 +135,22 @@ function Cambios() {
   }
 
   // ============================================
-  // SELECCIONAR PRODUCTO DEVUELTO
+  // SELECCIONAR PRODUCTO DEVUELTO (toggle)
   // ============================================
-  const toggleSeleccionProducto = (producto) => {
-    const existe = productosSeleccionados.find(p => p.producto_id === producto.producto_id)
+  const toggleSeleccionProductoDevuelto = (producto) => {
+    const existe = productosDevueltos.find(p => p.producto_id === producto.producto_id)
     if (existe) {
       // Si ya está seleccionado, lo quitamos
-      setProductosSeleccionados(productosSeleccionados.filter(p => p.producto_id !== producto.producto_id))
+      setProductosDevueltos(productosDevueltos.filter(p => p.producto_id !== producto.producto_id))
     } else {
       // Si no está seleccionado, lo agregamos
-      setProductosSeleccionados([
-        ...productosSeleccionados,
+      setProductosDevueltos([
+        ...productosDevueltos,
         {
           producto_id: producto.producto_id,
           producto_nombre: producto.producto_nombre,
           cantidad: 1,
-          precio: producto.producto_precio || producto.precio || 0,
-          total: (producto.producto_precio || producto.precio || 0) * 1
+          precio: producto.producto_precio || producto.precio || 0
         }
       ])
     }
@@ -168,23 +161,19 @@ function Cambios() {
   // ============================================
   const actualizarCantidadDevuelto = (productoId, nuevaCantidad) => {
     if (nuevaCantidad < 1) return
-    setProductosSeleccionados(productosSeleccionados.map(p => {
+    setProductosDevueltos(productosDevueltos.map(p => {
       if (p.producto_id === productoId) {
-        return {
-          ...p,
-          cantidad: nuevaCantidad,
-          total: p.precio * nuevaCantidad
-        }
+        return { ...p, cantidad: nuevaCantidad }
       }
       return p
     }))
   }
 
   // ============================================
-  // ELIMINAR PRODUCTO DEVUELTO SELECCIONADO
+  // ELIMINAR PRODUCTO DEVUELTO
   // ============================================
   const eliminarProductoDevuelto = (productoId) => {
-    setProductosSeleccionados(productosSeleccionados.filter(p => p.producto_id !== productoId))
+    setProductosDevueltos(productosDevueltos.filter(p => p.producto_id !== productoId))
   }
 
   // ============================================
@@ -199,12 +188,6 @@ function Cambios() {
         precio: producto.precio || 0,
         cantidad: 1
       })
-      setForm(prev => ({
-        ...prev,
-        producto_nuevo_id: producto.id,
-        producto_nuevo_nombre: producto.nombre,
-        precio_nuevo: producto.precio || 0
-      }))
     }
   }
 
@@ -217,17 +200,13 @@ function Cambios() {
       ...productoNuevoSeleccionado,
       cantidad: nuevaCantidad
     })
-    setForm(prev => ({
-      ...prev,
-      cantidad_nueva: nuevaCantidad
-    }))
   }
 
   // ============================================
   // CALCULAR TOTAL DEVUELTO
   // ============================================
   const calcularTotalDevuelto = () => {
-    return productosSeleccionados.reduce((total, p) => total + (p.precio * p.cantidad), 0)
+    return productosDevueltos.reduce((total, p) => total + (p.precio * p.cantidad), 0)
   }
 
   // ============================================
@@ -401,20 +380,13 @@ function Cambios() {
     }
   };
 
-  const seleccionarProductoDevuelto = (producto) => {
-    setForm(prev => ({
-      ...prev,
-      producto_devuelto_id: producto.producto_id,
-      producto_devuelto_nombre: producto.producto_nombre,
-      precio_devuelto: producto.producto_precio || producto.precio || 0,
-      cantidad_devuelta: 1
-    }))
-  }
-
+  // ============================================
+  // HANDLE SUBMIT
+  // ============================================
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (productosSeleccionados.length === 0) {
+    if (productosDevueltos.length === 0) {
       alert('⚠️ Selecciona al menos un producto devuelto')
       return
     }
@@ -442,7 +414,7 @@ function Cambios() {
         factura_original: form.factura_original,
         cliente_nombre: form.cliente_nombre,
         cliente_telefono: form.cliente_telefono,
-        productos_devueltos: productosSeleccionados,
+        productos_devueltos: productosDevueltos,
         producto_nuevo_id: productoNuevoSeleccionado?.id || null,
         producto_nuevo_nombre: productoNuevoSeleccionado?.nombre || '',
         cantidad_nueva: productoNuevoSeleccionado?.cantidad || 1,
@@ -457,6 +429,8 @@ function Cambios() {
         envio_opcional: form.envio_opcional
       }
 
+      console.log('📤 Enviando cambio:', dataEnvio)
+
       const response = await fetch(`${API_URL}/cambios`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -470,7 +444,7 @@ function Cambios() {
         setMostrarFormulario(false)
         setVentaEncontrada(null)
         setDetallesVenta([])
-        setProductosSeleccionados([])
+        setProductosDevueltos([])
         setProductoNuevoSeleccionado(null)
         setCostoEnvioManual(0)
         setFacturaBusqueda('')
@@ -481,14 +455,6 @@ function Cambios() {
           factura_original: '',
           cliente_nombre: '',
           cliente_telefono: '',
-          producto_devuelto_id: '',
-          producto_devuelto_nombre: '',
-          cantidad_devuelta: 1,
-          precio_devuelto: 0,
-          producto_nuevo_id: '',
-          producto_nuevo_nombre: '',
-          cantidad_nueva: 1,
-          precio_nuevo: 0,
           motivo: '',
           envio_opcional: false
         })
@@ -498,7 +464,7 @@ function Cambios() {
       }
     } catch (error) {
       console.error(error)
-      alert('❌ Error registrando cambio')
+      alert('❌ Error registrando cambio: ' + error.message)
     } finally {
       setCargando(false)
     }
@@ -617,15 +583,16 @@ function Cambios() {
               <div><strong>Vendedor:</strong> {ventaEncontrada.vendedor_nombre || 'N/A'}</div>
             </div>
 
+            {/* 👇 LISTA DE PRODUCTOS DE LA VENTA - SELECCIONABLES */}
             <div style={{ marginTop: '10px' }}>
-              <h4>📋 Productos de la venta:</h4>
+              <h4>📋 Productos de la venta <span style={{ fontSize: '0.8rem', color: '#666' }}>(Haz clic para seleccionar)</span></h4>
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                 {detallesVenta.map((d, idx) => {
-                  const seleccionado = productosSeleccionados.find(p => p.producto_id === d.producto_id)
+                  const seleccionado = productosDevueltos.find(p => p.producto_id === d.producto_id)
                   return (
                     <div
                       key={idx}
-                      onClick={() => toggleSeleccionProducto(d)}
+                      onClick={() => toggleSeleccionProductoDevuelto(d)}
                       style={{
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -634,24 +601,32 @@ function Cambios() {
                         borderBottom: '1px solid #eee',
                         cursor: 'pointer',
                         backgroundColor: seleccionado ? '#e3f2fd' : 'transparent',
-                        borderLeft: seleccionado ? '4px solid #2196F3' : '4px solid transparent'
+                        borderLeft: seleccionado ? '4px solid #2196F3' : '4px solid transparent',
+                        transition: 'all 0.2s'
                       }}
                     >
                       <span>{d.producto_nombre}</span>
                       <span>Cantidad: {d.cantidad} | RD$ {Number(d.producto_precio).toFixed(2)}</span>
-                      <span style={{ color: seleccionado ? '#2196F3' : '#999', fontSize: '0.8rem' }}>
+                      <span style={{ 
+                        color: seleccionado ? '#2196F3' : '#999', 
+                        fontSize: '0.8rem',
+                        fontWeight: seleccionado ? 'bold' : 'normal'
+                      }}>
                         {seleccionado ? '✅ Seleccionado' : 'Seleccionar'}
                       </span>
                     </div>
                   )
                 })}
               </div>
-              {productosSeleccionados.length > 0 && (
+
+              {/* 👇 PRODUCTOS DEVUELTOS SELECCIONADOS */}
+              {productosDevueltos.length > 0 && (
                 <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
-                  <strong>Productos seleccionados: {productosSeleccionados.length}</strong>
-                  {productosSeleccionados.map((p, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px' }}>
-                      <span>{p.producto_nombre}</span>
+                  <strong>📦 Productos devueltos seleccionados: {productosDevueltos.length}</strong>
+                  {productosDevueltos.map((p, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 'bold' }}>{p.producto_nombre}</span>
+                      <span>Cantidad:</span>
                       <input
                         type="number"
                         min="1"
@@ -660,7 +635,7 @@ function Cambios() {
                         style={{ width: '60px', padding: '4px', border: '1px solid #ddd', borderRadius: '4px' }}
                       />
                       <span>RD$ {Number(p.precio).toFixed(2)} c/u</span>
-                      <span>Total: RD$ {Number(p.total).toFixed(2)}</span>
+                      <span style={{ fontWeight: 'bold' }}>Total: RD$ {Number(p.precio * p.cantidad).toFixed(2)}</span>
                       <button
                         onClick={() => eliminarProductoDevuelto(p.producto_id)}
                         style={{ backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer' }}
@@ -669,7 +644,7 @@ function Cambios() {
                       </button>
                     </div>
                   ))}
-                  <div style={{ marginTop: '5px', fontWeight: 'bold', color: '#003b6f' }}>
+                  <div style={{ marginTop: '5px', fontWeight: 'bold', color: '#003b6f', fontSize: '1.1rem' }}>
                     Total devuelto: RD$ {calcularTotalDevuelto().toFixed(2)}
                   </div>
                 </div>
@@ -747,12 +722,13 @@ function Cambios() {
 
             <hr style={{ margin: '20px 0' }} />
 
+            {/* PRODUCTO NUEVO */}
             <h4 style={{ color: '#4CAF50' }}>🆕 Producto Nuevo (Cambio)</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
               <div>
                 <label style={{ fontWeight: 'bold' }}>Producto Nuevo *</label>
                 <select
-                  value={form.producto_nuevo_id}
+                  value={productoNuevoSeleccionado?.id || ''}
                   onChange={(e) => seleccionarProductoNuevo(e.target.value)}
                   style={{
                     width: '100%',
@@ -809,6 +785,7 @@ function Cambios() {
 
             <hr style={{ margin: '20px 0' }} />
 
+            {/* COSTO DE ENVÍO */}
             <h4 style={{ color: '#003b6f' }}>🚚 Costo de Envío</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
               <div>
@@ -903,7 +880,7 @@ function Cambios() {
                   setMostrarFormulario(false)
                   setVentaEncontrada(null)
                   setDetallesVenta([])
-                  setProductosSeleccionados([])
+                  setProductosDevueltos([])
                   setProductoNuevoSeleccionado(null)
                   setCostoEnvioManual(0)
                 }}

@@ -112,7 +112,7 @@ router.get('/venta/:codigo', async (req, res) => {
 });
 
 // ============================================
-// POST /cambios - Crear un cambio (CON MÚLTIPLES PRODUCTOS)
+// POST /cambios - Crear un cambio
 // ============================================
 router.post('/', async (req, res) => {
     const client = await pool.connect();
@@ -122,7 +122,7 @@ router.post('/', async (req, res) => {
             factura_original,
             cliente_nombre,
             cliente_telefono,
-            productos_devueltos,  // 👈 NUEVO: Array de productos
+            productos_devueltos,
             producto_nuevo_id,
             producto_nuevo_nombre,
             cantidad_nueva,
@@ -146,7 +146,7 @@ router.post('/', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Crear el cambio con los productos devueltos en formato JSON
+        // Crear el cambio
         const result = await client.query(
             `INSERT INTO cambios (
                 venta_id, factura_original, cliente_nombre, cliente_telefono,
@@ -174,7 +174,6 @@ router.post('/', async (req, res) => {
 
         // Actualizar inventario para cada producto devuelto
         for (const producto of productos_devueltos) {
-            // Devolver el producto devuelto al inventario
             await client.query(
                 `UPDATE producto_inventario 
                  SET stock = stock + $1
@@ -238,7 +237,6 @@ router.get('/:id', async (req, res) => {
             });
         }
 
-        // Parsear productos_devueltos si existe
         const cambio = result.rows[0];
         if (cambio.productos_devueltos && typeof cambio.productos_devueltos === 'string') {
             try {

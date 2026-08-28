@@ -14,14 +14,12 @@ function Cambios() {
   const [filtroEstado, setFiltroEstado] = useState('')
   const [cambiosFiltrados, setCambiosFiltrados] = useState([])
   
-  // 👇 ESTADO PARA PRODUCTOS DEVUELTOS SELECCIONADOS
   const [productosDevueltos, setProductosDevueltos] = useState([])
   const [productoNuevoSeleccionado, setProductoNuevoSeleccionado] = useState(null)
   const [costoEnvioManual, setCostoEnvioManual] = useState(0)
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
   const rol = usuario?.rol || ''
-  
   const tieneAcceso = ['dueno', 'dueño', 'subgerente', 'admin', 'vendedor', 'vendedora'].includes(rol)
 
   const [form, setForm] = useState({
@@ -75,9 +73,6 @@ function Cambios() {
     }
   }
 
-  // ============================================
-  // BUSCAR FACTURA
-  // ============================================
   const buscarFactura = async () => {
     if (!facturaBusqueda.trim()) {
       alert('⚠️ Ingresa un número de factura')
@@ -87,10 +82,7 @@ function Cambios() {
     setCargando(true)
     try {
       const url = `${API_URL}/cambios/venta/${facturaBusqueda.trim()}`
-      console.log('📡 Buscando factura en:', url)
-      
       const response = await fetch(url)
-      console.log('📊 Status:', response.status)
       
       if (response.status === 500) {
         alert('❌ Error en el servidor. Intenta con otro código o contacta al administrador.')
@@ -101,12 +93,11 @@ function Cambios() {
       }
       
       const data = await response.json()
-      console.log('📊 Datos recibidos:', data)
 
       if (data.success) {
         setVentaEncontrada(data.venta)
         setDetallesVenta(data.detalles || [])
-        setProductosDevueltos([]) // Resetear selecciones
+        setProductosDevueltos([])
         setProductoNuevoSeleccionado(null)
         setCostoEnvioManual(0)
         setMostrarFormulario(true)
@@ -134,13 +125,7 @@ function Cambios() {
     }
   }
 
-  // ============================================
-  // SELECCIONAR PRODUCTO DEVUELTO (toggle)
-  // ============================================
   const toggleSeleccionProductoDevuelto = (producto) => {
-    console.log('🔄 Seleccionando producto:', producto)
-    
-    // Verificar que el producto tenga los datos necesarios
     if (!producto || !producto.producto_id) {
       console.error('❌ Producto inválido:', producto)
       return
@@ -149,25 +134,18 @@ function Cambios() {
     const existe = productosDevueltos.find(p => p.producto_id === producto.producto_id)
     
     if (existe) {
-      // Si ya está seleccionado, lo quitamos
-      console.log('❌ Quitando producto:', producto.producto_nombre)
       setProductosDevueltos(productosDevueltos.filter(p => p.producto_id !== producto.producto_id))
     } else {
-      // Si no está seleccionado, lo agregamos
       const nuevoProducto = {
         producto_id: producto.producto_id,
         producto_nombre: producto.producto_nombre || producto.nombre || 'Producto sin nombre',
         cantidad: 1,
         precio: parseFloat(producto.producto_precio || producto.precio || 0)
       }
-      console.log('✅ Agregando producto:', nuevoProducto)
       setProductosDevueltos([...productosDevueltos, nuevoProducto])
     }
   }
 
-  // ============================================
-  // ACTUALIZAR CANTIDAD DE PRODUCTO DEVUELTO
-  // ============================================
   const actualizarCantidadDevuelto = (productoId, nuevaCantidad) => {
     if (nuevaCantidad < 1) return
     setProductosDevueltos(productosDevueltos.map(p => {
@@ -178,16 +156,10 @@ function Cambios() {
     }))
   }
 
-  // ============================================
-  // ELIMINAR PRODUCTO DEVUELTO
-  // ============================================
   const eliminarProductoDevuelto = (productoId) => {
     setProductosDevueltos(productosDevueltos.filter(p => p.producto_id !== productoId))
   }
 
-  // ============================================
-  // SELECCIONAR PRODUCTO NUEVO
-  // ============================================
   const seleccionarProductoNuevo = (productoId) => {
     const producto = productos.find(p => p.id === parseInt(productoId))
     if (producto) {
@@ -200,9 +172,6 @@ function Cambios() {
     }
   }
 
-  // ============================================
-  // ACTUALIZAR CANTIDAD DE PRODUCTO NUEVO
-  // ============================================
   const actualizarCantidadNuevo = (nuevaCantidad) => {
     if (nuevaCantidad < 1) return
     setProductoNuevoSeleccionado({
@@ -211,26 +180,15 @@ function Cambios() {
     })
   }
 
-  // ============================================
-  // CALCULAR TOTAL DEVUELTO
-  // ============================================
   const calcularTotalDevuelto = () => {
-    const total = productosDevueltos.reduce((total, p) => total + (p.precio * p.cantidad), 0)
-    console.log('💰 Total devuelto calculado:', total)
-    return total
+    return productosDevueltos.reduce((total, p) => total + (p.precio * p.cantidad), 0)
   }
 
-  // ============================================
-  // CALCULAR TOTAL NUEVO
-  // ============================================
   const calcularTotalNuevo = () => {
     if (!productoNuevoSeleccionado) return 0
     return productoNuevoSeleccionado.precio * productoNuevoSeleccionado.cantidad
   }
 
-  // ============================================
-  // CALCULAR DIFERENCIA
-  // ============================================
   const calcularDiferencia = () => {
     const totalDevuelto = calcularTotalDevuelto()
     const totalNuevo = calcularTotalNuevo()
@@ -238,9 +196,6 @@ function Cambios() {
     return (totalNuevo + envio) - totalDevuelto
   }
 
-  // ============================================
-  // FUNCIÓN PARA REIMPRIMIR FACTURA
-  // ============================================
   const handleReimprimir = async (ventaId) => {
     if (!ventaId) {
       alert('⚠️ No hay factura asociada a este cambio');
@@ -391,9 +346,6 @@ function Cambios() {
     }
   };
 
-  // ============================================
-  // HANDLE SUBMIT
-  // ============================================
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -439,8 +391,6 @@ function Cambios() {
         usuario_id: usuario.id,
         envio_opcional: form.envio_opcional
       }
-
-      console.log('📤 Enviando cambio:', dataEnvio)
 
       const response = await fetch(`${API_URL}/cambios`, {
         method: 'POST',
@@ -535,7 +485,6 @@ function Cambios() {
         </div>
       )}
 
-      {/* BUSCAR FACTURA */}
       <div style={{
         backgroundColor: 'white',
         borderRadius: '12px',
@@ -594,7 +543,6 @@ function Cambios() {
               <div><strong>Vendedor:</strong> {ventaEncontrada.vendedor_nombre || 'N/A'}</div>
             </div>
 
-            {/* 👇 LISTA DE PRODUCTOS DE LA VENTA - SELECCIONABLES */}
             <div style={{ marginTop: '10px' }}>
               <h4>📋 Productos de la venta <span style={{ fontSize: '0.8rem', color: '#666' }}>(Haz clic para seleccionar)</span></h4>
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
@@ -630,7 +578,6 @@ function Cambios() {
                 })}
               </div>
 
-              {/* 👇 PRODUCTOS DEVUELTOS SELECCIONADOS */}
               {productosDevueltos.length > 0 && (
                 <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
                   <strong>📦 Productos devueltos seleccionados: {productosDevueltos.length}</strong>
@@ -680,7 +627,6 @@ function Cambios() {
         )}
       </div>
 
-      {/* FORMULARIO DE CAMBIO */}
       {mostrarFormulario && ventaEncontrada && (
         <div style={{
           backgroundColor: 'white',
@@ -733,7 +679,6 @@ function Cambios() {
 
             <hr style={{ margin: '20px 0' }} />
 
-            {/* PRODUCTO NUEVO */}
             <h4 style={{ color: '#4CAF50' }}>🆕 Producto Nuevo (Cambio)</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
               <div>
@@ -796,7 +741,6 @@ function Cambios() {
 
             <hr style={{ margin: '20px 0' }} />
 
-            {/* COSTO DE ENVÍO */}
             <h4 style={{ color: '#003b6f' }}>🚚 Costo de Envío</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
               <div>
@@ -832,7 +776,6 @@ function Cambios() {
 
             <hr style={{ margin: '20px 0' }} />
 
-            {/* RESUMEN DEL CAMBIO */}
             <div style={{
               padding: '15px',
               backgroundColor: '#f0f4f8',
@@ -913,7 +856,6 @@ function Cambios() {
         </div>
       )}
 
-      {/* LISTA DE CAMBIOS */}
       <div style={{
         backgroundColor: 'white',
         borderRadius: '12px',

@@ -1,375 +1,1435 @@
-const express = require('express');
-const router = express.Router();
-const pool = require('../db');
+const express = require('express')
+const router = express.Router()
+const pool = require('../db')
 
-// ============================================
-// GET /cambios - Listar todos los cambios
-// ============================================
+const SUCURSALES_VALIDAS = [1, 2, 3]
+
+function numero(valor, defecto = 0) {
+    const n = Number(valor)
+    return Number.isFinite(n) ? n : defecto
+}
+
+function entero(valor, defecto = 0) {
+    const n = Number.parseInt(valor, 10)
+    return Number.isFinite(n) ? n : defecto
+}
+
+function normalizarTipo(tipo) {
+    const tipos = ['cambio', 'devolucion', 'ajuste']
+
+    return tipos.includes(tipo)
+        ? tipo
+        : null
+}
+
+function validarSucursal(sucursalId) {
+    return SUCURSALES_VALIDAS.includes(
+        Number(sucursalId)
+    )
+}
+
+function limpiarProductos(productos) {
+    if (!Array.isArray(productos)) {
+        return []
+    }
+
+    return productos
+        .map(producto => ({
+            producto_id: entero(
+                producto.producto_id
+            ),
+            producto_nombre:
+                producto.producto_nombre ||
+                producto.nombre ||
+                'Producto',
+            cantidad: entero(
+                producto.cantidad,
+                0
+            ),
+            precio: numero(
+                producto.precio,
+                0
+            )
+        }))
+        .filter(
+            producto =>
+                producto.producto_id > 0 &&
+                producto.cantidad > 0
+        )
+}
+
+function agruparProductos(productos) {
+    const mapa = new Map()
+
+    for (const producto of productos) {
+        const id = Number(
+            producto.producto_id
+        )
+
+        if (!mapa.has(id)) {
+            mapa.set(id, {
+                ...producto
+            })
+        } else {
+            const existente =
+                mapa.get(id)
+
+            existente.cantidad +=
+                Number(
+                    producto.cantidad
+                )
+        }
+    }
+
+    return Array.from(
+        mapa.values()
+    )
+}
+
+// =====================================================
+// GET /cambios
+// =====================================================
+
 router.get('/', async (req, res) => {
     try {
-        const { factura, estado, fecha_inicio, fecha_fin } = req.query;
-        
+        const {
+            factura,
+            estado,
+            fecha_inicio,
+            fecha_fin,
+            sucursal_id
+        } = req.query
+
         let query = `
-            SELECT 
+            SELECT
                 c.*,
-                u.nombre as usuario_nombre,
-                v.cliente_nombre as venta_cliente,
-                v.total as venta_total
+
+                u.nombre AS usuario_nombre,
+
+                v.cliente_nombre AS venta_cliente,
+                v.total AS venta_total,
+                v.sucursal_id AS venta_sucursal_id,
+
+                CASE
+                    WHEN v.sucursal_id = 1 THEN 'Sucursal 1'
+                    WHEN v.sucursal_id = 2 THEN 'Sucursal 2'
+                    WHEN v.sucursal_id = 3 THEN 'Sucursal 3'
+                    ELSE 'Sin definir'
+                END AS sucursal_nombre
+
             FROM cambios c
-            LEFT JOIN usuarios u ON c.usuario_id = u.id
-            LEFT JOIN ventas v ON c.venta_id = v.id
-            WHERE 1=1
-        `;
-        let params = [];
-        let paramIndex = 1;
+
+            LEFT JOIN usuarios u
+                ON c.usuario_id = u.id
+
+            LEFT JOIN ventas v
+                ON c.venta_id = v.id
+
+            WHERE 1 = 1
+        `
+
+        const params = []
+        let index = 1
 
         if (factura) {
-            query += ` AND c.factura_original ILIKE $${paramIndex}`;
-            params.push(`%${factura}%`);
-            paramIndex++;
+            query += `
+                AND c.factura_original ILIKE $${index}
+            `
+
+            params.push(
+                `%${factura}%`
+            )
+
+            index++
         }
 
         if (estado) {
-            query += ` AND c.estado = $${paramIndex}`;
-            params.push(estado);
-            paramIndex++;
+            query += `
+                AND c.estado = $${index}
+            `
+
+            params.push(estado)
+            index++
         }
 
         if (fecha_inicio) {
-            query += ` AND DATE(c.fecha) >= $${paramIndex}`;
-            params.push(fecha_inicio);
-            paramIndex++;
+            query += `
+                AND DATE(c.fecha) >= $${index}
+            `
+
+            params.push(fecha_inicio)
+            index++
         }
 
         if (fecha_fin) {
-            query += ` AND DATE(c.fecha) <= $${paramIndex}`;
-            params.push(fecha_fin);
-            paramIndex++;
+            query += `
+                AND DATE(c.fecha) <= $${index}
+            `
+
+            params.push(fecha_fin)
+            index++
         }
 
-        query += ` ORDER BY c.fecha DESC LIMIT 100`;
+        if (
+            sucursal_id &&
+            validarSucursal(
+                sucursal_id
+            )
+        ) {
+            query += `
+                AND v.sucursal_id = $${index}
+            `
 
-        const result = await pool.query(query, params);
-        res.json(result.rows || []);
-    } catch (error) {
-        console.error('❌ Error en GET /cambios:', error.message);
-        res.status(200).json([]);
-    }
-});
+            params.push(
+                Number(sucursal_id)
+            )
 
-// ============================================
-// GET /cambios/venta/:codigo - Buscar por código de entrega
-// ============================================
-router.get('/venta/:codigo', async (req, res) => {
-    try {
-        const { codigo } = req.params;
-        
-        console.log('📡 GET /cambios/venta/:codigo - Código:', codigo);
-        
-        const venta = await pool.query(
-            `SELECT 
-                v.*,
-                u.nombre as vendedor_nombre
-            FROM ventas v
-            LEFT JOIN usuarios u ON v.usuario_id = u.id
-            WHERE v.codigo_entrega = $1 OR v.id::text = $1`,
-            [codigo]
-        );
-
-        if (venta.rows.length === 0) {
-            return res.json({
-                success: false,
-                message: 'Factura no encontrada'
-            });
+            index++
         }
 
-        const detalles = await pool.query(
-            `SELECT 
-                d.*,
-                p.nombre as producto_nombre,
-                p.precio as producto_precio
-            FROM detalle_ventas d
-            LEFT JOIN productos p ON d.producto_id = p.id
-            WHERE d.venta_id = $1`,
-            [venta.rows[0].id]
-        );
+        query += `
+            ORDER BY c.fecha DESC
+            LIMIT 200
+        `
 
-        res.json({
-            success: true,
-            venta: {
-                ...venta.rows[0],
-                factura: venta.rows[0].codigo_entrega || venta.rows[0].id
-            },
-            detalles: detalles.rows || []
-        });
+        const result =
+            await pool.query(
+                query,
+                params
+            )
+
+        res.json(
+            result.rows || []
+        )
     } catch (error) {
-        console.error('❌ Error en GET /cambios/venta/:codigo:', error.message);
+        console.error(
+            'Error GET /cambios:',
+            error
+        )
+
         res.status(500).json({
             success: false,
-            error: error.message
-        });
+            error:
+                'No se pudo cargar el historial'
+        })
     }
-});
+})
 
-// ============================================
-// POST /cambios - Crear un cambio o devolución
-// ============================================
-router.post('/', async (req, res) => {
-    const client = await pool.connect();
-    try {
-        const {
-            venta_id,
-            factura_original,
-            cliente_nombre,
-            cliente_telefono,
-            productos_devueltos,
-            producto_nuevo_id,
-            producto_nuevo_nombre,
-            cantidad_nueva,
-            precio_nuevo,
-            total_devuelto,
-            total_nuevo,
-            envio,
-            diferencia,
-            tipo,
-            motivo,
-            usuario_id,
-            envio_opcional
-        } = req.body;
+// =====================================================
+// GET /cambios/venta/:codigo
+// =====================================================
 
-        // Validaciones
-        if (!venta_id || !productos_devueltos || productos_devueltos.length === 0 || !tipo) {
-            return res.status(400).json({
+router.get(
+    '/venta/:codigo',
+    async (req, res) => {
+        try {
+            const codigo =
+                String(
+                    req.params.codigo ||
+                    ''
+                ).trim()
+
+            if (!codigo) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'Código de factura requerido'
+                })
+            }
+
+            const ventaResult =
+                await pool.query(
+                    `
+                    SELECT
+                        v.*,
+
+                        u.nombre AS vendedor_nombre,
+
+                        CASE
+                            WHEN v.sucursal_id = 1 THEN 'Sucursal 1'
+                            WHEN v.sucursal_id = 2 THEN 'Sucursal 2'
+                            WHEN v.sucursal_id = 3 THEN 'Sucursal 3'
+                            ELSE 'Sin definir'
+                        END AS sucursal_nombre
+
+                    FROM ventas v
+
+                    LEFT JOIN usuarios u
+                        ON v.usuario_id = u.id
+
+                    WHERE
+                        v.codigo_entrega = $1
+                        OR v.id::text = $1
+
+                    LIMIT 1
+                    `,
+                    [codigo]
+                )
+
+            if (
+                ventaResult.rows.length ===
+                0
+            ) {
+                return res.status(
+                    404
+                ).json({
+                    success: false,
+                    error:
+                        'Factura no encontrada'
+                })
+            }
+
+            const venta =
+                ventaResult.rows[0]
+
+            const sucursalId =
+                Number(
+                    venta.sucursal_id
+                )
+
+            if (
+                !validarSucursal(
+                    sucursalId
+                )
+            ) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'La venta no tiene una sucursal válida'
+                })
+            }
+
+            const detallesResult =
+                await pool.query(
+                    `
+                    SELECT
+                        d.*,
+
+                        p.nombre AS producto_nombre,
+                        p.precio AS producto_precio
+
+                    FROM detalle_ventas d
+
+                    LEFT JOIN productos p
+                        ON d.producto_id = p.id
+
+                    WHERE d.venta_id = $1
+
+                    ORDER BY d.id ASC
+                    `,
+                    [venta.id]
+                )
+
+            res.json({
+                success: true,
+
+                venta: {
+                    ...venta,
+
+                    factura:
+                        venta.codigo_entrega ||
+                        venta.id,
+
+                    sucursal_id:
+                        sucursalId
+                },
+
+                detalles:
+                    detallesResult.rows ||
+                    []
+            })
+        } catch (error) {
+            console.error(
+                'Error GET /cambios/venta:',
+                error
+            )
+
+            res.status(500).json({
                 success: false,
-                error: 'Venta, productos devueltos y tipo son requeridos'
-            });
+                error:
+                    'Error buscando la factura'
+            })
         }
+    }
+)
 
-        if (tipo === 'cambio' && !producto_nuevo_id) {
-            return res.status(400).json({
-                success: false,
-                error: 'Para un cambio, el producto nuevo es requerido'
-            });
-        }
+// =====================================================
+// POST /cambios
+// =====================================================
 
-        // Verificar que la venta existe
-        const ventaCheck = await client.query(
-            'SELECT id, codigo_entrega, cliente_nombre FROM ventas WHERE id = $1',
-            [venta_id]
-        );
-        if (ventaCheck.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Venta no encontrada'
-            });
-        }
+router.post(
+    '/',
+    async (req, res) => {
+        const client =
+            await pool.connect()
 
-        // Verificar que no tenga un cambio previo
-        const cambioExistente = await client.query(
-            'SELECT id FROM cambios WHERE venta_id = $1 AND estado != $2',
-            [venta_id, 'cancelado']
-        );
-        if (cambioExistente.rows.length > 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'Esta venta ya tiene un cambio o devolución registrada'
-            });
-        }
-
-        await client.query('BEGIN');
-
-        // Crear el cambio
-        const result = await client.query(
-            `INSERT INTO cambios (
-                venta_id, factura_original, cliente_nombre, cliente_telefono,
+        try {
+            const {
+                venta_id,
+                factura_original,
+                cliente_nombre,
+                cliente_telefono,
                 productos_devueltos,
-                producto_nuevo_id, producto_nuevo_nombre, cantidad_nueva, precio_nuevo,
-                total_devuelto, total_nuevo, envio, diferencia, tipo, motivo, usuario_id, estado
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'completado')
-            RETURNING *`,
-            [
-                venta_id, factura_original, cliente_nombre, cliente_telefono,
-                JSON.stringify(productos_devueltos),
-                producto_nuevo_id, producto_nuevo_nombre, cantidad_nueva || 0, precio_nuevo || 0,
-                total_devuelto || 0, total_nuevo || 0, envio || 0, diferencia || 0,
-                tipo, motivo, usuario_id
-            ]
-        );
+                producto_nuevo_id,
+                producto_nuevo_nombre,
+                cantidad_nueva,
+                precio_nuevo,
+                total_devuelto,
+                total_nuevo,
+                envio,
+                diferencia,
+                tipo,
+                motivo,
+                usuario_id,
+                envio_opcional
+            } = req.body
 
-        const cambio = result.rows[0];
+            const ventaId =
+                entero(venta_id)
 
-        // Marcar la venta como que tiene cambio
-        await client.query(
-            `UPDATE ventas SET tiene_cambio = TRUE, cambio_id = $1 WHERE id = $2`,
-            [cambio.id, venta_id]
-        );
+            const tipoOperacion =
+                normalizarTipo(tipo)
 
-        // Actualizar inventario para cada producto devuelto
-        const sucursalId = 3; // Sucursal principal (ajustar si es necesario)
-        
-        for (const producto of productos_devueltos) {
-            // Verificar si el producto existe en inventario
-            const inventarioCheck = await client.query(
-                `SELECT stock FROM producto_inventario 
-                 WHERE producto_id = $1 AND sucursal_id = $2`,
-                [producto.producto_id, sucursalId]
-            );
+            if (!ventaId) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'La venta es requerida'
+                })
+            }
 
-            if (inventarioCheck.rows.length === 0) {
-                // Crear el registro si no existe
+            if (!tipoOperacion) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'Tipo de operación inválido'
+                })
+            }
+
+            if (
+                !String(
+                    motivo || ''
+                ).trim()
+            ) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'El motivo es requerido'
+                })
+            }
+
+            let productos =
+                limpiarProductos(
+                    productos_devueltos
+                )
+
+            productos =
+                agruparProductos(
+                    productos
+                )
+
+            if (
+                productos.length ===
+                0
+            ) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'Debes seleccionar productos devueltos'
+                })
+            }
+
+            const nuevoProductoId =
+                producto_nuevo_id
+                    ? entero(
+                          producto_nuevo_id
+                      )
+                    : null
+
+            const cantidadNueva =
+                entero(
+                    cantidad_nueva,
+                    0
+                )
+
+            const precioNuevo =
+                numero(
+                    precio_nuevo,
+                    0
+                )
+
+            const envioNumero =
+                numero(
+                    envio,
+                    0
+                )
+
+            if (
+                envioNumero < 0
+            ) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'El envío no puede ser negativo'
+                })
+            }
+
+            if (
+                tipoOperacion ===
+                    'cambio' &&
+                (!nuevoProductoId ||
+                    cantidadNueva <=
+                        0)
+            ) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'Para un cambio debes seleccionar el producto nuevo y su cantidad'
+                })
+            }
+
+            if (
+                tipoOperacion ===
+                'devolucion'
+            ) {
+                productos =
+                    productos.map(
+                        producto => ({
+                            ...producto
+                        })
+                    )
+            }
+
+            await client.query(
+                'BEGIN'
+            )
+
+            // =================================================
+            // 1. OBTENER Y BLOQUEAR LA VENTA
+            // =================================================
+
+            const ventaResult =
                 await client.query(
-                    `INSERT INTO producto_inventario (producto_id, sucursal_id, stock) 
-                     VALUES ($1, $2, $3)`,
-                    [producto.producto_id, sucursalId, 0]
-                );
+                    `
+                    SELECT
+                        v.*,
+
+                        CASE
+                            WHEN v.sucursal_id = 1 THEN 'Sucursal 1'
+                            WHEN v.sucursal_id = 2 THEN 'Sucursal 2'
+                            WHEN v.sucursal_id = 3 THEN 'Sucursal 3'
+                            ELSE 'Sin definir'
+                        END AS sucursal_nombre
+
+                    FROM ventas v
+
+                    WHERE v.id = $1
+
+                    FOR UPDATE
+                    `,
+                    [ventaId]
+                )
+
+            if (
+                ventaResult.rows.length ===
+                0
+            ) {
+                throw new Error(
+                    'La venta no existe'
+                )
             }
 
-            // Aumentar stock del producto devuelto
-            await client.query(
-                `UPDATE producto_inventario 
-                 SET stock = stock + $1, updated_at = NOW()
-                 WHERE producto_id = $2 AND sucursal_id = $3`,
-                [producto.cantidad, producto.producto_id, sucursalId]
-            );
+            const venta =
+                ventaResult.rows[0]
 
-            // También actualizar la tabla productos si existe stock
-            await client.query(
-                `UPDATE productos 
-                 SET stock = COALESCE(stock, 0) + $1 
-                 WHERE id = $2`,
-                [producto.cantidad, producto.producto_id]
-            );
-        }
+            const sucursalId =
+                Number(
+                    venta.sucursal_id
+                )
 
-        // Si es un cambio, descontar el producto nuevo del inventario
-        if (tipo === 'cambio' && producto_nuevo_id) {
-            // Verificar stock disponible
-            const stockCheck = await client.query(
-                `SELECT stock FROM producto_inventario 
-                 WHERE producto_id = $1 AND sucursal_id = $2`,
-                [producto_nuevo_id, sucursalId]
-            );
-
-            const stockDisponible = stockCheck.rows.length > 0 ? stockCheck.rows[0].stock : 0;
-            const cantidadADescontar = cantidad_nueva || 1;
-
-            if (stockDisponible < cantidadADescontar) {
-                throw new Error(`Stock insuficiente para el producto ${producto_nuevo_nombre}. Disponible: ${stockDisponible}, Requerido: ${cantidadADescontar}`);
+            if (
+                !validarSucursal(
+                    sucursalId
+                )
+            ) {
+                throw new Error(
+                    'La venta no pertenece a una de las 3 sucursales válidas'
+                )
             }
 
-            // Descontar stock
+            // =================================================
+            // 2. EVITAR DUPLICADOS
+            // =================================================
+
+            const cambioExistente =
+                await client.query(
+                    `
+                    SELECT id
+                    FROM cambios
+                    WHERE
+                        venta_id = $1
+                        AND estado = 'completado'
+                    LIMIT 1
+                    `,
+                    [ventaId]
+                )
+
+            if (
+                cambioExistente.rows
+                    .length > 0
+            ) {
+                throw new Error(
+                    `Esta venta ya tiene una operación de cambio/devolución completada (#${cambioExistente.rows[0].id})`
+                )
+            }
+
+            // =================================================
+            // 3. OBTENER DETALLES ORIGINALES
+            // =================================================
+
+            const detallesResult =
+                await client.query(
+                    `
+                    SELECT
+                        d.id,
+                        d.producto_id,
+                        d.cantidad,
+                        d.precio,
+                        p.nombre AS producto_nombre
+
+                    FROM detalle_ventas d
+
+                    LEFT JOIN productos p
+                        ON p.id = d.producto_id
+
+                    WHERE d.venta_id = $1
+
+                    FOR UPDATE
+                    `,
+                    [ventaId]
+                )
+
+            if (
+                detallesResult.rows
+                    .length === 0
+            ) {
+                throw new Error(
+                    'La venta no tiene productos registrados'
+                )
+            }
+
+            // =================================================
+            // 4. VALIDAR CANTIDADES DEVUELTAS
+            // =================================================
+
+            const vendidosMap =
+                new Map()
+
+            for (
+                const detalle of detallesResult.rows
+            ) {
+                const id =
+                    Number(
+                        detalle.producto_id
+                    )
+
+                const cantidad =
+                    numero(
+                        detalle.cantidad,
+                        0
+                    )
+
+                const precio =
+                    numero(
+                        detalle.precio,
+                        0
+                    )
+
+                if (
+                    vendidosMap.has(id)
+                ) {
+                    const anterior =
+                        vendidosMap.get(
+                            id
+                        )
+
+                    anterior.cantidad +=
+                        cantidad
+                } else {
+                    vendidosMap.set(
+                        id,
+                        {
+                            producto_id:
+                                id,
+                            producto_nombre:
+                                detalle.producto_nombre ||
+                                'Producto',
+                            cantidad,
+                            precio
+                        }
+                    )
+                }
+            }
+
+            for (
+                const producto of productos
+            ) {
+                const vendido =
+                    vendidosMap.get(
+                        Number(
+                            producto.producto_id
+                        )
+                    )
+
+                if (!vendido) {
+                    throw new Error(
+                        `El producto ${producto.producto_id} no pertenece a la venta original`
+                    )
+                }
+
+                if (
+                    Number(
+                        producto.cantidad
+                    ) >
+                    Number(
+                        vendido.cantidad
+                    )
+                ) {
+                    throw new Error(
+                        `No puedes devolver ${producto.cantidad} unidades de ${vendido.producto_nombre}. Solo se vendieron ${vendido.cantidad}.`
+                    )
+                }
+            }
+
+            // =================================================
+            // 5. RECALCULAR TOTAL DEVUELTO EN SERVIDOR
+            // =================================================
+
+            let totalDevueltoServidor =
+                0
+
+            for (
+                const producto of productos
+            ) {
+                const vendido =
+                    vendidosMap.get(
+                        Number(
+                            producto.producto_id
+                        )
+                    )
+
+                const precio =
+                    Number(
+                        vendido.precio
+                    )
+
+                totalDevueltoServidor +=
+                    precio *
+                    Number(
+                        producto.cantidad
+                    )
+            }
+
+            totalDevueltoServidor =
+                Number(
+                    totalDevueltoServidor.toFixed(
+                        2
+                    )
+                )
+
+            // =================================================
+            // 6. VALIDAR PRODUCTO NUEVO
+            // =================================================
+
+            let totalNuevoServidor =
+                0
+
+            let productoNuevoNombre =
+                ''
+
+            if (
+                tipoOperacion ===
+                'cambio'
+            ) {
+                const productoNuevoResult =
+                    await client.query(
+                        `
+                        SELECT
+                            id,
+                            nombre,
+                            precio
+
+                        FROM productos
+
+                        WHERE id = $1
+
+                        FOR UPDATE
+                        `,
+                        [
+                            nuevoProductoId
+                        ]
+                    )
+
+                if (
+                    productoNuevoResult
+                        .rows.length ===
+                    0
+                ) {
+                    throw new Error(
+                        'El producto nuevo no existe'
+                    )
+                }
+
+                const productoNuevo =
+                    productoNuevoResult
+                        .rows[0]
+
+                productoNuevoNombre =
+                    productoNuevo.nombre
+
+                const precioActual =
+                    numero(
+                        productoNuevo.precio,
+                        0
+                    )
+
+                totalNuevoServidor =
+                    Number(
+                        (
+                            precioActual *
+                            cantidadNueva
+                        ).toFixed(2)
+                    )
+            }
+
+            // =================================================
+            // 7. CALCULAR DIFERENCIA REAL
+            // =================================================
+
+            let diferenciaServidor =
+                0
+
+            if (
+                tipoOperacion ===
+                'devolucion'
+            ) {
+                diferenciaServidor =
+                    Number(
+                        (
+                            -totalDevueltoServidor
+                        ).toFixed(2)
+                    )
+            } else {
+                diferenciaServidor =
+                    Number(
+                        (
+                            totalNuevoServidor +
+                            envioNumero -
+                            totalDevueltoServidor
+                        ).toFixed(2)
+                    )
+            }
+
+            // =================================================
+            // 8. VERIFICAR INVENTARIO DE LA SUCURSAL
+            // =================================================
+
+            for (
+                const producto of productos
+            ) {
+                const inventarioResult =
+                    await client.query(
+                        `
+                        SELECT
+                            id,
+                            stock
+
+                        FROM producto_inventario
+
+                        WHERE
+                            producto_id = $1
+                            AND sucursal_id = $2
+
+                        FOR UPDATE
+                        `,
+                        [
+                            producto.producto_id,
+                            sucursalId
+                        ]
+                    )
+
+                if (
+                    inventarioResult.rows
+                        .length === 0
+                ) {
+                    throw new Error(
+                        `El producto ${producto.producto_nombre} no tiene inventario configurado en la sucursal ${sucursalId}`
+                    )
+                }
+            }
+
+            // =================================================
+            // 9. VERIFICAR STOCK DEL PRODUCTO NUEVO
+            // =================================================
+
+            let inventarioNuevo = null
+
+            if (
+                tipoOperacion ===
+                'cambio'
+            ) {
+                const inventarioNuevoResult =
+                    await client.query(
+                        `
+                        SELECT
+                            id,
+                            stock
+
+                        FROM producto_inventario
+
+                        WHERE
+                            producto_id = $1
+                            AND sucursal_id = $2
+
+                        FOR UPDATE
+                        `,
+                        [
+                            nuevoProductoId,
+                            sucursalId
+                        ]
+                    )
+
+                if (
+                    inventarioNuevoResult
+                        .rows.length ===
+                    0
+                ) {
+                    throw new Error(
+                        `El producto nuevo no tiene inventario configurado en la sucursal ${sucursalId}`
+                    )
+                }
+
+                inventarioNuevo =
+                    inventarioNuevoResult
+                        .rows[0]
+
+                const stockActual =
+                    numero(
+                        inventarioNuevo.stock,
+                        0
+                    )
+
+                if (
+                    stockActual <
+                    cantidadNueva
+                ) {
+                    throw new Error(
+                        `Stock insuficiente de ${productoNuevoNombre} en la sucursal ${sucursalId}. Disponible: ${stockActual}. Necesario: ${cantidadNueva}.`
+                    )
+                }
+            }
+
+            // =================================================
+            // 10. GUARDAR EL CAMBIO
+            // =================================================
+
+            const insertResult =
+                await client.query(
+                    `
+                    INSERT INTO cambios (
+                        venta_id,
+                        factura_original,
+                        cliente_nombre,
+                        cliente_telefono,
+                        productos_devueltos,
+                        producto_nuevo_id,
+                        producto_nuevo_nombre,
+                        cantidad_nueva,
+                        precio_nuevo,
+                        total_devuelto,
+                        total_nuevo,
+                        envio,
+                        diferencia,
+                        tipo,
+                        motivo,
+                        usuario_id,
+                        estado
+                    )
+
+                    VALUES (
+                        $1,
+                        $2,
+                        $3,
+                        $4,
+                        $5,
+                        $6,
+                        $7,
+                        $8,
+                        $9,
+                        $10,
+                        $11,
+                        $12,
+                        $13,
+                        $14,
+                        $15,
+                        $16,
+                        'completado'
+                    )
+
+                    RETURNING *
+                    `,
+                    [
+                        ventaId,
+
+                        factura_original ||
+                            venta.codigo_entrega ||
+                            venta.id,
+
+                        cliente_nombre ||
+                            venta.cliente_nombre ||
+                            '',
+
+                        cliente_telefono ||
+                            venta.cliente_telefono ||
+                            '',
+
+                        JSON.stringify(
+                            productos
+                        ),
+
+                        tipoOperacion ===
+                        'cambio'
+                            ? nuevoProductoId
+                            : null,
+
+                        tipoOperacion ===
+                        'cambio'
+                            ? productoNuevoNombre
+                            : '',
+
+                        tipoOperacion ===
+                        'cambio'
+                            ? cantidadNueva
+                            : 0,
+
+                        tipoOperacion ===
+                        'cambio'
+                            ? precioNuevo
+                            : 0,
+
+                        totalDevueltoServidor,
+
+                        totalNuevoServidor,
+
+                        envioNumero,
+
+                        diferenciaServidor,
+
+                        tipoOperacion,
+
+                        String(
+                            motivo
+                        ).trim(),
+
+                        usuario_id
+                            ? entero(
+                                  usuario_id
+                              )
+                            : null
+                    ]
+                )
+
+            const cambio =
+                insertResult.rows[0]
+
+            // =================================================
+            // 11. DEVOLVER PRODUCTOS AL INVENTARIO
+            //     DE LA SUCURSAL ORIGINAL
+            // =================================================
+
+            for (
+                const producto of productos
+            ) {
+                const updateResult =
+                    await client.query(
+                        `
+                        UPDATE producto_inventario
+
+                        SET stock =
+                            stock + $1
+
+                        WHERE
+                            producto_id = $2
+                            AND sucursal_id = $3
+
+                        RETURNING stock
+                        `,
+                        [
+                            Number(
+                                producto.cantidad
+                            ),
+                            Number(
+                                producto.producto_id
+                            ),
+                            sucursalId
+                        ]
+                    )
+
+                if (
+                    updateResult.rows
+                        .length === 0
+                ) {
+                    throw new Error(
+                        `No se pudo actualizar el inventario de ${producto.producto_nombre}`
+                    )
+                }
+            }
+
+            // =================================================
+            // 12. DESCONTAR PRODUCTO NUEVO
+            //     DE LA MISMA SUCURSAL
+            // =================================================
+
+            if (
+                tipoOperacion ===
+                    'cambio' &&
+                nuevoProductoId
+            ) {
+                const updateNuevo =
+                    await client.query(
+                        `
+                        UPDATE producto_inventario
+
+                        SET stock =
+                            stock - $1
+
+                        WHERE
+                            producto_id = $2
+                            AND sucursal_id = $3
+                            AND stock >= $1
+
+                        RETURNING stock
+                        `,
+                        [
+                            cantidadNueva,
+                            nuevoProductoId,
+                            sucursalId
+                        ]
+                    )
+
+                if (
+                    updateNuevo.rows
+                        .length === 0
+                ) {
+                    throw new Error(
+                        `No hay suficiente stock de ${productoNuevoNombre} en la sucursal ${sucursalId}`
+                    )
+                }
+            }
+
+            // =================================================
+            // 13. MARCAR VENTA
+            // =================================================
+
             await client.query(
-                `UPDATE producto_inventario 
-                 SET stock = stock - $1, updated_at = NOW()
-                 WHERE producto_id = $2 AND sucursal_id = $3`,
-                [cantidadADescontar, producto_nuevo_id, sucursalId]
-            );
+                `
+                UPDATE ventas
 
-            // También actualizar la tabla productos
+                SET
+                    tiene_cambio = TRUE,
+                    cambio_id = $1
+
+                WHERE id = $2
+                `,
+                [
+                    cambio.id,
+                    ventaId
+                ]
+            )
+
             await client.query(
-                `UPDATE productos 
-                 SET stock = COALESCE(stock, 0) - $1 
-                 WHERE id = $2`,
-                [cantidadADescontar, producto_nuevo_id]
-            );
-        }
+                'COMMIT'
+            )
 
-        await client.query('COMMIT');
+            res.json({
+                success: true,
 
-        res.json({
-            success: true,
-            message: `✅ ${tipo === 'cambio' ? 'Cambio' : 'Devolución'} registrado correctamente`,
-            cambio: cambio
-        });
+                message:
+                    tipoOperacion ===
+                    'devolucion'
+                        ? 'Devolución registrada correctamente'
+                        : 'Cambio registrado correctamente',
 
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('❌ Error en POST /cambios:', error.message);
-        console.error('Stack:', error.stack);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    } finally {
-        client.release();
-    }
-});
+                cambio: {
+                    ...cambio,
 
-// ============================================
-// GET /cambios/:id - Obtener un cambio específico
-// ============================================
-router.get('/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        const result = await pool.query(
-            `SELECT 
-                c.*,
-                u.nombre as usuario_nombre
-            FROM cambios c
-            LEFT JOIN usuarios u ON c.usuario_id = u.id
-            WHERE c.id = $1`,
-            [id]
-        );
+                    sucursal_id:
+                        sucursalId,
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Cambio no encontrado'
-            });
-        }
+                    sucursal_nombre:
+                        venta.sucursal_nombre,
 
-        const cambio = result.rows[0];
-        if (cambio.productos_devueltos && typeof cambio.productos_devueltos === 'string') {
+                    total_devuelto:
+                        totalDevueltoServidor,
+
+                    total_nuevo:
+                        totalNuevoServidor,
+
+                    diferencia:
+                        diferenciaServidor
+                }
+            })
+        } catch (error) {
             try {
-                cambio.productos_devueltos = JSON.parse(cambio.productos_devueltos);
-            } catch (e) {
-                cambio.productos_devueltos = [];
+                await client.query(
+                    'ROLLBACK'
+                )
+            } catch (
+                rollbackError
+            ) {
+                console.error(
+                    'Error ROLLBACK:',
+                    rollbackError
+                )
             }
-        }
 
-        res.json(cambio);
-    } catch (error) {
-        console.error('❌ Error en GET /cambios/:id:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
+            console.error(
+                'Error POST /cambios:',
+                error
+            )
 
-// ============================================
-// PUT /cambios/:id - Actualizar estado de un cambio
-// ============================================
-router.put('/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { estado } = req.body;
-
-        const result = await pool.query(
-            `UPDATE cambios SET estado = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-            [estado, id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({
+            res.status(500).json({
                 success: false,
-                error: 'Cambio no encontrado'
-            });
+                error:
+                    error.message ||
+                    'No se pudo registrar la operación'
+            })
+        } finally {
+            client.release()
         }
-
-        res.json({
-            success: true,
-            message: '✅ Estado actualizado correctamente',
-            cambio: result.rows[0]
-        });
-    } catch (error) {
-        console.error('❌ Error en PUT /cambios/:id:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
     }
-});
+)
 
-module.exports = router;
+// =====================================================
+// GET /cambios/:id
+// =====================================================
+
+router.get(
+    '/:id',
+    async (req, res) => {
+        try {
+            const id =
+                entero(
+                    req.params.id
+                )
+
+            if (!id) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'ID inválido'
+                })
+            }
+
+            const result =
+                await pool.query(
+                    `
+                    SELECT
+                        c.*,
+
+                        u.nombre AS usuario_nombre,
+
+                        v.sucursal_id AS venta_sucursal_id,
+
+                        CASE
+                            WHEN v.sucursal_id = 1 THEN 'Sucursal 1'
+                            WHEN v.sucursal_id = 2 THEN 'Sucursal 2'
+                            WHEN v.sucursal_id = 3 THEN 'Sucursal 3'
+                            ELSE 'Sin definir'
+                        END AS sucursal_nombre
+
+                    FROM cambios c
+
+                    LEFT JOIN usuarios u
+                        ON c.usuario_id = u.id
+
+                    LEFT JOIN ventas v
+                        ON c.venta_id = v.id
+
+                    WHERE c.id = $1
+                    `,
+                    [id]
+                )
+
+            if (
+                result.rows.length ===
+                0
+            ) {
+                return res.status(
+                    404
+                ).json({
+                    success: false,
+                    error:
+                        'Cambio no encontrado'
+                })
+            }
+
+            const cambio =
+                result.rows[0]
+
+            if (
+                typeof cambio.productos_devueltos ===
+                'string'
+            ) {
+                try {
+                    cambio.productos_devueltos =
+                        JSON.parse(
+                            cambio.productos_devueltos
+                        )
+                } catch {
+                    cambio.productos_devueltos =
+                        []
+                }
+            }
+
+            res.json({
+                success: true,
+                cambio
+            })
+        } catch (error) {
+            console.error(
+                'Error GET /cambios/:id:',
+                error
+            )
+
+            res.status(500).json({
+                success: false,
+                error:
+                    'No se pudo obtener el cambio'
+            })
+        }
+    }
+)
+
+// =====================================================
+// PUT /cambios/:id
+// =====================================================
+
+router.put(
+    '/:id',
+    async (req, res) => {
+        try {
+            const id =
+                entero(
+                    req.params.id
+                )
+
+            const estado =
+                String(
+                    req.body.estado ||
+                    ''
+                ).trim()
+
+            const estadosValidos = [
+                'pendiente',
+                'completado',
+                'cancelado'
+            ]
+
+            if (!id) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'ID inválido'
+                })
+            }
+
+            if (
+                !estadosValidos.includes(
+                    estado
+                )
+            ) {
+                return res.status(
+                    400
+                ).json({
+                    success: false,
+                    error:
+                        'Estado inválido'
+                })
+            }
+
+            const result =
+                await pool.query(
+                    `
+                    UPDATE cambios
+
+                    SET
+                        estado = $1,
+                        updated_at = NOW()
+
+                    WHERE id = $2
+
+                    RETURNING *
+                    `,
+                    [
+                        estado,
+                        id
+                    ]
+                )
+
+            if (
+                result.rows.length ===
+                0
+            ) {
+                return res.status(
+                    404
+                ).json({
+                    success: false,
+                    error:
+                        'Cambio no encontrado'
+                })
+            }
+
+            res.json({
+                success: true,
+                message:
+                    'Estado actualizado correctamente',
+                cambio:
+                    result.rows[0]
+            })
+        } catch (error) {
+            console.error(
+                'Error PUT /cambios/:id:',
+                error
+            )
+
+            res.status(500).json({
+                success: false,
+                error:
+                    'No se pudo actualizar el estado'
+            })
+        }
+    }
+)
+
+module.exports = router

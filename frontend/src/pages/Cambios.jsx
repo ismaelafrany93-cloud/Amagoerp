@@ -1,31 +1,38 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AdminLayout from '../layouts/AdminLayout'
 import API_URL from '../config'
 
 function Cambios() {
-  // Estados principales
   const [cambios, setCambios] = useState([])
+  const [productos, setProductos] = useState([])
   const [facturaBusqueda, setFacturaBusqueda] = useState('')
   const [ventaEncontrada, setVentaEncontrada] = useState(null)
   const [detallesVenta, setDetallesVenta] = useState([])
-  const [productos, setProductos] = useState([])
-  const [cargando, setCargando] = useState(false)
-  const [mensaje, setMensaje] = useState('')
-  const [mostrarFormulario, setMostrarFormulario] = useState(false)
-  const [filtroEstado, setFiltroEstado] = useState('')
-  const [cambiosFiltrados, setCambiosFiltrados] = useState([])
-  
-  // Estados para el cambio/devolución
   const [productosDevueltos, setProductosDevueltos] = useState([])
   const [productoNuevoSeleccionado, setProductoNuevoSeleccionado] = useState(null)
+
+  const [cargando, setCargando] = useState(false)
+  const [cargandoFactura, setCargandoFactura] = useState(false)
+  const [mensaje, setMensaje] = useState('')
+  const [error, setError] = useState('')
+  const [mostrarFormulario, setMostrarFormulario] = useState(false)
+  const [filtroEstado, setFiltroEstado] = useState('')
+  const [filtroSucursal, setFiltroSucursal] = useState('')
+  const [busquedaHistorial, setBusquedaHistorial] = useState('')
   const [costoEnvioManual, setCostoEnvioManual] = useState(0)
-  const [totalDevueltoCalculado, setTotalDevueltoCalculado] = useState(0)
-  const [totalNuevoCalculado, setTotalNuevoCalculado] = useState(0)
-  const [diferenciaCalculada, setDiferenciaCalculada] = useState(0)
 
   const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-  const rol = usuario?.rol || ''
-  const tieneAcceso = ['dueno', 'dueño', 'subgerente', 'admin', 'vendedor', 'vendedora'].includes(rol)
+
+  const rol = String(usuario?.rol || '').toLowerCase()
+
+  const tieneAcceso = [
+    'dueno',
+    'dueño',
+    'subgerente',
+    'admin',
+    'vendedor',
+    'vendedora'
+  ].includes(rol)
 
   const [form, setForm] = useState({
     tipo: 'cambio',
@@ -37,44 +44,47 @@ function Cambios() {
     envio_opcional: false
   })
 
+  const sucursales = [
+    { id: 1, nombre: 'Sucursal 1' },
+    { id: 2, nombre: 'Sucursal 2' },
+    { id: 3, nombre: 'Sucursal 3' }
+  ]
+
   useEffect(() => {
-    if (tieneAcceso) {
-      cargarCambios()
-      cargarProductos()
-    }
+    if (!tieneAcceso) return
+
+    cargarCambios()
+    cargarProductos()
   }, [tieneAcceso])
-
-  useEffect(() => {
-    filtrarCambios()
-  }, [cambios, filtroEstado])
-
-  // Recalcular totales cuando cambien los productos seleccionados
-  useEffect(() => {
-    const totalDevuelto = calcularTotalDevuelto()
-    const totalNuevo = calcularTotalNuevo()
-    const envio = parseFloat(costoEnvioManual) || 0
-    const diferencia = (totalNuevo + envio) - totalDevuelto
-    
-    setTotalDevueltoCalculado(totalDevuelto)
-    setTotalNuevoCalculado(totalNuevo)
-    setDiferenciaCalculada(diferencia)
-  }, [productosDevueltos, productoNuevoSeleccionado, costoEnvioManual])
 
   const cargarCambios = async () => {
     try {
       const response = await fetch(`${API_URL}/cambios`)
+
+      if (!response.ok) {
+        throw new Error('No se pudo cargar el historial')
+      }
+
       const data = await response.json()
+
       setCambios(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando cambios:', error)
       setCambios([])
+      setError('No se pudo cargar el historial de cambios')
     }
   }
 
   const cargarProductos = async () => {
     try {
       const response = await fetch(`${API_URL}/productos`)
+
+      if (!response.ok) {
+        throw new Error('No se pudieron cargar los productos')
+      }
+
       const data = await response.json()
+
       setProductos(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error cargando productos:', error)
@@ -82,394 +92,914 @@ function Cambios() {
     }
   }
 
-  const filtrarCambios = () => {
-    if (!filtroEstado) {
-      setCambiosFiltrados(cambios)
-    } else {
-      setCambiosFiltrados(cambios.filter(c => c.estado === filtroEstado))
-    }
+  const limpiarMensajes = () => {
+    setMensaje('')
+    setError('')
   }
 
-  // ============================================
-  // BUSCAR FACTURA
-  // ============================================
+  const mostrarMensaje = (texto) => {
+    setMensaje(texto)
+    setError('')
+
+    setTimeout(() => {
+      setMensaje('')
+    }, 4000)
+  }
+
+  const mostrarError = (texto) => {
+    setError(texto)
+    setMensaje('')
+
+    setTimeout(() => {
+      setError('')
+    }, 5000)
+  }
+
   const buscarFactura = async () => {
-    if (!facturaBusqueda.trim()) {
-      alert('⚠️ Ingresa un número de factura')
+    const codigo = facturaBusqueda.trim()
+
+    if (!codigo) {
+      mostrarError('Ingresa un número de factura o ID de venta')
       return
     }
 
-    setCargando(true)
-    try {
-      const url = `${API_URL}/cambios/venta/${facturaBusqueda.trim()}`
-      console.log('📡 Buscando factura en:', url)
-      
-      const response = await fetch(url)
-      console.log('📊 Status:', response.status)
-      
-      if (response.status === 500) {
-        alert('❌ Error en el servidor. Intenta con otro código.')
-        setCargando(false)
-        return
-      }
-      
-      const data = await response.json()
-      console.log('📊 Datos recibidos:', data)
+    limpiarMensajes()
+    setCargandoFactura(true)
 
-      if (data.success) {
-        setVentaEncontrada(data.venta)
-        setDetallesVenta(data.detalles || [])
-        setProductosDevueltos([])
-        setProductoNuevoSeleccionado(null)
-        setCostoEnvioManual(0)
-        setMostrarFormulario(true)
-        
-        const numeroFactura = data.venta.codigo_entrega || data.venta.id
-        setMensaje(`✅ Factura ${numeroFactura} encontrada`)
-        
-        setForm(prev => ({
-          ...prev,
-          cliente_nombre: data.venta.cliente_nombre || '',
-          cliente_telefono: data.venta.cliente_telefono || '',
-          venta_id: data.venta.id,
-          factura_original: data.venta.codigo_entrega || data.venta.id
-        }))
-      } else {
-        alert('❌ Factura no encontrada')
-        setVentaEncontrada(null)
-        setDetallesVenta([])
+    try {
+      const response = await fetch(
+        `${API_URL}/cambios/venta/${encodeURIComponent(codigo)}`
+      )
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || 'Factura no encontrada')
       }
+
+      setVentaEncontrada(data.venta || null)
+      setDetallesVenta(Array.isArray(data.detalles) ? data.detalles : [])
+      setProductosDevueltos([])
+      setProductoNuevoSeleccionado(null)
+      setCostoEnvioManual(0)
+      setMostrarFormulario(false)
+
+      setForm({
+        tipo: 'cambio',
+        venta_id: data.venta.id,
+        factura_original:
+          data.venta.codigo_entrega || data.venta.id,
+        cliente_nombre:
+          data.venta.cliente_nombre || '',
+        cliente_telefono:
+          data.venta.cliente_telefono || '',
+        motivo: '',
+        envio_opcional: false
+      })
+
+      mostrarMensaje(
+        `Factura ${
+          data.venta.codigo_entrega || data.venta.id
+        } encontrada`
+      )
     } catch (error) {
-      console.error('❌ Error buscando factura:', error)
-      alert('❌ Error buscando factura')
+      console.error('Error buscando factura:', error)
+
+      setVentaEncontrada(null)
+      setDetallesVenta([])
+      setProductosDevueltos([])
+      setProductoNuevoSeleccionado(null)
+
+      mostrarError(error.message || 'Error buscando la factura')
     } finally {
-      setCargando(false)
+      setCargandoFactura(false)
     }
   }
 
-  // ============================================
-  // SELECCIONAR PRODUCTO DEVUELTO
-  // ============================================
-  const seleccionarProductoDevuelto = (producto) => {
-    console.log('🔄 CLICK en producto:', producto)
-    
-    if (!producto) {
-      console.error('❌ Producto es null o undefined')
+  const seleccionarProductoDevuelto = (detalle) => {
+    if (!detalle) return
+
+    const productoId = Number(
+      detalle.producto_id || detalle.id
+    )
+
+    if (!productoId) return
+
+    const cantidadVendida = Number(detalle.cantidad || 0)
+
+    if (cantidadVendida <= 0) {
+      mostrarError('La cantidad vendida de este producto no es válida')
       return
     }
 
-    const id = producto.producto_id || producto.id
-    if (!id) {
-      console.error('❌ Producto sin ID:', producto)
+    const existente = productosDevueltos.find(
+      p => Number(p.producto_id) === productoId
+    )
+
+    if (existente) {
+      setProductosDevueltos(prev =>
+        prev.filter(
+          p => Number(p.producto_id) !== productoId
+        )
+      )
+
       return
     }
 
-    const nombre = producto.producto_nombre || producto.nombre || 'Sin nombre'
-    const precio = parseFloat(producto.producto_precio || producto.precio || 0)
-    const cantidadMaxima = producto.cantidad || 1
+    const nombre =
+      detalle.producto_nombre ||
+      detalle.nombre ||
+      'Producto'
 
-    console.log(`📦 Producto: ${nombre} - ID: ${id} - Precio: ${precio} - Cantidad Max: ${cantidadMaxima}`)
+    const precio = Number(
+      detalle.producto_precio ||
+      detalle.precio ||
+      0
+    )
 
-    // Verificar si ya está seleccionado
-    const existe = productosDevueltos.find(p => p.producto_id === id)
-    
-    if (existe) {
-      console.log(`❌ Quitando producto: ${nombre}`)
-      setProductosDevueltos(productosDevueltos.filter(p => p.producto_id !== id))
-    } else {
-      console.log(`✅ Agregando producto: ${nombre}`)
-      const nuevoProducto = {
-        producto_id: id,
+    setProductosDevueltos(prev => [
+      ...prev,
+      {
+        producto_id: productoId,
         producto_nombre: nombre,
         cantidad: 1,
-        cantidad_maxima: cantidadMaxima,
-        precio: precio
+        cantidad_maxima: cantidadVendida,
+        precio
       }
-      setProductosDevueltos([...productosDevueltos, nuevoProducto])
-    }
+    ])
   }
 
-  // ============================================
-  // ACTUALIZAR CANTIDAD DEVUELTO
-  // ============================================
-  const actualizarCantidadDevuelto = (productoId, nuevaCantidad) => {
-    // Buscar el producto original para validar cantidad máxima
-    const productoOriginal = detallesVenta.find(d => (d.producto_id || d.id) === productoId)
-    const cantidadMaxima = productoOriginal?.cantidad || 1
-    
-    if (nuevaCantidad < 1) return
-    if (nuevaCantidad > cantidadMaxima) {
-      alert(`⚠️ No puedes devolver más de ${cantidadMaxima} unidades de este producto`)
-      return
+  const actualizarCantidadDevuelto = (
+    productoId,
+    nuevaCantidad
+  ) => {
+    const producto = productosDevueltos.find(
+      p => Number(p.producto_id) === Number(productoId)
+    )
+
+    if (!producto) return
+
+    let cantidad = Number(nuevaCantidad)
+
+    if (!Number.isFinite(cantidad)) {
+      cantidad = 1
     }
-    
-    setProductosDevueltos(productosDevueltos.map(p => {
-      if (p.producto_id === productoId) {
-        return { ...p, cantidad: nuevaCantidad }
-      }
-      return p
-    }))
+
+    cantidad = Math.floor(cantidad)
+
+    if (cantidad < 1) cantidad = 1
+
+    if (cantidad > producto.cantidad_maxima) {
+      cantidad = producto.cantidad_maxima
+    }
+
+    setProductosDevueltos(prev =>
+      prev.map(p =>
+        Number(p.producto_id) === Number(productoId)
+          ? {
+              ...p,
+              cantidad
+            }
+          : p
+      )
+    )
   }
 
-  // ============================================
-  // ELIMINAR PRODUCTO DEVUELTO
-  // ============================================
   const eliminarProductoDevuelto = (productoId) => {
-    setProductosDevueltos(productosDevueltos.filter(p => p.producto_id !== productoId))
+    setProductosDevueltos(prev =>
+      prev.filter(
+        p => Number(p.producto_id) !== Number(productoId)
+      )
+    )
   }
 
-  // ============================================
-  // SELECCIONAR PRODUCTO NUEVO
-  // ============================================
   const seleccionarProductoNuevo = (productoId) => {
-    const producto = productos.find(p => p.id === parseInt(productoId))
-    if (producto) {
-      setProductoNuevoSeleccionado({
-        id: producto.id,
-        nombre: producto.nombre,
-        precio: parseFloat(producto.precio || 0),
-        cantidad: 1,
-        stock: producto.stock || 0
-      })
-    }
-  }
-
-  // ============================================
-  // ACTUALIZAR CANTIDAD NUEVO
-  // ============================================
-  const actualizarCantidadNuevo = (nuevaCantidad) => {
-    if (nuevaCantidad < 1) return
-    
-    // Validar stock disponible
-    if (productoNuevoSeleccionado && nuevaCantidad > productoNuevoSeleccionado.stock) {
-      alert(`⚠️ Solo hay ${productoNuevoSeleccionado.stock} unidades disponibles en stock`)
+    if (!productoId) {
+      setProductoNuevoSeleccionado(null)
       return
     }
-    
+
+    const producto = productos.find(
+      p => Number(p.id) === Number(productoId)
+    )
+
+    if (!producto) {
+      setProductoNuevoSeleccionado(null)
+      return
+    }
+
     setProductoNuevoSeleccionado({
-      ...productoNuevoSeleccionado,
-      cantidad: nuevaCantidad
+      id: Number(producto.id),
+      nombre: producto.nombre || 'Producto',
+      precio: Number(producto.precio || 0),
+      cantidad: 1
     })
   }
 
-  // ============================================
-  // CÁLCULOS
-  // ============================================
-  const calcularTotalDevuelto = () => {
-    return productosDevueltos.reduce((sum, p) => sum + (p.precio * p.cantidad), 0)
+  const actualizarCantidadNuevo = (cantidad) => {
+    if (!productoNuevoSeleccionado) return
+
+    let nuevaCantidad = Number(cantidad)
+
+    if (!Number.isFinite(nuevaCantidad)) {
+      nuevaCantidad = 1
+    }
+
+    nuevaCantidad = Math.floor(nuevaCantidad)
+
+    if (nuevaCantidad < 1) {
+      nuevaCantidad = 1
+    }
+
+    setProductoNuevoSeleccionado(prev => ({
+      ...prev,
+      cantidad: nuevaCantidad
+    }))
   }
 
-  const calcularTotalNuevo = () => {
+  const totalDevuelto = useMemo(() => {
+    return productosDevueltos.reduce(
+      (total, producto) =>
+        total +
+        Number(producto.precio || 0) *
+        Number(producto.cantidad || 0),
+      0
+    )
+  }, [productosDevueltos])
+
+  const totalNuevo = useMemo(() => {
     if (!productoNuevoSeleccionado) return 0
-    return productoNuevoSeleccionado.precio * productoNuevoSeleccionado.cantidad
+
+    return (
+      Number(productoNuevoSeleccionado.precio || 0) *
+      Number(productoNuevoSeleccionado.cantidad || 0)
+    )
+  }, [productoNuevoSeleccionado])
+
+  const envio = Number(costoEnvioManual || 0)
+
+  const diferencia = useMemo(() => {
+    if (form.tipo === 'devolucion') {
+      return -totalDevuelto
+    }
+
+    return totalNuevo + envio - totalDevuelto
+  }, [
+    form.tipo,
+    totalDevuelto,
+    totalNuevo,
+    envio
+  ])
+
+  const cambiosFiltrados = useMemo(() => {
+    return cambios.filter(cambio => {
+      const estadoCoincide =
+        !filtroEstado ||
+        String(cambio.estado || '') === filtroEstado
+
+      const sucursalCoincide =
+        !filtroSucursal ||
+        String(
+          cambio.sucursal_id ||
+          cambio.venta_sucursal_id ||
+          ''
+        ) === filtroSucursal
+
+      const texto = busquedaHistorial
+        .trim()
+        .toLowerCase()
+
+      const textoCoincide =
+        !texto ||
+        String(cambio.factura_original || '')
+          .toLowerCase()
+          .includes(texto) ||
+        String(cambio.cliente_nombre || '')
+          .toLowerCase()
+          .includes(texto) ||
+        String(cambio.producto_devuelto_nombre || '')
+          .toLowerCase()
+          .includes(texto) ||
+        String(cambio.producto_nuevo_nombre || '')
+          .toLowerCase()
+          .includes(texto)
+
+      return (
+        estadoCoincide &&
+        sucursalCoincide &&
+        textoCoincide
+      )
+    })
+  }, [
+    cambios,
+    filtroEstado,
+    filtroSucursal,
+    busquedaHistorial
+  ])
+
+  const abrirFormulario = () => {
+    if (!ventaEncontrada) {
+      mostrarError('Primero debes buscar una factura')
+      return
+    }
+
+    if (productosDevueltos.length === 0) {
+      mostrarError(
+        'Selecciona al menos un producto que el cliente va a devolver'
+      )
+      return
+    }
+
+    setMostrarFormulario(true)
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    })
   }
 
-  const calcularDiferencia = () => {
-    const totalDevuelto = calcularTotalDevuelto()
-    const totalNuevo = calcularTotalNuevo()
-    const envio = parseFloat(costoEnvioManual) || 0
-    return (totalNuevo + envio) - totalDevuelto
+  const cerrarFormulario = () => {
+    setMostrarFormulario(false)
   }
 
-  // ============================================
-  // HANDLE SUBMIT
-  // ============================================
+  const limpiarOperacion = () => {
+    setVentaEncontrada(null)
+    setDetallesVenta([])
+    setProductosDevueltos([])
+    setProductoNuevoSeleccionado(null)
+    setCostoEnvioManual(0)
+    setFacturaBusqueda('')
+    setMostrarFormulario(false)
+
+    setForm({
+      tipo: 'cambio',
+      venta_id: '',
+      factura_original: '',
+      cliente_nombre: '',
+      cliente_telefono: '',
+      motivo: '',
+      envio_opcional: false
+    })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
+    if (!ventaEncontrada) {
+      mostrarError('No existe una venta seleccionada')
+      return
+    }
+
     if (productosDevueltos.length === 0) {
-      alert('⚠️ Selecciona al menos un producto devuelto')
+      mostrarError(
+        'Debes seleccionar al menos un producto devuelto'
+      )
       return
     }
 
-    if (form.tipo === 'cambio' && !productoNuevoSeleccionado) {
-      alert('⚠️ Selecciona el producto nuevo para el cambio')
+    if (!form.motivo.trim()) {
+      mostrarError('Debes indicar el motivo')
       return
     }
 
-    const diferencia = calcularDiferencia()
-    
-    if (diferencia > 0) {
-      const confirmar = confirm(`⚠️ El cliente debe pagar RD$ ${diferencia.toFixed(2)} por la diferencia. ¿Confirmar?`)
-      if (!confirmar) return
-    } else if (diferencia < 0) {
-      const confirmar = confirm(`💰 El cliente tiene crédito a favor de RD$ ${Math.abs(diferencia).toFixed(2)}. ¿Confirmar la devolución?`)
-      if (!confirmar) return
+    if (
+      form.tipo === 'cambio' &&
+      !productoNuevoSeleccionado
+    ) {
+      mostrarError(
+        'Selecciona el producto nuevo para realizar el cambio'
+      )
+      return
     }
+
+    if (
+      form.tipo === 'devolucion' &&
+      productoNuevoSeleccionado
+    ) {
+      setProductoNuevoSeleccionado(null)
+    }
+
+    const confirmar = window.confirm(
+      form.tipo === 'devolucion'
+        ? `¿Confirmar devolución por RD$ ${totalDevuelto.toFixed(
+            2
+          )}?\n\nEl inventario será actualizado en la sucursal de la venta.`
+        : `¿Confirmar cambio?\n\nProducto devuelto: RD$ ${totalDevuelto.toFixed(
+            2
+          )}\nProducto nuevo: RD$ ${totalNuevo.toFixed(
+            2
+          )}\nDiferencia: RD$ ${Math.abs(
+            diferencia
+          ).toFixed(2)}`
+    )
+
+    if (!confirmar) return
 
     setCargando(true)
+    limpiarMensajes()
+
     try {
-      const dataEnvio = {
-        venta_id: form.venta_id,
+      const payload = {
+        venta_id: Number(form.venta_id),
         factura_original: form.factura_original,
         cliente_nombre: form.cliente_nombre,
         cliente_telefono: form.cliente_telefono,
-        productos_devueltos: productosDevueltos,
-        producto_nuevo_id: productoNuevoSeleccionado?.id || null,
-        producto_nuevo_nombre: productoNuevoSeleccionado?.nombre || '',
-        cantidad_nueva: productoNuevoSeleccionado?.cantidad || 0,
-        precio_nuevo: productoNuevoSeleccionado?.precio || 0,
-        total_devuelto: calcularTotalDevuelto(),
-        total_nuevo: calcularTotalNuevo(),
-        envio: parseFloat(costoEnvioManual) || 0,
-        diferencia: diferencia,
+        productos_devueltos: productosDevueltos.map(p => ({
+          producto_id: Number(p.producto_id),
+          producto_nombre: p.producto_nombre,
+          cantidad: Number(p.cantidad),
+          precio: Number(p.precio)
+        })),
+        producto_nuevo_id:
+          form.tipo === 'cambio'
+            ? Number(
+                productoNuevoSeleccionado?.id || 0
+              )
+            : null,
+        producto_nuevo_nombre:
+          form.tipo === 'cambio'
+            ? productoNuevoSeleccionado?.nombre || ''
+            : '',
+        cantidad_nueva:
+          form.tipo === 'cambio'
+            ? Number(
+                productoNuevoSeleccionado?.cantidad || 0
+              )
+            : 0,
+        precio_nuevo:
+          form.tipo === 'cambio'
+            ? Number(
+                productoNuevoSeleccionado?.precio || 0
+              )
+            : 0,
+        total_devuelto: Number(
+          totalDevuelto.toFixed(2)
+        ),
+        total_nuevo: Number(
+          totalNuevo.toFixed(2)
+        ),
+        envio: Number(envio.toFixed(2)),
+        diferencia: Number(
+          diferencia.toFixed(2)
+        ),
         tipo: form.tipo,
-        motivo: form.motivo,
-        usuario_id: usuario.id,
-        envio_opcional: form.envio_opcional
+        motivo: form.motivo.trim(),
+        usuario_id: usuario.id
+          ? Number(usuario.id)
+          : null,
+        envio_opcional: Boolean(
+          form.envio_opcional
+        )
       }
 
-      console.log('📤 Enviando cambio:', dataEnvio)
-
-      const response = await fetch(`${API_URL}/cambios`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataEnvio)
-      })
+      const response = await fetch(
+        `${API_URL}/cambios`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        }
+      )
 
       const data = await response.json()
 
-      if (data.success) {
-        setMensaje('✅ Cambio registrado correctamente')
-        setMostrarFormulario(false)
-        setVentaEncontrada(null)
-        setDetallesVenta([])
-        setProductosDevueltos([])
-        setProductoNuevoSeleccionado(null)
-        setCostoEnvioManual(0)
-        setFacturaBusqueda('')
-        cargarCambios()
-        setTimeout(() => setMensaje(''), 3000)
-      } else {
-        alert('❌ Error: ' + (data.error || 'No se pudo registrar'))
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            data.message ||
+            'No se pudo registrar la operación'
+        )
       }
+
+      mostrarMensaje(
+        form.tipo === 'devolucion'
+          ? 'Devolución registrada correctamente'
+          : 'Cambio registrado correctamente'
+      )
+
+      limpiarOperacion()
+      await cargarCambios()
+      await cargarProductos()
     } catch (error) {
-      console.error(error)
-      alert('❌ Error registrando cambio: ' + error.message)
+      console.error(
+        'Error registrando cambio/devolución:',
+        error
+      )
+
+      mostrarError(
+        error.message ||
+          'Error registrando la operación'
+      )
     } finally {
       setCargando(false)
     }
   }
 
-  // ============================================
-  // FUNCIONES AUXILIARES
-  // ============================================
-  const getTipoLabel = (tipo) => {
-    const tipos = { 
-      'cambio': '🔄 Cambio', 
-      'devolucion': '💰 Devolución', 
-      'ajuste': '⚙️ Ajuste' 
+  const getTipoLabel = tipo => {
+    const tipos = {
+      cambio: '🔄 Cambio',
+      devolucion: '↩️ Devolución',
+      ajuste: '⚙️ Ajuste'
     }
-    return tipos[tipo] || tipo
+
+    return tipos[tipo] || tipo || 'N/A'
   }
 
-  const getEstadoColor = (estado) => {
-    const colores = { 
-      'pendiente': '#ff9800', 
-      'completado': '#4CAF50', 
-      'cancelado': '#f44336' 
+  const getEstadoColor = estado => {
+    const colores = {
+      pendiente: '#f59e0b',
+      completado: '#16a34a',
+      cancelado: '#dc2626'
     }
-    return colores[estado] || '#757575'
+
+    return colores[estado] || '#64748b'
   }
 
-  const getEstadoLabel = (estado) => {
-    const estados = { 
-      'pendiente': '⏳ Pendiente', 
-      'completado': '✅ Completado', 
-      'cancelado': '❌ Cancelado' 
+  const getEstadoLabel = estado => {
+    const estados = {
+      pendiente: 'Pendiente',
+      completado: 'Completado',
+      cancelado: 'Cancelado'
     }
-    return estados[estado] || estado
+
+    return estados[estado] || estado || 'N/A'
   }
 
-  // ============================================
-  // REIMPRIMIR FACTURA
-  // ============================================
-  const handleReimprimir = async (ventaId) => {
+  const getSucursalNombre = cambio => {
+    const id =
+      cambio.sucursal_id ||
+      cambio.venta_sucursal_id
+
+    const sucursal = sucursales.find(
+      s => Number(s.id) === Number(id)
+    )
+
+    return (
+      cambio.sucursal_nombre ||
+      sucursal?.nombre ||
+      (id ? `Sucursal ${id}` : 'No definida')
+    )
+  }
+
+  const handleReimprimir = async ventaId => {
     if (!ventaId) {
-      alert('⚠️ No hay factura asociada')
-      return;
+      mostrarError(
+        'No existe una factura asociada'
+      )
+      return
     }
+
     try {
-      const loading = document.createElement('div');
-      loading.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;color:white;font-size:1.5rem;';
-      loading.innerHTML = '🖨️ Generando factura...';
-      document.body.appendChild(loading);
+      setCargando(true)
 
-      const response = await fetch(`${API_URL}/ventas/${ventaId}/reimprimir`);
-      const data = await response.json();
+      const response = await fetch(
+        `${API_URL}/ventas/${ventaId}/reimprimir`
+      )
 
-      if (!data.success) {
-        alert('❌ Error al obtener los datos');
-        document.body.removeChild(loading);
-        return;
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            'No se pudieron obtener los datos de la factura'
+        )
       }
 
-      const venta = data.venta;
-      const detalles = data.detalles;
-      const sucursal = data.sucursal || { nombre: 'Sucursal Principal', direccion: '', telefono: '' };
+      const venta = data.venta
+      const detalles = data.detalles || []
+
+      const sucursal =
+        data.sucursal || {
+          nombre:
+            venta.sucursal_nombre ||
+            'Sucursal',
+          direccion: '',
+          telefono: ''
+        }
+
+      const escapeHTML = value =>
+        String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;')
 
       let ticketHTML = `
-        <div style="font-family: monospace; width: 300px; margin: 0 auto; padding: 20px; background: white;">
-          <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px;">
-            <h2 style="margin: 0; font-size: 18px;">🏭 AMAGO ERP</h2>
-            <p style="margin: 2px 0; font-size: 12px;">${sucursal.nombre || 'Sucursal Principal'}</p>
-            <p style="margin: 5px 0; font-size: 14px; font-weight: bold;">FACTURA</p>
-            <p style="margin: 2px 0; font-size: 12px;">#${venta.codigo_entrega || venta.id}</p>
+        <div class="ticket">
+          <div class="header">
+            <h2>AMAGO ERP</h2>
+            <p>${escapeHTML(
+              sucursal.nombre
+            )}</p>
+            ${
+              sucursal.direccion
+                ? `<p>${escapeHTML(
+                    sucursal.direccion
+                  )}</p>`
+                : ''
+            }
+            ${
+              sucursal.telefono
+                ? `<p>${escapeHTML(
+                    sucursal.telefono
+                  )}</p>`
+                : ''
+            }
+            <strong>FACTURA</strong>
+            <p>#${escapeHTML(
+              venta.codigo_entrega ||
+                venta.id
+            )}</p>
           </div>
-          <div style="padding: 10px 0; border-bottom: 1px dashed #000;">
-            <p style="margin: 2px 0;"><strong>Cliente:</strong> ${venta.cliente_nombre || 'N/A'}</p>
-            <p style="margin: 2px 0;"><strong>Fecha:</strong> ${new Date(venta.fecha).toLocaleString()}</p>
-            <p style="margin: 2px 0;"><strong>Total:</strong> RD$ ${Number(venta.total).toFixed(2)}</p>
+
+          <div class="info">
+            <p>
+              <strong>Cliente:</strong>
+              ${escapeHTML(
+                venta.cliente_nombre ||
+                  'N/A'
+              )}
+            </p>
+
+            <p>
+              <strong>Fecha:</strong>
+              ${new Date(
+                venta.fecha
+              ).toLocaleString()}
+            </p>
+
+            <p>
+              <strong>Sucursal:</strong>
+              ${escapeHTML(
+                venta.sucursal_nombre ||
+                  sucursal.nombre
+              )}
+            </p>
           </div>
-          <div style="padding: 10px 0;">
-            <table style="width:100%;font-size:12px;border-collapse:collapse;">
-              <thead><tr style="border-bottom:1px solid #000;"><th style="text-align:left;">Producto</th><th style="text-align:center;">Cant</th><th style="text-align:right;">Total</th></tr></thead>
-              <tbody>
-      `;
+
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cant.</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+
+            <tbody>
+      `
+
       detalles.forEach(d => {
-        ticketHTML += `<tr><td>${d.producto_nombre || 'Producto'}</td><td style="text-align:center;">${d.cantidad}</td><td style="text-align:right;">RD$ ${(Number(d.precio) * d.cantidad).toFixed(2)}</td></tr>`;
-      });
+        const cantidad = Number(
+          d.cantidad || 0
+        )
+
+        const precio = Number(
+          d.precio || 0
+        )
+
+        ticketHTML += `
+          <tr>
+            <td>${escapeHTML(
+              d.producto_nombre ||
+                'Producto'
+            )}</td>
+
+            <td>${cantidad}</td>
+
+            <td>
+              RD$ ${(precio * cantidad).toFixed(
+                2
+              )}
+            </td>
+          </tr>
+        `
+      })
+
       ticketHTML += `
-              </tbody>
-              <tfoot><tr style="border-top:2px solid #000;"><td colspan="2" style="text-align:right;font-weight:bold;">TOTAL:</td><td style="text-align:right;font-weight:bold;">RD$ ${Number(venta.total).toFixed(2)}</td></tr></tfoot>
-            </table>
+            </tbody>
+
+            <tfoot>
+              <tr>
+                <td colspan="2">
+                  <strong>TOTAL</strong>
+                </td>
+                <td>
+                  <strong>
+                    RD$ ${Number(
+                      venta.total || 0
+                    ).toFixed(2)}
+                  </strong>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div class="footer">
+            <p>Gracias por su compra</p>
           </div>
-          <div style="padding:10px 0;text-align:center;font-size:11px;color:#666;"><p>¡Gracias por su compra!</p></div>
         </div>
-      `;
+      `
 
-      const ventana = window.open('', '_blank', 'width=400,height=600');
+      const ventana = window.open(
+        '',
+        '_blank',
+        'width=420,height=700'
+      )
+
+      if (!ventana) {
+        throw new Error(
+          'El navegador bloqueó la ventana de impresión'
+        )
+      }
+
       ventana.document.write(`
-        <html><head><title>Factura #${venta.codigo_entrega || venta.id}</title>
-        <style>body{margin:0;padding:20px;background:#f5f5f5;}@media print{body{background:white;padding:0;}.no-print{display:none;}}</style>
-        </head><body>${ticketHTML}
-        <div style="text-align:center;margin-top:20px;" class="no-print">
-          <button onclick="window.print()" style="padding:10px 30px;background:#003b6f;color:white;border:none;border-radius:8px;cursor:pointer;">🖨️ Imprimir</button>
-          <button onclick="window.close()" style="padding:10px 30px;background:#f44336;color:white;border:none;border-radius:8px;cursor:pointer;margin-left:10px;">✕ Cerrar</button>
-        </div>
-        </body></html>
-      `);
-      ventana.document.close();
-      document.body.removeChild(loading);
-      setMensaje('✅ Factura reimpresa');
-      setTimeout(() => setMensaje(''), 3000);
-    } catch (error) {
-      console.error(error);
-      alert('❌ Error al reimprimir');
-      const loading = document.querySelector('div[style*="position: fixed;"]');
-      if (loading) document.body.removeChild(loading);
-    }
-  };
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <title>Factura #${escapeHTML(
+            venta.codigo_entrega ||
+              venta.id
+          )}</title>
 
-  // ============================================
-  // RENDER
-  // ============================================
+          <style>
+            * {
+              box-sizing: border-box;
+            }
+
+            body {
+              margin: 0;
+              padding: 20px;
+              background: #f1f5f9;
+              font-family: Arial, sans-serif;
+            }
+
+            .ticket {
+              width: 360px;
+              max-width: 100%;
+              margin: auto;
+              background: white;
+              padding: 20px;
+              color: #111827;
+            }
+
+            .header {
+              text-align: center;
+              border-bottom: 2px dashed #111827;
+              padding-bottom: 12px;
+            }
+
+            .header h2 {
+              margin: 0 0 5px;
+            }
+
+            .header p {
+              margin: 3px 0;
+              font-size: 12px;
+            }
+
+            .info {
+              border-bottom: 1px dashed #64748b;
+              padding: 12px 0;
+              font-size: 12px;
+            }
+
+            .info p {
+              margin: 4px 0;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 12px;
+              font-size: 11px;
+            }
+
+            th,
+            td {
+              padding: 6px 3px;
+              text-align: left;
+            }
+
+            th:last-child,
+            td:last-child {
+              text-align: right;
+            }
+
+            tfoot {
+              border-top: 2px solid #111827;
+            }
+
+            .footer {
+              text-align: center;
+              margin-top: 20px;
+              font-size: 11px;
+              color: #64748b;
+            }
+
+            .acciones {
+              text-align: center;
+              margin-top: 20px;
+            }
+
+            button {
+              border: 0;
+              padding: 10px 20px;
+              border-radius: 6px;
+              cursor: pointer;
+              margin: 5px;
+            }
+
+            .imprimir {
+              background: #003b6f;
+              color: white;
+            }
+
+            .cerrar {
+              background: #dc2626;
+              color: white;
+            }
+
+            @media print {
+              body {
+                background: white;
+                padding: 0;
+              }
+
+              .acciones {
+                display: none;
+              }
+
+              .ticket {
+                width: 100%;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+
+          ${ticketHTML}
+
+          <div class="acciones">
+            <button
+              class="imprimir"
+              onclick="window.print()"
+            >
+              🖨️ Imprimir
+            </button>
+
+            <button
+              class="cerrar"
+              onclick="window.close()"
+            >
+              Cerrar
+            </button>
+          </div>
+
+        </body>
+        </html>
+      `)
+
+      ventana.document.close()
+      ventana.focus()
+
+      mostrarMensaje(
+        'Factura preparada para impresión'
+      )
+    } catch (error) {
+      console.error(
+        'Error reimprimiendo:',
+        error
+      )
+
+      mostrarError(
+        error.message ||
+          'Error al reimprimir'
+      )
+    } finally {
+      setCargando(false)
+    }
+  }
+
   if (!tieneAcceso) {
     return (
       <AdminLayout>
-        <div style={{ textAlign: 'center', padding: '60px' }}>
+        <div
+          style={{
+            padding: 60,
+            textAlign: 'center'
+          }}
+        >
           <h2>⛔ Acceso Denegado</h2>
-          <p>No tienes permisos para ver esta página.</p>
+          <p>
+            No tienes permisos para utilizar
+            este módulo.
+          </p>
         </div>
       </AdminLayout>
     )
@@ -477,437 +1007,1534 @@ function Cambios() {
 
   return (
     <AdminLayout>
-      <h1>🔄 Cambios y Devoluciones</h1>
+      <div
+        style={{
+          maxWidth: '1500px',
+          margin: '0 auto',
+          paddingBottom: '40px'
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '15px',
+            flexWrap: 'wrap',
+            marginBottom: '25px'
+          }}
+        >
+          <div>
+            <h1
+              style={{
+                margin: 0,
+                color: '#003b6f'
+              }}
+            >
+              🔄 Cambios y Devoluciones
+            </h1>
 
-      {mensaje && (
-        <div style={{
-          backgroundColor: mensaje.includes('✅') ? '#e8f5e9' : '#fef2f2',
-          color: mensaje.includes('✅') ? '#1b5e20' : '#dc2626',
-          padding: '10px 15px',
-          borderRadius: '8px',
-          marginBottom: '20px'
-        }}>
-          {mensaje}
-        </div>
-      )}
+            <p
+              style={{
+                margin: '6px 0 0',
+                color: '#64748b'
+              }}
+            >
+              Gestión de cambios, devoluciones
+              e inventario por sucursal
+            </p>
+          </div>
 
-      {/* BUSCAR FACTURA */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        padding: '20px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        marginBottom: '25px'
-      }}>
-        <h3 style={{ color: '#003b6f' }}>🔍 Buscar Factura</h3>
-        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            value={facturaBusqueda}
-            onChange={(e) => setFacturaBusqueda(e.target.value)}
-            placeholder="Número de factura o ID"
+          <div
             style={{
-              padding: '10px 16px',
-              border: '1px solid #ddd',
-              borderRadius: '8px',
-              flex: 1,
-              minWidth: '200px',
-              fontSize: '1rem'
-            }}
-            onKeyPress={(e) => e.key === 'Enter' && buscarFactura()}
-          />
-          <button
-            onClick={buscarFactura}
-            disabled={cargando}
-            style={{
-              padding: '10px 25px',
-              backgroundColor: '#003b6f',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '1rem'
+              background: '#e0f2fe',
+              color: '#075985',
+              padding: '10px 15px',
+              borderRadius: '10px',
+              fontWeight: 600
             }}
           >
-            {cargando ? 'Buscando...' : '🔍 Buscar'}
-          </button>
+            🏢 3 sucursales
+          </div>
         </div>
 
-        {ventaEncontrada && (
-          <div style={{
-            marginTop: '15px',
-            padding: '15px',
-            backgroundColor: '#f0f4f8',
-            borderRadius: '8px',
-            border: '1px solid #ddd'
-          }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <div><strong>Factura:</strong> {ventaEncontrada.codigo_entrega || ventaEncontrada.id}</div>
-              <div><strong>Cliente:</strong> {ventaEncontrada.cliente_nombre}</div>
-              <div><strong>Teléfono:</strong> {ventaEncontrada.cliente_telefono || 'N/A'}</div>
-              <div><strong>Total:</strong> RD$ {Number(ventaEncontrada.total).toFixed(2)}</div>
-              <div><strong>Fecha:</strong> {new Date(ventaEncontrada.fecha).toLocaleDateString()}</div>
-              <div><strong>Vendedor:</strong> {ventaEncontrada.vendedor_nombre || 'N/A'}</div>
-            </div>
+        {mensaje && (
+          <div
+            style={{
+              background: '#dcfce7',
+              color: '#166534',
+              border: '1px solid #86efac',
+              padding: '14px 18px',
+              borderRadius: '10px',
+              marginBottom: '20px'
+            }}
+          >
+            ✅ {mensaje}
+          </div>
+        )}
 
-            {/* LISTA DE PRODUCTOS */}
-            <div style={{ marginTop: '10px' }}>
-              <h4>📋 Productos de la venta <span style={{ fontSize: '0.8rem', color: '#666' }}>(Haz clic para seleccionar)</span></h4>
-              <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                {detallesVenta.map((d, idx) => {
-                  const seleccionado = productosDevueltos.find(p => p.producto_id === (d.producto_id || d.id))
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => seleccionarProductoDevuelto(d)}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '8px 12px',
-                        borderBottom: '1px solid #eee',
-                        cursor: 'pointer',
-                        backgroundColor: seleccionado ? '#e3f2fd' : 'transparent',
-                        borderLeft: seleccionado ? '4px solid #2196F3' : '4px solid transparent'
-                      }}
-                    >
-                      <span>{d.producto_nombre || d.nombre || 'Sin nombre'}</span>
-                      <span>Cantidad: {d.cantidad} | RD$ {Number(d.producto_precio || d.precio || 0).toFixed(2)}</span>
-                      <span style={{ color: seleccionado ? '#2196F3' : '#999', fontSize: '0.8rem' }}>
-                        {seleccionado ? '✅ Seleccionado' : 'Seleccionar'}
-                      </span>
-                    </div>
-                  )
-                })}
+        {error && (
+          <div
+            style={{
+              background: '#fef2f2',
+              color: '#991b1b',
+              border: '1px solid #fecaca',
+              padding: '14px 18px',
+              borderRadius: '10px',
+              marginBottom: '20px'
+            }}
+          >
+            ⚠️ {error}
+          </div>
+        )}
+
+        <section
+          style={{
+            background: '#fff',
+            borderRadius: '14px',
+            padding: '24px',
+            boxShadow:
+              '0 4px 15px rgba(15,23,42,.08)',
+            marginBottom: '25px'
+          }}
+        >
+          <h3
+            style={{
+              marginTop: 0,
+              color: '#003b6f'
+            }}
+          >
+            🔎 Buscar venta
+          </h3>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <input
+              value={facturaBusqueda}
+              onChange={e =>
+                setFacturaBusqueda(
+                  e.target.value
+                )
+              }
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  buscarFactura()
+                }
+              }}
+              placeholder="Número de factura o ID"
+              style={{
+                flex: 1,
+                minWidth: '250px',
+                padding: '13px 15px',
+                border:
+                  '1px solid #cbd5e1',
+                borderRadius: '9px',
+                fontSize: '15px'
+              }}
+            />
+
+            <button
+              onClick={buscarFactura}
+              disabled={cargandoFactura}
+              style={{
+                padding: '13px 25px',
+                border: 0,
+                borderRadius: '9px',
+                background: '#003b6f',
+                color: '#fff',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              {cargandoFactura
+                ? 'Buscando...'
+                : '🔎 Buscar factura'}
+            </button>
+          </div>
+        </section>
+
+        {ventaEncontrada && (
+          <section
+            style={{
+              background: '#fff',
+              borderRadius: '14px',
+              padding: '24px',
+              boxShadow:
+                '0 4px 15px rgba(15,23,42,.08)',
+              marginBottom: '25px'
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent:
+                  'space-between',
+                alignItems: 'center',
+                gap: '15px',
+                flexWrap: 'wrap',
+                marginBottom: '20px'
+              }}
+            >
+              <div>
+                <h3
+                  style={{
+                    margin: 0,
+                    color: '#003b6f'
+                  }}
+                >
+                  🧾 Información de la venta
+                </h3>
               </div>
 
-              {/* PRODUCTOS SELECCIONADOS */}
-              {productosDevueltos.length > 0 && (
-                <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
-                  <strong>📦 Productos devueltos seleccionados: {productosDevueltos.length}</strong>
-                  {productosDevueltos.map((p, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 'bold' }}>{p.producto_nombre}</span>
-                      <span>Cantidad:</span>
+              <div
+                style={{
+                  background: '#dcfce7',
+                  color: '#166534',
+                  padding: '9px 14px',
+                  borderRadius: '9px',
+                  fontWeight: 700
+                }}
+              >
+                🏢{' '}
+                {ventaEncontrada.sucursal_nombre ||
+                  `Sucursal ${
+                    ventaEncontrada.sucursal_id ||
+                    ''
+                  }`}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns:
+                  'repeat(auto-fit,minmax(200px,1fr))',
+                gap: '15px',
+                marginBottom: '20px'
+              }}
+            >
+              <div>
+                <small>Factura</small>
+                <strong
+                  style={{
+                    display: 'block',
+                    marginTop: 4
+                  }}
+                >
+                  #
+                  {ventaEncontrada.codigo_entrega ||
+                    ventaEncontrada.id}
+                </strong>
+              </div>
+
+              <div>
+                <small>Cliente</small>
+                <strong
+                  style={{
+                    display: 'block',
+                    marginTop: 4
+                  }}
+                >
+                  {ventaEncontrada.cliente_nombre ||
+                    'Consumidor final'}
+                </strong>
+              </div>
+
+              <div>
+                <small>Teléfono</small>
+                <strong
+                  style={{
+                    display: 'block',
+                    marginTop: 4
+                  }}
+                >
+                  {ventaEncontrada.cliente_telefono ||
+                    'N/A'}
+                </strong>
+              </div>
+
+              <div>
+                <small>Total venta</small>
+                <strong
+                  style={{
+                    display: 'block',
+                    marginTop: 4,
+                    color: '#003b6f'
+                  }}
+                >
+                  RD${' '}
+                  {Number(
+                    ventaEncontrada.total || 0
+                  ).toFixed(2)}
+                </strong>
+              </div>
+            </div>
+
+            <h4
+              style={{
+                color: '#003b6f',
+                marginBottom: '10px'
+              }}
+            >
+              📦 Productos vendidos
+            </h4>
+
+            <div
+              style={{
+                overflowX: 'auto',
+                border:
+                  '1px solid #e2e8f0',
+                borderRadius: '10px'
+              }}
+            >
+              <table
+                style={{
+                  width: '100%',
+                  borderCollapse:
+                    'collapse'
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      background:
+                        '#f8fafc'
+                    }}
+                  >
+                    <th style={th}>
+                      Producto
+                    </th>
+                    <th style={th}>
+                      Vendido
+                    </th>
+                    <th style={th}>
+                      Precio
+                    </th>
+                    <th style={th}>
+                      Total
+                    </th>
+                    <th style={th}>
+                      Acción
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {detallesVenta.map(
+                    (detalle, index) => {
+                      const productoId =
+                        Number(
+                          detalle.producto_id ||
+                            detalle.id
+                        )
+
+                      const seleccionado =
+                        productosDevueltos.some(
+                          p =>
+                            Number(
+                              p.producto_id
+                            ) ===
+                            productoId
+                        )
+
+                      const cantidad =
+                        Number(
+                          detalle.cantidad ||
+                            0
+                        )
+
+                      const precio =
+                        Number(
+                          detalle.producto_precio ||
+                            detalle.precio ||
+                            0
+                        )
+
+                      return (
+                        <tr
+                          key={`${productoId}-${index}`}
+                          style={{
+                            borderTop:
+                              '1px solid #e2e8f0'
+                          }}
+                        >
+                          <td style={td}>
+                            <strong>
+                              {detalle.producto_nombre ||
+                                detalle.nombre ||
+                                'Producto'}
+                            </strong>
+                          </td>
+
+                          <td style={td}>
+                            {cantidad}
+                          </td>
+
+                          <td style={td}>
+                            RD${' '}
+                            {precio.toFixed(
+                              2
+                            )}
+                          </td>
+
+                          <td style={td}>
+                            RD${' '}
+                            {(
+                              precio *
+                              cantidad
+                            ).toFixed(2)}
+                          </td>
+
+                          <td style={td}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                seleccionarProductoDevuelto(
+                                  detalle
+                                )
+                              }
+                              style={{
+                                padding:
+                                  '8px 12px',
+                                border: 0,
+                                borderRadius:
+                                  '7px',
+                                background:
+                                  seleccionado
+                                    ? '#dc2626'
+                                    : '#003b6f',
+                                color: '#fff',
+                                cursor:
+                                  'pointer'
+                              }}
+                            >
+                              {seleccionado
+                                ? '✕ Quitar'
+                                : '↩️ Devolver'}
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    }
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {productosDevueltos.length >
+              0 && (
+              <div
+                style={{
+                  marginTop: '20px',
+                  background: '#eff6ff',
+                  border:
+                    '1px solid #bfdbfe',
+                  borderRadius: '12px',
+                  padding: '18px'
+                }}
+              >
+                <h4
+                  style={{
+                    marginTop: 0,
+                    color: '#1e40af'
+                  }}
+                >
+                  ↩️ Productos seleccionados
+                </h4>
+
+                {productosDevueltos.map(
+                  producto => (
+                    <div
+                      key={producto.producto_id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns:
+                          '2fr 1fr 1fr 1fr auto',
+                        gap: '12px',
+                        alignItems:
+                          'center',
+                        padding:
+                          '12px 0',
+                        borderBottom:
+                          '1px solid #dbeafe'
+                      }}
+                    >
+                      <strong>
+                        {
+                          producto.producto_nombre
+                        }
+                      </strong>
+
+                      <span>
+                        Máx:{' '}
+                        {
+                          producto.cantidad_maxima
+                        }
+                      </span>
+
                       <input
                         type="number"
                         min="1"
-                        max={p.cantidad_maxima || 1}
-                        value={p.cantidad}
-                        onChange={(e) => actualizarCantidadDevuelto(p.producto_id, parseInt(e.target.value) || 1)}
-                        style={{ width: '60px', padding: '4px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        max={
+                          producto.cantidad_maxima
+                        }
+                        value={
+                          producto.cantidad
+                        }
+                        onChange={e =>
+                          actualizarCantidadDevuelto(
+                            producto.producto_id,
+                            e.target.value
+                          )
+                        }
+                        style={{
+                          width: '80px',
+                          padding: '8px',
+                          border:
+                            '1px solid #cbd5e1',
+                          borderRadius:
+                            '7px'
+                        }}
                       />
-                      <span style={{ fontSize: '0.7rem', color: '#666' }}>(max {p.cantidad_maxima || 1})</span>
-                      <span>RD$ {Number(p.precio).toFixed(2)} c/u</span>
-                      <span style={{ fontWeight: 'bold' }}>Total: RD$ {Number(p.precio * p.cantidad).toFixed(2)}</span>
+
+                      <strong>
+                        RD${' '}
+                        {(
+                          producto.precio *
+                          producto.cantidad
+                        ).toFixed(2)}
+                      </strong>
+
                       <button
-                        onClick={() => eliminarProductoDevuelto(p.producto_id)}
-                        style={{ backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer' }}
+                        type="button"
+                        onClick={() =>
+                          eliminarProductoDevuelto(
+                            producto.producto_id
+                          )
+                        }
+                        style={{
+                          border: 0,
+                          background:
+                            '#dc2626',
+                          color: '#fff',
+                          padding:
+                            '7px 10px',
+                          borderRadius:
+                            '6px',
+                          cursor:
+                            'pointer'
+                        }}
                       >
                         ✕
                       </button>
                     </div>
-                  ))}
-                  <div style={{ marginTop: '5px', fontWeight: 'bold', color: '#003b6f', fontSize: '1.1rem' }}>
-                    Total devuelto: RD$ {totalDevueltoCalculado.toFixed(2)}
-                  </div>
-                </div>
-              )}
-            </div>
+                  )
+                )}
 
-            <button
-              onClick={() => setMostrarFormulario(!mostrarFormulario)}
+                <div
+                  style={{
+                    textAlign: 'right',
+                    marginTop: '15px',
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    color: '#1e3a8a'
+                  }}
+                >
+                  Total seleccionado:
+                  {' '}RD${' '}
+                  {totalDevuelto.toFixed(2)}
+                </div>
+              </div>
+            )}
+
+            <div
               style={{
-                marginTop: '10px',
-                padding: '8px 20px',
-                backgroundColor: mostrarFormulario ? '#f44336' : '#4CAF50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
+                display: 'flex',
+                gap: '10px',
+                marginTop: '20px',
+                flexWrap: 'wrap'
               }}
             >
-              {mostrarFormulario ? '✕ Cerrar' : '📝 Registrar Cambio'}
-            </button>
-          </div>
-        )}
-      </div>
+              <button
+                type="button"
+                onClick={abrirFormulario}
+                disabled={
+                  productosDevueltos.length ===
+                  0
+                }
+                style={{
+                  padding:
+                    '12px 20px',
+                  border: 0,
+                  borderRadius: '8px',
+                  background:
+                    productosDevueltos.length
+                      ? '#16a34a'
+                      : '#94a3b8',
+                  color: '#fff',
+                  fontWeight: 700,
+                  cursor:
+                    productosDevueltos.length
+                      ? 'pointer'
+                      : 'not-allowed'
+                }}
+              >
+                📝 Continuar operación
+              </button>
 
-      {/* FORMULARIO */}
-      {mostrarFormulario && ventaEncontrada && (
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '24px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          marginBottom: '25px',
-          border: '2px solid #003b6f'
-        }}>
-          <h3 style={{ color: '#003b6f' }}>📝 Registrar Cambio</h3>
-
-          <form onSubmit={handleSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              <div>
-                <label style={{ fontWeight: 'bold' }}>Tipo de Operación *</label>
-                <select
-                  value={form.tipo}
-                  onChange={(e) => setForm({ ...form, tipo: e.target.value })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px' }}
-                >
-                  <option value="cambio">🔄 Cambio por otro producto</option>
-                  <option value="devolucion">💰 Devolución (reembolso)</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontWeight: 'bold' }}>Motivo *</label>
-                <input
-                  type="text"
-                  value={form.motivo}
-                  onChange={(e) => setForm({ ...form, motivo: e.target.value })}
-                  placeholder="Ej: Producto defectuoso, falla de fábrica..."
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px' }}
-                  required
-                />
-              </div>
+              <button
+                type="button"
+                onClick={
+                  limpiarOperacion
+                }
+                style={{
+                  padding:
+                    '12px 20px',
+                  border: 0,
+                  borderRadius: '8px',
+                  background:
+                    '#64748b',
+                  color: '#fff',
+                  fontWeight: 700,
+                  cursor:
+                    'pointer'
+                }}
+              >
+                Limpiar
+              </button>
             </div>
+          </section>
+        )}
 
-            {form.tipo === 'cambio' && (
-              <>
-                <hr style={{ margin: '20px 0' }} />
+        {mostrarFormulario &&
+          ventaEncontrada && (
+            <section
+              style={{
+                background: '#fff',
+                borderRadius: '14px',
+                padding: '24px',
+                boxShadow:
+                  '0 4px 15px rgba(15,23,42,.08)',
+                marginBottom: '25px',
+                border:
+                  '2px solid #003b6f'
+              }}
+            >
+              <h3
+                style={{
+                  marginTop: 0,
+                  color: '#003b6f'
+                }}
+              >
+                📝 Registrar operación
+              </h3>
 
-                <h4 style={{ color: '#4CAF50' }}>🆕 Producto Nuevo (Cambio)</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+              <form
+                onSubmit={handleSubmit}
+              >
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns:
+                      'repeat(auto-fit,minmax(250px,1fr))',
+                    gap: '18px'
+                  }}
+                >
                   <div>
-                    <label style={{ fontWeight: 'bold' }}>Producto Nuevo *</label>
+                    <label>
+                      <strong>
+                        Tipo de operación
+                      </strong>
+                    </label>
+
                     <select
-                      value={productoNuevoSeleccionado?.id || ''}
-                      onChange={(e) => seleccionarProductoNuevo(e.target.value)}
-                      style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px' }}
+                      value={form.tipo}
+                      onChange={e =>
+                        setForm({
+                          ...form,
+                          tipo:
+                            e.target.value
+                        })
+                      }
+                      style={inputStyle}
                     >
-                      <option value="">Seleccionar producto</option>
-                      {productos.map(p => (
-                        <option key={p.id} value={p.id}>{p.nombre} - RD$ {Number(p.precio).toFixed(2)} {p.stock <= 0 && '❌ (Sin stock)'}</option>
-                      ))}
+                      <option value="cambio">
+                        🔄 Cambio por otro
+                        producto
+                      </option>
+
+                      <option value="devolucion">
+                        ↩️ Devolución de
+                        dinero
+                      </option>
                     </select>
                   </div>
-                  {productoNuevoSeleccionado && (
-                    <>
+
+                  <div>
+                    <label>
+                      <strong>
+                        Motivo *
+                      </strong>
+                    </label>
+
+                    <input
+                      value={
+                        form.motivo
+                      }
+                      onChange={e =>
+                        setForm({
+                          ...form,
+                          motivo:
+                            e.target.value
+                        })
+                      }
+                      placeholder="Ej. Producto defectuoso"
+                      required
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                {form.tipo ===
+                  'cambio' && (
+                  <>
+                    <hr
+                      style={{
+                        margin:
+                          '25px 0',
+                        border:
+                          '0',
+                        borderTop:
+                          '1px solid #e2e8f0'
+                      }}
+                    />
+
+                    <h4
+                      style={{
+                        color: '#16a34a'
+                      }}
+                    >
+                      🆕 Producto nuevo
+                    </h4>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns:
+                          '2fr 1fr 1fr',
+                        gap: '15px'
+                      }}
+                    >
                       <div>
-                        <label style={{ fontWeight: 'bold' }}>Cantidad</label>
+                        <label>
+                          <strong>
+                            Producto
+                          </strong>
+                        </label>
+
+                        <select
+                          value={
+                            productoNuevoSeleccionado?.id ||
+                            ''
+                          }
+                          onChange={e =>
+                            seleccionarProductoNuevo(
+                              e.target.value
+                            )
+                          }
+                          style={
+                            inputStyle
+                          }
+                        >
+                          <option value="">
+                            Seleccionar
+                            producto
+                          </option>
+
+                          {productos.map(
+                            producto => (
+                              <option
+                                key={
+                                  producto.id
+                                }
+                                value={
+                                  producto.id
+                                }
+                              >
+                                {
+                                  producto.nombre
+                                }{' '}
+                                — RD${' '}
+                                {Number(
+                                  producto.precio ||
+                                    0
+                                ).toFixed(
+                                  2
+                                )}
+                              </option>
+                            )
+                          )}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label>
+                          <strong>
+                            Cantidad
+                          </strong>
+                        </label>
+
                         <input
                           type="number"
                           min="1"
-                          max={productoNuevoSeleccionado.stock || 0}
-                          value={productoNuevoSeleccionado.cantidad}
-                          onChange={(e) => actualizarCantidadNuevo(parseInt(e.target.value) || 1)}
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px' }}
+                          value={
+                            productoNuevoSeleccionado?.cantidad ||
+                            1
+                          }
+                          disabled={
+                            !productoNuevoSeleccionado
+                          }
+                          onChange={e =>
+                            actualizarCantidadNuevo(
+                              e.target
+                                .value
+                            )
+                          }
+                          style={
+                            inputStyle
+                          }
                         />
-                        <span style={{ fontSize: '0.7rem', color: '#666' }}>Stock disponible: {productoNuevoSeleccionado.stock || 0}</span>
                       </div>
+
                       <div>
-                        <label style={{ fontWeight: 'bold' }}>Precio Unitario</label>
+                        <label>
+                          <strong>
+                            Precio
+                          </strong>
+                        </label>
+
                         <input
-                          type="number"
-                          value={productoNuevoSeleccionado.precio}
+                          value={
+                            productoNuevoSeleccionado
+                              ? `RD$ ${productoNuevoSeleccionado.precio.toFixed(
+                                  2
+                                )}`
+                              : ''
+                          }
                           readOnly
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px', backgroundColor: '#f5f5f5' }}
+                          style={{
+                            ...inputStyle,
+                            background:
+                              '#f8fafc'
+                          }}
                         />
                       </div>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
+                    </div>
+                  </>
+                )}
 
-            <hr style={{ margin: '20px 0' }} />
+                {form.tipo ===
+                  'cambio' && (
+                  <>
+                    <hr
+                      style={{
+                        margin:
+                          '25px 0',
+                        border:
+                          '0',
+                        borderTop:
+                          '1px solid #e2e8f0'
+                      }}
+                    />
 
-            <h4 style={{ color: '#003b6f' }}>🚚 Costo de Envío</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
-              <div>
-                <label style={{ fontWeight: 'bold' }}>Costo Envío (RD$)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={costoEnvioManual}
-                  onChange={(e) => setCostoEnvioManual(parseFloat(e.target.value) || 0)}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', marginTop: '5px' }}
+                    <h4
+                      style={{
+                        color: '#003b6f'
+                      }}
+                    >
+                      🚚 Envío
+                    </h4>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns:
+                          '1fr 2fr',
+                        gap: '15px'
+                      }}
+                    >
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={
+                          costoEnvioManual
+                        }
+                        onChange={e =>
+                          setCostoEnvioManual(
+                            Number(
+                              e.target
+                                .value
+                            ) || 0
+                          )
+                        }
+                        style={
+                          inputStyle
+                        }
+                      />
+
+                      <label
+                        style={{
+                          display:
+                            'flex',
+                          alignItems:
+                            'center',
+                          gap: '10px'
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={
+                            form.envio_opcional
+                          }
+                          onChange={e =>
+                            setForm({
+                              ...form,
+                              envio_opcional:
+                                e.target
+                                  .checked
+                            })
+                          }
+                        />
+
+                        El cliente pagó
+                        el envío
+                      </label>
+                    </div>
+                  </>
+                )}
+
+                <hr
+                  style={{
+                    margin:
+                      '25px 0',
+                    border: 0,
+                    borderTop:
+                      '1px solid #e2e8f0'
+                  }}
                 />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', paddingTop: '5px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={form.envio_opcional}
-                    onChange={(e) => setForm({ ...form, envio_opcional: e.target.checked })}
-                    style={{ width: '18px', height: '18px' }}
-                  />
-                  <span>🚚 El cliente pagó envío</span>
-                </label>
-              </div>
-            </div>
 
-            <hr style={{ margin: '20px 0' }} />
+                <div
+                  style={{
+                    background:
+                      '#f8fafc',
+                    borderRadius:
+                      '12px',
+                    padding:
+                      '20px'
+                  }}
+                >
+                  <h4
+                    style={{
+                      marginTop: 0,
+                      color:
+                        '#003b6f'
+                    }}
+                  >
+                    💰 Resumen
+                  </h4>
 
-            <div style={{
-              padding: '15px',
-              backgroundColor: '#f0f4f8',
-              borderRadius: '8px',
-              textAlign: 'center'
-            }}>
-              <h4>💰 Resumen de la Operación</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '10px' }}>
-                <div>
-                  <p style={{ margin: '5px 0', color: '#f44336' }}>
-                    <strong>Total Devuelto:</strong><br />RD$ {totalDevueltoCalculado.toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <p style={{ margin: '5px 0', color: '#4CAF50' }}>
-                    <strong>Total Nuevo:</strong><br />RD$ {totalNuevoCalculado.toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <p style={{ margin: '5px 0', color: '#003b6f' }}>
-                    <strong>Envío:</strong><br />RD$ {Number(costoEnvioManual).toFixed(2)}
-                  </p>
-                </div>
-              </div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: diferenciaCalculada > 0 ? '#f44336' : '#4CAF50', marginTop: '15px' }}>
-                {form.tipo === 'cambio' ? 'Diferencia a Pagar' : 'Total a Reembolsar'}: RD$ {Math.abs(diferenciaCalculada).toFixed(2)}
-                {diferenciaCalculada > 0 && ' (Cliente paga)'}
-                {diferenciaCalculada < 0 && ' (Crédito a favor del cliente)'}
-                {diferenciaCalculada === 0 && ' (Sin diferencia)'}
-              </div>
-            </div>
+                  <div
+                    style={{
+                      display:
+                        'grid',
+                      gridTemplateColumns:
+                        'repeat(auto-fit,minmax(180px,1fr))',
+                      gap: '15px'
+                    }}
+                  >
+                    <SummaryCard
+                      title="Devuelto"
+                      value={
+                        totalDevuelto
+                      }
+                      color="#dc2626"
+                    />
 
-            <div style={{ display: 'flex', gap: '15px', marginTop: '25px' }}>
-              <button
-                type="submit"
-                disabled={cargando}
+                    {form.tipo ===
+                      'cambio' && (
+                      <SummaryCard
+                        title="Nuevo"
+                        value={
+                          totalNuevo
+                        }
+                        color="#16a34a"
+                      />
+                    )}
+
+                    {form.tipo ===
+                      'cambio' && (
+                      <SummaryCard
+                        title="Envío"
+                        value={
+                          envio
+                        }
+                        color="#003b6f"
+                      />
+                    )}
+
+                    <SummaryCard
+                      title={
+                        form.tipo ===
+                        'devolucion'
+                          ? 'A devolver'
+                          : diferencia >
+                            0
+                          ? 'Cliente paga'
+                          : diferencia <
+                            0
+                          ? 'A favor del cliente'
+                          : 'Diferencia'
+                      }
+                      value={
+                        form.tipo ===
+                        'devolucion'
+                          ? totalDevuelto
+                          : Math.abs(
+                              diferencia
+                            )
+                      }
+                      color={
+                        form.tipo ===
+                        'devolucion'
+                          ? '#dc2626'
+                          : diferencia >
+                            0
+                          ? '#dc2626'
+                          : '#16a34a'
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display:
+                      'flex',
+                    gap: '12px',
+                    marginTop:
+                      '25px'
+                  }}
+                >
+                  <button
+                    type="submit"
+                    disabled={
+                      cargando
+                    }
+                    style={{
+                      flex: 1,
+                      padding:
+                        '14px',
+                      border: 0,
+                      borderRadius:
+                        '9px',
+                      background:
+                        '#16a34a',
+                      color: '#fff',
+                      fontWeight: 700,
+                      cursor:
+                        'pointer'
+                    }}
+                  >
+                    {cargando
+                      ? 'Procesando...'
+                      : form.tipo ===
+                        'devolucion'
+                      ? '↩️ Confirmar devolución'
+                      : '🔄 Confirmar cambio'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={
+                      cerrarFormulario
+                    }
+                    style={{
+                      flex: 1,
+                      padding:
+                        '14px',
+                      border: 0,
+                      borderRadius:
+                        '9px',
+                      background:
+                        '#dc2626',
+                      color: '#fff',
+                      fontWeight: 700,
+                      cursor:
+                        'pointer'
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+
+        <section
+          style={{
+            background: '#fff',
+            borderRadius: '14px',
+            padding: '24px',
+            boxShadow:
+              '0 4px 15px rgba(15,23,42,.08)'
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent:
+                'space-between',
+              alignItems: 'center',
+              gap: '15px',
+              flexWrap: 'wrap',
+              marginBottom: '20px'
+            }}
+          >
+            <div>
+              <h3
                 style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: '#4CAF50',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '1rem'
+                  margin: 0,
+                  color: '#003b6f'
                 }}
               >
-                {cargando ? 'Guardando...' : '✅ Registrar'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMostrarFormulario(false)
-                  setVentaEncontrada(null)
-                  setDetallesVenta([])
-                  setProductosDevueltos([])
-                  setProductoNuevoSeleccionado(null)
-                  setCostoEnvioManual(0)
-                }}
+                📋 Historial
+              </h3>
+
+              <small
                 style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: '#f44336',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '1rem'
+                  color: '#64748b'
                 }}
               >
-                ❌ Cancelar
-              </button>
+                Cambios y devoluciones
+                registrados
+              </small>
             </div>
-          </form>
-        </div>
-      )}
 
-      {/* HISTORIAL DE CAMBIOS */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        padding: '20px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
-          <h3 style={{ margin: 0, color: '#003b6f' }}>📋 Historial de Cambios</h3>
-          <div>
+            <button
+              type="button"
+              onClick={cargarCambios}
+              style={{
+                padding:
+                  '9px 15px',
+                border: 0,
+                borderRadius:
+                  '8px',
+                background:
+                  '#003b6f',
+                color: '#fff',
+                cursor:
+                  'pointer'
+              }}
+            >
+              🔄 Actualizar
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                '2fr 1fr 1fr',
+              gap: '12px',
+              marginBottom: '20px'
+            }}
+          >
+            <input
+              value={
+                busquedaHistorial
+              }
+              onChange={e =>
+                setBusquedaHistorial(
+                  e.target.value
+                )
+              }
+              placeholder="Buscar factura, cliente o producto..."
+              style={inputStyle}
+            />
+
+            <select
+              value={
+                filtroSucursal
+              }
+              onChange={e =>
+                setFiltroSucursal(
+                  e.target.value
+                )
+              }
+              style={inputStyle}
+            >
+              <option value="">
+                Todas las sucursales
+              </option>
+
+              {sucursales.map(
+                sucursal => (
+                  <option
+                    key={
+                      sucursal.id
+                    }
+                    value={
+                      sucursal.id
+                    }
+                  >
+                    {sucursal.nombre}
+                  </option>
+                )
+              )}
+            </select>
+
             <select
               value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value)}
-              style={{ padding: '8px 16px', border: '1px solid #ddd', borderRadius: '8px' }}
+              onChange={e =>
+                setFiltroEstado(
+                  e.target.value
+                )
+              }
+              style={inputStyle}
             >
-              <option value="">Todos</option>
-              <option value="pendiente">⏳ Pendiente</option>
-              <option value="completado">✅ Completado</option>
-              <option value="cancelado">❌ Cancelado</option>
+              <option value="">
+                Todos los estados
+              </option>
+              <option value="completado">
+                Completado
+              </option>
+              <option value="pendiente">
+                Pendiente
+              </option>
+              <option value="cancelado">
+                Cancelado
+              </option>
             </select>
           </div>
-        </div>
 
-        {cambiosFiltrados.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>No hay cambios registrados</p>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f0f4f8' }}>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>ID</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Factura</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Cliente</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Tipo</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Producto Devuelto</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Producto Nuevo</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Diferencia</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Estado</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Fecha</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cambiosFiltrados.map((c) => (
-                  <tr key={c.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '10px' }}>#{c.id}</td>
-                    <td style={{ padding: '10px' }}>{c.factura_original}</td>
-                    <td style={{ padding: '10px' }}>{c.cliente_nombre}</td>
-                    <td style={{ padding: '10px' }}>{getTipoLabel(c.tipo)}</td>
-                    <td style={{ padding: '10px' }}>{c.producto_devuelto_nombre} (x{c.cantidad_devuelta})</td>
-                    <td style={{ padding: '10px' }}>
-                      {c.producto_nuevo_nombre ? `${c.producto_nuevo_nombre} (x${c.cantidad_nueva})` : '-'}
-                    </td>
-                    <td style={{ padding: '10px', textAlign: 'center', fontWeight: 'bold', color: Number(c.diferencia) > 0 ? '#f44336' : '#4CAF50' }}>
-                      RD$ {Number(c.diferencia).toFixed(2)}
-                    </td>
-                    <td style={{ padding: '10px', textAlign: 'center' }}>
-                      <span style={{ backgroundColor: getEstadoColor(c.estado), color: 'white', padding: '4px 12px', borderRadius: '12px', fontSize: '0.75rem' }}>
-                        {getEstadoLabel(c.estado)}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px', textAlign: 'center' }}>
-                      {new Date(c.fecha).toLocaleDateString()}
-                    </td>
-                    <td style={{ padding: '10px', textAlign: 'center' }}>
-                      <button
-                        onClick={() => handleReimprimir(c.venta_id)}
-                        style={{ backgroundColor: '#9C27B0', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '0.75rem' }}
-                      >
-                        🖨️ Reimprimir
-                      </button>
-                    </td>
+          {cambiosFiltrados.length ===
+          0 ? (
+            <div
+              style={{
+                textAlign:
+                  'center',
+                padding: '50px',
+                color: '#64748b'
+              }}
+            >
+              <div
+                style={{
+                  fontSize:
+                    '40px'
+                }}
+              >
+                📭
+              </div>
+
+              <p>
+                No hay operaciones
+                registradas.
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                overflowX:
+                  'auto'
+              }}
+            >
+              <table
+                style={{
+                  width: '100%',
+                  borderCollapse:
+                    'collapse'
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      background:
+                        '#f8fafc'
+                    }}
+                  >
+                    <th style={th}>
+                      ID
+                    </th>
+                    <th style={th}>
+                      Sucursal
+                    </th>
+                    <th style={th}>
+                      Factura
+                    </th>
+                    <th style={th}>
+                      Cliente
+                    </th>
+                    <th style={th}>
+                      Tipo
+                    </th>
+                    <th style={th}>
+                      Devuelto
+                    </th>
+                    <th style={th}>
+                      Nuevo
+                    </th>
+                    <th style={th}>
+                      Diferencia
+                    </th>
+                    <th style={th}>
+                      Estado
+                    </th>
+                    <th style={th}>
+                      Fecha
+                    </th>
+                    <th style={th}>
+                      Acción
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+
+                <tbody>
+                  {cambiosFiltrados.map(
+                    cambio => (
+                      <tr
+                        key={
+                          cambio.id
+                        }
+                        style={{
+                          borderTop:
+                            '1px solid #e2e8f0'
+                        }}
+                      >
+                        <td style={td}>
+                          #
+                          {
+                            cambio.id
+                          }
+                        </td>
+
+                        <td style={td}>
+                          <span
+                            style={{
+                              background:
+                                '#e0f2fe',
+                              color:
+                                '#075985',
+                              padding:
+                                '5px 9px',
+                              borderRadius:
+                                '6px',
+                              fontSize:
+                                '12px',
+                              fontWeight:
+                                700
+                            }}
+                          >
+                            🏢{' '}
+                            {getSucursalNombre(
+                              cambio
+                            )}
+                          </span>
+                        </td>
+
+                        <td style={td}>
+                          {
+                            cambio.factura_original
+                          }
+                        </td>
+
+                        <td style={td}>
+                          {
+                            cambio.cliente_nombre
+                          }
+                        </td>
+
+                        <td style={td}>
+                          {getTipoLabel(
+                            cambio.tipo
+                          )}
+                        </td>
+
+                        <td style={td}>
+                          RD${' '}
+                          {Number(
+                            cambio.total_devuelto ||
+                              0
+                          ).toFixed(
+                            2
+                          )}
+                        </td>
+
+                        <td style={td}>
+                          {cambio.producto_nuevo_nombre ||
+                            '-'}
+                        </td>
+
+                        <td
+                          style={{
+                            ...td,
+                            fontWeight:
+                              700,
+                            color:
+                              Number(
+                                cambio.diferencia ||
+                                  0
+                              ) >
+                              0
+                                ? '#dc2626'
+                                : '#16a34a'
+                          }}
+                        >
+                          RD${' '}
+                          {Math.abs(
+                            Number(
+                              cambio.diferencia ||
+                                0
+                            )
+                          ).toFixed(
+                            2
+                          )}
+                        </td>
+
+                        <td style={td}>
+                          <span
+                            style={{
+                              background:
+                                getEstadoColor(
+                                  cambio.estado
+                                ),
+                              color:
+                                '#fff',
+                              padding:
+                                '5px 10px',
+                              borderRadius:
+                                '20px',
+                              fontSize:
+                                '11px',
+                              fontWeight:
+                                700
+                            }}
+                          >
+                            {getEstadoLabel(
+                              cambio.estado
+                            )}
+                          </span>
+                        </td>
+
+                        <td style={td}>
+                          {cambio.fecha
+                            ? new Date(
+                                cambio.fecha
+                              ).toLocaleDateString()
+                            : '-'}
+                        </td>
+
+                        <td style={td}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleReimprimir(
+                                cambio.venta_id
+                              )
+                            }
+                            style={{
+                              padding:
+                                '7px 10px',
+                              border: 0,
+                              borderRadius:
+                                '6px',
+                              background:
+                                '#7c3aed',
+                              color:
+                                '#fff',
+                              cursor:
+                                'pointer'
+                            }}
+                          >
+                            🖨️
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </AdminLayout>
   )
+}
+
+function SummaryCard({
+  title,
+  value,
+  color
+}) {
+  return (
+    <div
+      style={{
+        background: '#fff',
+        borderRadius: '10px',
+        padding: '15px',
+        borderLeft: `5px solid ${color}`
+      }}
+    >
+      <small
+        style={{
+          color: '#64748b'
+        }}
+      >
+        {title}
+      </small>
+
+      <strong
+        style={{
+          display: 'block',
+          marginTop: '5px',
+          color,
+          fontSize: '20px'
+        }}
+      >
+        RD$ {Number(value || 0).toFixed(2)}
+      </strong>
+    </div>
+  )
+}
+
+const inputStyle = {
+  width: '100%',
+  padding: '11px 13px',
+  border: '1px solid #cbd5e1',
+  borderRadius: '8px',
+  fontSize: '14px',
+  marginTop: '6px',
+  boxSizing: 'border-box'
+}
+
+const th = {
+  padding: '12px',
+  textAlign: 'left',
+  whiteSpace: 'nowrap',
+  color: '#334155',
+  fontSize: '13px'
+}
+
+const td = {
+  padding: '11px',
+  whiteSpace: 'nowrap',
+  fontSize: '13px'
 }
 
 export default Cambios

@@ -78,6 +78,9 @@ function Cambios() {
     }
   }
 
+  // ============================================
+  // BUSCAR FACTURA - CON LOGS AGREGADOS
+  // ============================================
   const buscarFactura = async () => {
     if (!facturaBusqueda.trim()) {
       alert('⚠️ Ingresa un número de factura')
@@ -86,8 +89,14 @@ function Cambios() {
 
     setCargando(true)
     try {
-      const response = await fetch(`${API_URL}/cambios/venta/${facturaBusqueda.trim()}`)
+      const url = `${API_URL}/cambios/venta/${facturaBusqueda.trim()}`
+      console.log('📡 Buscando factura en:', url)
+      
+      const response = await fetch(url)
+      console.log('📊 Status:', response.status)
+      
       const data = await response.json()
+      console.log('📊 Datos recibidos:', data)
 
       if (data.success) {
         setVentaEncontrada(data.venta)
@@ -103,13 +112,13 @@ function Cambios() {
           factura_original: data.venta.factura
         }))
       } else {
-        alert('❌ Factura no encontrada')
+        alert('❌ Factura no encontrada: ' + (data.message || 'Código inválido'))
         setVentaEncontrada(null)
         setDetallesVenta([])
       }
     } catch (error) {
-      console.error('Error buscando factura:', error)
-      alert('❌ Error buscando factura')
+      console.error('❌ Error buscando factura:', error)
+      alert('❌ Error buscando factura: ' + error.message)
     } finally {
       setCargando(false)
     }
@@ -853,7 +862,6 @@ function Cambios() {
                       {new Date(c.fecha).toLocaleDateString()}
                     </td>
                     <td style={{ padding: '10px', textAlign: 'center' }}>
-                      {/* 👇 BOTÓN REIMPRIMIR EN CAMBIOS */}
                       <button
                         onClick={() => handleReimprimir(c.venta_id)}
                         style={{

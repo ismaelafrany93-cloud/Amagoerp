@@ -1,3 +1,18 @@
+const MODO_MANTENIMIENTO = true  // ← Cambia a false para reactivar
+
+app.use((req, res, next) => {
+  if (MODO_MANTENIMIENTO && req.path.includes('/api/auth/login')) {
+    return res.status(503).json({
+      success: false,
+      error: 'Sistema en mantenimiento. Contacte al administrador.'
+    })
+  }
+  next()
+})
+
+
+
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -263,5 +278,3 @@ app.listen(PORT, () => {
     console.log(`📁 Frontend path: ${frontendPath || 'No encontrado'}`);
 });
 
-
-jdjdjdjd..

@@ -1,20 +1,42 @@
-const MODO_MANTENIMIENTO = true  // ← Cambia a false para reactivar
-
-app.use((req, res, next) => {
-  if (MODO_MANTENIMIENTO && req.path.includes('/api/auth/login')) {
-    return res.status(503).json({
-      success: false,
-      error: 'Sistema en mantenimiento. Contacte al administrador.'
-    })
-  }
-  next()
-})
-
-
-
-
 const express = require('express');
 const cors = require('cors');
+
+
+/*
+ * MODO DE MANTENIMIENTO AMAGO ERP
+ *
+ * true  = bloquear todas las operaciones del backend.
+ * false = funcionamiento normal.
+ */
+const MODO_MANTENIMIENTO = true;
+
+app.use((req, res, next) => {
+    if (!MODO_MANTENIMIENTO) {
+        return next();
+    }
+
+    // Permitir cargar archivos estáticos y la página principal.
+    // Esto permite que React muestre el aviso de mantenimiento.
+    const esArchivoEstatico =
+        /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|webp|map)$/i
+            .test(req.path);
+
+    if (
+        req.method === 'GET' &&
+        (req.path === '/' || esArchivoEstatico)
+    ) {
+        return next();
+    }
+
+    // Bloquear login, módulos, consultas y operaciones de la API.
+    return res.status(503).json({
+        success: false,
+        mantenimiento: true,
+        message: 'Debes darle mantenimiento al sistema. Contacta al administrador.'
+    });
+});
+
+
 const path = require('path');
 const fs = require('fs');
 
